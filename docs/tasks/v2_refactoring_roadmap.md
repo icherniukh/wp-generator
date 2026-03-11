@@ -50,3 +50,13 @@ This document captures the technical feedback and outlines the necessary work it
 *   **Task 5.1: Proof of Concept - Metal/CoreImage Translation**
     *   *Description:* Investigate porting the core generation script from Python/NumPy to a Swift/Metal script or using Python bindings for Apple's CoreImage framework (`CIColorMatrix`, `CIGaussianBlur`, `CIPixellate`). 
     *   *Requirements:* Document the potential speedup. A CoreImage pipeline could generate a 5K image in ~16ms.
+
+## Epic 6: Hardware Scaling & Multi-Monitor Support
+**The Problem:** The tool currently assumes a static, hardcoded default resolution and doesn't dynamically adapt to different MacBook models or external monitors.
+**The Goal:** Automatically detect the user's active display(s) and tailor the output generation precisely to their hardware.
+
+*   **Task 6.1: Native Display Resolution Detection**
+    *   *Description:* Implement a display detection utility using macOS native APIs (via PyObjC or `AppKit.NSScreen`) to fetch the main screen's physical pixel dimensions (e.g., 3024x1964 for a 14-inch MacBook Pro M4, 3456x2234 for a 16-inch).
+    *   *Requirements:* Use this detected resolution as the default CLI output size if `--res` is not provided.
+*   **Task 6.2: Multi-Monitor & Aspect Ratio Adaptation**
+    *   *Description:* Adapt gradient meshes based on the aspect ratio (e.g., 16:9, 16:10) so circles/dots remain perfectly round and meshes distribute evenly across wider external displays.

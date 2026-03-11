@@ -17,7 +17,7 @@ A sophisticated procedural wallpaper generator designed for high-resolution (5K/
    ```
    *Note: On macOS, you may need to grant "Screen Recording" permissions to your terminal for the color sampler to work.*
 ## 📖 Usage
-Run the generator via the CLI. By default, it generates a **5120x2880 (5K)** wallpaper.
+Run the generator via the CLI. By default, it generates a **3024x1964** wallpaper, perfectly sized for a 14-inch MacBook Pro (M4 Pro).
 
 ### Visual CLI Examples
 
@@ -78,7 +78,7 @@ python main.py --no-nothing --colors #FF00FF #00FFFF
 | `--dots-mode` | Modulation type | `size` | `size` (Variable radius) vs `alpha` (Variable opacity) |
 | `--dots-spacing`| Grid density (pixels) | `25` | `10` = Dense/Fabric; `50` = Minimal/Blueprint |
 | `--noise` | Grain amount (0.0 - 1.0) | `0.03` | `0.05` = "Film" grain; `0.01` = Modern digital |
-| `--res` | Resolution (W H) | `5120 2880`| `5120 2880` (5K), `2560 1440` (2K) |
+| `--res` | Resolution (W H) | `3024 1964`| `3024 1964` (14"), `3456 2234` (16") |
 | `--sample` | Screen Color Sampler | `False` | Captures pixel at mouse cursor (3s delay) |
 | `--no-adjust` | Raw Color Mode | `False` | Bypasses the Nothing Aesthetic Harmonizer |
 
