@@ -50,9 +50,9 @@ python main.py --colors #FF5000 --dots-mode alpha --dots-spacing 15
 
 #### 3. High-Contrast Red (Phone 2a Style)
 ```bash
-python main.py --theme red --noise 0.05 --dots 0.0
+python main.py --theme red --noise 0.05 --dots 0.0 --complexity 2
 ```
-*Effect: Smooth, deep reds with heavy film grain (noise) to prevent banding and emphasize the "retro" display look.*
+*Effect: Smooth, deep reds with wide, simple gradient sweeps and heavy film grain to emphasize the "retro" display look.*
 
 ![Red Theme Sample](samples/red.png)
 
@@ -86,6 +86,7 @@ python main.py --no-nothing --colors #FF00FF #00FFFF
 | `--dots-spacing`| Grid density (pixels) | `25` | `10` = Dense/Fabric; `50` = Minimal/Blueprint |
 | `--noise` | Grain amount (0.0 - 1.0) | `0.03` | `0.05` = "Film" grain; `0.01` = Modern digital |
 | `--res` | Resolution (W H) | `3024 1964`| `3024 1964` (14"), `3456 2234` (16") |
+| `--complexity` | Gradient Pattern Complexity | `5` | `2` = Simple wide sweeps; `10` = Busy folds |
 | `--sample` | Screen Color Sampler | `False` | Captures pixel at mouse cursor (3s delay) |
 | `--no-adjust` | Raw Color Mode | `False` | Bypasses the Nothing Aesthetic Harmonizer |
 
