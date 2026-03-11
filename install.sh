@@ -1,33 +1,40 @@
 #!/bin/bash
 
 # Nothing-Style Wallpaper Generator Installer
-# Installs the CLI tool globally as "nothing-wp"
+# Packages the tool into a standalone binary and installs it globally
 
 set -e
 
 INSTALL_DIR="/usr/local/bin"
-REPO_DIR="$(pwd)"
+BINARY_NAME="nothing-wp"
 
-echo "Installing Nothing Wallpaper Generator..."
+echo "📦 Packaging Nothing Wallpaper Generator into a standalone binary..."
 
-# Ensure dependencies are installed
+# Ensure dependencies are installed for the build
 echo "Installing Python dependencies..."
 pip install -r requirements.txt --quiet
 
-# Create the wrapper script
-WRAPPER_SCRIPT="$INSTALL_DIR/nothing-wp"
+# Use PyInstaller to create a single-file executable
+# --collect-all ensures data files for heavy libraries are included
+echo "Building binary (this may take a minute)..."
+pyinstaller --onefile \
+            --name "$BINARY_NAME" \
+            --collect-all colour \
+            --collect-all scipy \
+            --collect-all numpy \
+            --hidden-import engine.gradient \
+            --hidden-import engine.filters \
+            --hidden-import engine.colors \
+            --hidden-import tools.sampler \
+            main.py --noconfirm
 
-echo "Creating executable at $WRAPPER_SCRIPT..."
+# Move the resulting binary to /usr/local/bin
+echo "Installing binary to $INSTALL_DIR/$BINARY_NAME..."
+sudo mv "dist/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
 
-# Use sudo if necessary to write to /usr/local/bin
-sudo bash -c "cat > \"$WRAPPER_SCRIPT\" << EOF
-#!/bin/bash
-# Wrapper script to execute the generator from its install directory
-cd \"$REPO_DIR\"
-python main.py \"\\\$@\"
-EOF"
-
-sudo chmod +x "$WRAPPER_SCRIPT"
+# Clean up build artifacts
+echo "Cleaning up build artifacts..."
+rm -rf build dist "$BINARY_NAME.spec"
 
 echo "Installation complete! 🎉"
-echo "You can now generate wallpapers from anywhere by typing: nothing-wp"
+echo "You can now run '$BINARY_NAME' from any directory."

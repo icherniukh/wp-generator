@@ -1,5 +1,6 @@
 import argparse
 import random
+import os
 import numpy as np
 from engine.gradient import MeshGradient, FluidMeshGradient
 from engine.filters import NothingFilters
@@ -126,6 +127,11 @@ def main():
         img = NothingFilters.apply_noise(img, amount=0.01)
 
     # Save
+    output_dir = os.path.dirname(args.output)
+    if output_dir and not os.path.exists(output_dir):
+        print(f"Creating directory: {output_dir}")
+        os.makedirs(output_dir)
+
     print(f"Saving wallpaper to {args.output}...")
     img.save(args.output, "PNG")
     print("Done!")
