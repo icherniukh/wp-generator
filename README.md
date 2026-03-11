@@ -50,9 +50,9 @@ python main.py --colors #FF5000 --dots-mode alpha --dots-spacing 15
 
 #### 3. High-Contrast Red (Phone 2a Style)
 ```bash
-python main.py --theme red --noise 0.05 --dots 0.0 --complexity 2
+python main.py --theme red --noise 0.05 --dots 0.0 --complexity 8
 ```
-*Effect: Smooth, deep reds with wide, simple gradient sweeps and heavy film grain to emphasize the "retro" display look.*
+*Effect: Deep, complex red folds with heavy film grain to emphasize the "retro" display look.*
 
 ![Red Theme Sample](samples/red.png)
 
