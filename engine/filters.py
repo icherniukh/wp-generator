@@ -9,36 +9,45 @@ class NothingFilters:
         :param mode: 'size' modulates dot radius, 'alpha' modulates dot opacity.
         """
         width, height = image.size
-        # Convert image to grayscale to get luminance
+        
+        # Convert image to grayscale to get luminance (0.0 to 1.0)
         grayscale = image.convert("L")
-        lum_data = np.array(grayscale)
+        lum_data = np.array(grayscale, dtype=np.float32) / 255.0
         
-        # Create a blank overlay
-        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
+        # Create coordinate grid
+        y, x = np.ogrid[:height, :width]
         
-        # Draw dots in a grid
-        for y in range(0, height, spacing):
-            for x in range(0, width, spacing):
-                # Sample luminance at this grid point
-                # Safety check for bounds
-                lum = lum_data[min(y, height-1), min(x, width-1)] / 255.0
-                
-                if mode == "size":
-                    # Modulate radius: Brighter pixels = smaller dots
-                    radius = max_radius * (1.0 - lum) * intensity
-                    alpha = int(255 * intensity)
-                else: # alpha mode
-                    radius = max_radius
-                    # Darker pixels = higher opacity
-                    alpha = int(255 * (1.0 - lum) * intensity)
-                
-                if radius > 0.5 and alpha > 5:
-                    # Draw a white dot (classic Nothing)
-                    draw.ellipse([x - radius, y - radius, x + radius, y + radius], 
-                                 fill=(255, 255, 255, alpha))
+        # Find offset to the nearest dot center
+        half_space = spacing // 2
+        dx = (x + half_space) % spacing - half_space
+        dy = (y + half_space) % spacing - half_space
+        dist_sq = dx**2 + dy**2
         
-        return Image.alpha_composite(image.convert("RGBA"), overlay)
+        # Find coordinates of the nearest dot center to sample a uniform cell luminance
+        cx = np.clip(x - dx, 0, width - 1)
+        cy = np.clip(y - dy, 0, height - 1)
+        cell_lum = lum_data[cy, cx]
+        
+        # Prepare an RGBA overlay (all white, transparent initially)
+        overlay = np.zeros((height, width, 4), dtype=np.uint8)
+        overlay[..., :3] = 255
+        
+        if mode == "size":
+            # Modulate radius: Brighter pixels = smaller dots
+            radius = max_radius * (1.0 - cell_lum) * intensity
+            alpha_val = int(255 * intensity)
+            mask = (dist_sq <= radius**2) & (radius > 0.5)
+            overlay[..., 3] = np.where(mask, alpha_val, 0)
+        else: # alpha mode
+            radius = max_radius
+            # Darker pixels = higher opacity
+            alpha = np.clip(255 * (1.0 - cell_lum) * intensity, 0, 255).astype(np.uint8)
+            mask = dist_sq <= radius**2
+            # Only apply alpha if greater than a threshold (e.g. 5)
+            overlay[..., 3] = np.where(mask & (alpha > 5), alpha, 0)
+        
+        overlay_img = Image.fromarray(overlay, mode="RGBA")
+        return Image.alpha_composite(image.convert("RGBA"), overlay_img)
 
     @staticmethod
     def apply_noise(image, amount=0.05):

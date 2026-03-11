@@ -1,7 +1,7 @@
 import argparse
 import random
 import numpy as np
-from engine.gradient import MeshGradient
+from engine.gradient import MeshGradient, FluidMeshGradient
 from engine.filters import NothingFilters
 from engine.colors import ColorHarmonizer
 from tools.sampler import ScreenSampler
@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--res", nargs=2, type=int, default=[5120, 2880], help="Output resolution (width height).")
     parser.add_argument("--no-nothing", action="store_true", help="Disable all 'Nothing' aesthetic filters and color snapping.")
     parser.add_argument("--seed", type=int, help="Random seed for reproducible gradients and colors.")
+    parser.add_argument("--legacy-idw", action="store_true", help="Use the legacy Inverse Distance Weighting (IDW) gradient engine.")
     
     args = parser.parse_args()
 
@@ -97,9 +98,14 @@ def main():
         final_colors = base_colors
 
     # Generate Gradient
-    print(f"Generating Mesh Gradient ({args.res[0]}x{args.res[1]})...")
-    engine = MeshGradient(width=args.res[0], height=args.res[1])
-    img = engine.generate(final_colors, p=2.5)
+    if args.legacy_idw:
+        print(f"Generating Legacy IDW Mesh Gradient ({args.res[0]}x{args.res[1]})...")
+        engine = MeshGradient(width=args.res[0], height=args.res[1])
+        img = engine.generate(final_colors, p=2.5)
+    else:
+        print(f"Generating Fluid Mesh Gradient ({args.res[0]}x{args.res[1]})...")
+        engine = FluidMeshGradient(width=args.res[0], height=args.res[1])
+        img = engine.generate(final_colors)
 
     # Apply Filters
     if not args.no_nothing:

@@ -1,6 +1,40 @@
 import numpy as np
 from PIL import Image
 import random
+import scipy.ndimage
+
+class FluidMeshGradient:
+    def __init__(self, width=5120, height=2880):
+        self.width = width
+        self.height = height
+
+    def generate(self, colors, grid_size=(5, 5)):
+        """
+        Generates a fluid mesh gradient using bicubic interpolation of a low-res color grid.
+        Produces much more organic, overlapping folds of color than IDW.
+        """
+        # Create a low-res color grid
+        grid = np.zeros((grid_size[1], grid_size[0], 3), dtype=np.float32)
+        
+        for y in range(grid_size[1]):
+            for x in range(grid_size[0]):
+                # Blend 2 random colors for smooth transitions in the base grid
+                c1 = np.array(random.choice(colors), dtype=np.float32)
+                c2 = np.array(random.choice(colors), dtype=np.float32)
+                alpha = random.random()
+                grid[y, x] = c1 * alpha + c2 * (1 - alpha)
+        
+        # Scale factors to reach target resolution
+        zoom_y = self.height / grid_size[1]
+        zoom_x = self.width / grid_size[0]
+        
+        # Apply bicubic interpolation (order=3) for fluid folds
+        # mode='nearest' prevents dark borders
+        res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=3, mode='nearest')
+        
+        # Clip to valid RGB range and convert
+        res = np.clip(res, 0, 255).astype(np.uint8)
+        return Image.fromarray(res)
 
 class MeshGradient:
     def __init__(self, width=5120, height=2880):
