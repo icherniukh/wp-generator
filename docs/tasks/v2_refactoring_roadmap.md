@@ -60,3 +60,11 @@ This document captures the technical feedback and outlines the necessary work it
     *   *Requirements:* Use this detected resolution as the default CLI output size if `--res` is not provided.
 *   **Task 6.2: Multi-Monitor & Aspect Ratio Adaptation**
     *   *Description:* Adapt gradient meshes based on the aspect ratio (e.g., 16:9, 16:10) so circles/dots remain perfectly round and meshes distribute evenly across wider external displays.
+
+## Epic 7: Distribution & Packaging (Homebrew)
+**The Problem:** Currently, users must clone the repository, manage Python virtual environments, and manually run the installer script. This is friction.
+**The Goal:** Make the tool available via a standard macOS package manager for one-click installation.
+
+*   **Task 7.1: Create a Homebrew Tap**
+    *   *Description:* Package the Python script using `pyinstaller` or `shiv` into a standalone binary to eliminate the need for the end-user to manage Python dependencies.
+    *   *Requirements:* Create a GitHub repository (e.g., `homebrew-nothing-wp`) and author a `Formula/nothing-wp.rb` file so users can install it globally via `brew install username/tap/nothing-wp`.
