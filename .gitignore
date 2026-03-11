@@ -35,6 +35,4 @@ venv/
 # Project specific
 output/*.png
 !output/.gitkeep
-samples/
-!samples/.gitkeep
 .DS_Store
