@@ -39,15 +39,15 @@ python main.py --colors #FF5000 --dots-mode alpha --dots-spacing 15
 
 #### 3. High-Contrast Red (Phone 2a Style)
 ```bash
-python main.py --theme red --noise 0.05 --dots 1.0
+python main.py --theme red --noise 0.05 --dots 0.0
 ```
-*Effect: Adds heavy film grain (noise) to prevent banding in deep reds and emphasize the "retro" display look.*
+*Effect: Smooth, deep reds with heavy film grain (noise) to prevent banding and emphasize the "retro" display look.*
 
 ![Red Theme Sample](samples/red.png)
 
 #### 4. The "Glass" Series (Frosted)
 ```bash
-python main.py --theme glass --noise 0.01 --res 2560 1440
+python main.py --theme glass --noise 0.01 --dots 0.0 --res 2560 1440
 ```
 *Effect: Smooth, blurred translucent gradients with minimal noise, perfect for a clean desktop setup.*
 
