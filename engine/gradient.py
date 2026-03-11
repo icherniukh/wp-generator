@@ -8,16 +8,33 @@ class FluidMeshGradient:
         self.width = width
         self.height = height
 
-    def generate(self, colors, grid_size=(5, 5)):
+    def generate(self, colors, complexity=5):
         """
         Generates a fluid mesh gradient using bicubic interpolation of a low-res color grid.
         Produces much more organic, overlapping folds of color than IDW.
-        """
-        # Create a low-res color grid
-        grid = np.zeros((grid_size[1], grid_size[0], 3), dtype=np.float32)
         
-        for y in range(grid_size[1]):
-            for x in range(grid_size[0]):
+        :param complexity: Approximates the number of "points" or "directions" of color.
+                           We map this to a grid size to ensure the total number of points 
+                           roughly matches the requested complexity.
+        """
+        # Determine grid size based on target complexity and aspect ratio.
+        # We want (cols * rows) roughly equal to complexity.
+        aspect_ratio = self.width / self.height
+        
+        # Ensure we have at least a 2x2 grid for interpolation to work smoothly
+        min_complexity = max(4, complexity)
+        
+        # Math: cols * rows = min_complexity
+        # cols / rows = aspect_ratio -> cols = rows * aspect_ratio
+        # rows^2 * aspect_ratio = min_complexity
+        rows = max(2, int(np.sqrt(min_complexity / aspect_ratio)))
+        cols = max(2, int(rows * aspect_ratio))
+        
+        # Create a low-res color grid
+        grid = np.zeros((rows, cols, 3), dtype=np.float32)
+        
+        for y in range(rows):
+            for x in range(cols):
                 # Blend 2 random colors for smooth transitions in the base grid
                 c1 = np.array(random.choice(colors), dtype=np.float32)
                 c2 = np.array(random.choice(colors), dtype=np.float32)
@@ -25,8 +42,8 @@ class FluidMeshGradient:
                 grid[y, x] = c1 * alpha + c2 * (1 - alpha)
         
         # Scale factors to reach target resolution
-        zoom_y = self.height / grid_size[1]
-        zoom_x = self.width / grid_size[0]
+        zoom_y = self.height / rows
+        zoom_x = self.width / cols
         
         # Apply bicubic interpolation (order=3) for fluid folds
         # mode='nearest' prevents dark borders
