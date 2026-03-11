@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--output", default="output/wallpaper.png", help="Path to save the generated wallpaper.")
     parser.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
     parser.add_argument("--no-adjust", action="store_true", help="Disable automatic color harmonization.")
-    parser.add_argument("--res", nargs=2, type=int, default=[5120, 2880], help="Output resolution (width height).")
+    parser.add_argument("--res", nargs=2, type=int, default=[3024, 1964], help="Output resolution (width height). Defaults to 14-inch MacBook Pro resolution.")
     parser.add_argument("--no-nothing", action="store_true", help="Disable all 'Nothing' aesthetic filters and color snapping.")
     parser.add_argument("--seed", type=int, help="Random seed for reproducible gradients and colors.")
     parser.add_argument("--legacy-idw", action="store_true", help="Use the legacy Inverse Distance Weighting (IDW) gradient engine.")
