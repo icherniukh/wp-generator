@@ -106,7 +106,7 @@ def main():
     else:
         print(f"Generating Fluid Mesh Gradient ({args.res[0]}x{args.res[1]})... (Complexity: {args.complexity})")
         engine = FluidMeshGradient(width=args.res[0], height=args.res[1])
-        img = engine.generate(final_colors, grid_size=(args.complexity, args.complexity))
+        img = engine.generate(final_colors, complexity=args.complexity)
 
     # Apply Filters
     if not args.no_nothing:
