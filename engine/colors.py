@@ -58,14 +58,6 @@ class ColorHarmonizer:
                 else:
                     L = min(85, L * 1.0) # Bright tone, not blinding white
                 
-                # Optionally snap exactly to Nothing Red/Orange if it's very close
-                if 10 <= H < 42 and C > 40:
-                    adjusted.append(ColorHarmonizer.NOTHING_PALETTE["red"])
-                    continue
-                elif 42 <= H < 75 and C > 40:
-                    adjusted.append(ColorHarmonizer.NOTHING_PALETTE["orange"])
-                    continue
-                
                 # Keep the user's hue, desaturate more significantly to look elegant
                 C = C * 0.7
                 
