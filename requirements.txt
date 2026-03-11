@@ -1,0 +1,6 @@
+numpy
+pillow
+mss
+colour-science
+pyobjc-core
+pyobjc-framework-Quartz
