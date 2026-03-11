@@ -4,3 +4,4 @@ mss
 colour-science
 pyobjc-core
 pyobjc-framework-Quartz
+scipy

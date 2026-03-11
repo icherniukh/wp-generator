@@ -37,9 +37,9 @@ class ColorHarmonizer:
         """
         Adjusts colors to fit the 'Nothing' aesthetic.
         Rules: 
-        1. Reduce saturation (Chroma) for background colors.
-        2. Set specific pops (Red/Orange) to high saturation.
-        3. Ensure high contrast with black/white.
+        1. Preserve user intent (Hue) but map Lightness and Chroma.
+        2. High-chroma colors get contrast-boosted (very bright or deep dark).
+        3. Background/low-chroma colors are pushed to strict monochrome extremes.
         """
         adjusted = []
         for c in colors:
@@ -47,37 +47,42 @@ class ColorHarmonizer:
             xyz = colour.sRGB_to_XYZ(rgb)
             lab = colour.XYZ_to_Lab(xyz)
             
-            # Check if it's a "pop" color candidate (High Chroma)
             # Convert to LCH for easier adjustment
             lch = colour.Lab_to_LCHab(lab)
+            L, C, H = lch
             
-            # If color is 'vibrant', snap it to Nothing Red or CMF Orange if it's close.
-            # Otherwise, mute it.
-            if lch[1] > 40: # High Chroma
-                # Check hue for red/orange
-                hue = lch[2]
-                if 0 <= hue < 42: # Red-ish
-                    # Snap to Nothing Red
-                    adjusted.append(ColorHarmonizer.NOTHING_PALETTE["red"])
-                elif 42 <= hue < 75: # Orange-ish
-                    # Snap to CMF Orange
-                    adjusted.append(ColorHarmonizer.NOTHING_PALETTE["orange"])
+            if C > 35: # Vibrant color
+                # Push lightness to extremes to make it 'punchy'
+                if L < 60:
+                    L = max(15, L * 0.8) # Deep, rich tone
                 else:
-                    # Too colorful but not Red/Orange? Mute it.
-                    lch[1] *= 0.3
-                    lab_new = colour.LCHab_to_Lab(lch)
-                    rgb_new = colour.XYZ_to_sRGB(colour.Lab_to_XYZ(lab_new))
-                    adjusted.append(tuple((np.clip(rgb_new, 0, 1) * 255).astype(int)))
-            else:
-                # Background color. Ensure it's very dark or very light.
-                if lch[0] < 50:
-                    lch[0] *= 0.5 # Make it darker
-                else:
-                    lch[0] = min(100, lch[0] * 1.1) # Make it lighter
+                    L = min(95, L * 1.1) # Bright, icy tone
                 
-                lab_new = colour.LCHab_to_Lab(lch)
-                rgb_new = colour.XYZ_to_sRGB(colour.Lab_to_XYZ(lab_new))
-                adjusted.append(tuple((np.clip(rgb_new, 0, 1) * 255).astype(int)))
+                # Optionally snap exactly to Nothing Red/Orange if it's very close
+                if 10 <= H < 42 and C > 50:
+                    adjusted.append(ColorHarmonizer.NOTHING_PALETTE["red"])
+                    continue
+                elif 42 <= H < 75 and C > 50:
+                    adjusted.append(ColorHarmonizer.NOTHING_PALETTE["orange"])
+                    continue
+                
+                # Keep the user's hue, slightly desaturate to look 'industrial'
+                C = C * 0.9
+                
+            else: # Muted or background color
+                # Push towards pure black or white/light-gray
+                if L < 50:
+                    L = max(5, L * 0.4) # Make it very dark
+                    C = C * 0.1 # Kill saturation
+                else:
+                    L = min(98, max(85, L * 1.2)) # Make it light
+                    C = C * 0.1 # Kill saturation
+            
+            # Reconstruct color
+            lch_new = np.array([L, C, H])
+            lab_new = colour.LCHab_to_Lab(lch_new)
+            rgb_new = colour.XYZ_to_sRGB(colour.Lab_to_XYZ(lab_new))
+            adjusted.append(tuple((np.clip(rgb_new, 0, 1) * 255).astype(int)))
         
         return adjusted
 

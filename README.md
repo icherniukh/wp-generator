@@ -71,6 +71,7 @@ python main.py --no-nothing --colors #FF00FF #00FFFF
 | Argument | Description | Default | Visual Impact |
 | :--- | :--- | :--- | :--- |
 | `--no-nothing`| **Disable Nothing-style** | `False` | Disables dots, noise, and color snapping. |
+| `--legacy-idw`| **Use Legacy Engine** | `False` | Uses Inverse Distance Weighting instead of Fluid Gradients. |
 | `--theme` | Pre-defined aesthetic themes | `dark` | `dark`, `light`, `red`, `orange`, `glass` |
 | `--colors` | Custom hex color list | (Theme) | Harmonized to "Nothing" LCH space |
 | `--dots` | Dot intensity (0.0 - 1.0) | `0.8` | `1.0` = Bold/Sharp dots; `0.2` = Subtle texture |
