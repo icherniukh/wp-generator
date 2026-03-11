@@ -27,15 +27,19 @@ python main.py --theme dark --dots 0.8 --dots-spacing 25
 ```
 *Effect: Deep charcoal mesh gradient with a technical dot grid modulated by luminance.*
 
-![Dark Theme Sample](samples/dark.png)
+<img src="samples/dark.png" width="400" alt="Dark Theme Sample">
 
-#### 2. CMF Orange "Technical" Edition
+#### 2. CMF Orange "Technical" Edition (Before & After Dots)
 ```bash
+# Base gradient (left) vs. Alpha-modulated Dots (right)
 python main.py --colors #FF5000 --dots-mode alpha --dots-spacing 15
 ```
-*Effect: Varies dot **opacity** rather than size. Denser grid (15px) for a textured, industrial feel.*
+*Effect: Varies dot **opacity** rather than size over a smooth mesh gradient. Denser grid (15px) for an industrial feel.*
 
-![Alpha Mode Sample](samples/dots_alpha.png)
+<p>
+  <img src="samples/dots_alpha_base.png" width="400" alt="Base Gradient without Dots">
+  <img src="samples/dots_alpha.png" width="400" alt="Alpha Mode Dots Applied">
+</p>
 
 #### 3. High-Contrast Red (Phone 2a Style)
 ```bash
@@ -43,7 +47,7 @@ python main.py --theme red --noise 0.05 --dots 0.0
 ```
 *Effect: Smooth, deep reds with heavy film grain (noise) to prevent banding and emphasize the "retro" display look.*
 
-![Red Theme Sample](samples/red.png)
+<img src="samples/red.png" width="400" alt="Red Theme Sample">
 
 #### 4. The "Glass" Series (Frosted)
 ```bash
@@ -51,7 +55,7 @@ python main.py --theme glass --noise 0.01 --dots 0.0 --res 2560 1440
 ```
 *Effect: Smooth, blurred translucent gradients with minimal noise, perfect for a clean desktop setup.*
 
-![Glass Theme Sample](samples/glass.png)
+<img src="samples/glass.png" width="400" alt="Glass Theme Sample">
 
 #### 5. Generic Mesh Gradients (No Filters)
 ```bash
@@ -59,7 +63,7 @@ python main.py --no-nothing --colors #FF00FF #00FFFF
 ```
 *Effect: Pure, vibrant mesh gradient without dots, grain, or brand-snapping.*
 
-![Generic Sample](samples/generic_gradient.png)
+<img src="samples/generic_gradient.png" width="400" alt="Generic Sample">
 
 ---
 
