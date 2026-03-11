@@ -1,5 +1,6 @@
 import argparse
 import random
+import numpy as np
 from engine.gradient import MeshGradient
 from engine.filters import NothingFilters
 from engine.colors import ColorHarmonizer
@@ -29,8 +30,13 @@ def main():
     parser.add_argument("--no-adjust", action="store_true", help="Disable automatic color harmonization.")
     parser.add_argument("--res", nargs=2, type=int, default=[5120, 2880], help="Output resolution (width height).")
     parser.add_argument("--no-nothing", action="store_true", help="Disable all 'Nothing' aesthetic filters and color snapping.")
+    parser.add_argument("--seed", type=int, help="Random seed for reproducible gradients and colors.")
     
     args = parser.parse_args()
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
 
     # Handle screen sampling if requested
     if args.sample:
