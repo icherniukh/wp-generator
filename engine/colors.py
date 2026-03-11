@@ -4,12 +4,12 @@ from PIL import Image
 
 class ColorHarmonizer:
     NOTHING_PALETTE = {
-        "black": (0, 0, 0),
-        "white": (255, 255, 255),
-        "dark_gray": (30, 30, 30),
-        "red": (255, 0, 0),
-        "orange": (255, 80, 0),
-        "milky": (240, 240, 240)
+        "black": (15, 15, 18),
+        "white": (220, 220, 225),
+        "dark_gray": (35, 35, 40),
+        "red": (190, 40, 40),
+        "orange": (210, 80, 30),
+        "milky": (210, 210, 215)
     }
 
     @staticmethod
@@ -51,32 +51,32 @@ class ColorHarmonizer:
             lch = colour.Lab_to_LCHab(lab)
             L, C, H = lch
             
-            if C > 35: # Vibrant color
-                # Push lightness to extremes to make it 'punchy'
+            if C > 30: # Vibrant color
+                # Push lightness to extremes to make it 'punchy' but soften them
                 if L < 60:
-                    L = max(15, L * 0.8) # Deep, rich tone
+                    L = max(20, L * 0.9) # Deep, rich tone, not pure black
                 else:
-                    L = min(95, L * 1.1) # Bright, icy tone
+                    L = min(85, L * 1.0) # Bright tone, not blinding white
                 
                 # Optionally snap exactly to Nothing Red/Orange if it's very close
-                if 10 <= H < 42 and C > 50:
+                if 10 <= H < 42 and C > 40:
                     adjusted.append(ColorHarmonizer.NOTHING_PALETTE["red"])
                     continue
-                elif 42 <= H < 75 and C > 50:
+                elif 42 <= H < 75 and C > 40:
                     adjusted.append(ColorHarmonizer.NOTHING_PALETTE["orange"])
                     continue
                 
-                # Keep the user's hue, slightly desaturate to look 'industrial'
-                C = C * 0.9
+                # Keep the user's hue, desaturate more significantly to look elegant
+                C = C * 0.7
                 
             else: # Muted or background color
-                # Push towards pure black or white/light-gray
+                # Push towards dark gray or off-white
                 if L < 50:
-                    L = max(5, L * 0.4) # Make it very dark
+                    L = max(12, L * 0.7) # Make it very dark but not pitch black
                     C = C * 0.1 # Kill saturation
                 else:
-                    L = min(98, max(85, L * 1.2)) # Make it light
-                    C = C * 0.1 # Kill saturation
+                    L = min(88, max(75, L * 1.1)) # Make it light, but not pure white
+                    C = C * 0.15 # Allow a tiny bit of warmth/coolness
             
             # Reconstruct color
             lch_new = np.array([L, C, H])
