@@ -1,1 +1,33 @@
-#!/bin/bash\n\n# Nothing-Style Wallpaper Generator Installer\n# Installs the CLI tool globally as "nothing-wp"\n\nset -e\n\nINSTALL_DIR="/usr/local/bin"\nREPO_DIR=$(pwd)\n\necho "Installing Nothing Wallpaper Generator..."\n\n# Ensure dependencies are installed\necho "Installing Python dependencies..."\npip install -r requirements.txt --quiet\n\n# Create the wrapper script\nWRAPPER_SCRIPT="$INSTALL_DIR/nothing-wp"\n\necho "Creating executable at $WRAPPER_SCRIPT..."\n\n# Use sudo if necessary to write to /usr/local/bin\nsudo bash -c "cat > $WRAPPER_SCRIPT << EOF\n#!/bin/bash\n# Wrapper script to execute the generator from its install directory\ncd \\"$REPO_DIR\\"\npython main.py \\\"\\\$@\\\"\nEOF"\n\nsudo chmod +x "$WRAPPER_SCRIPT"\n\necho "Installation complete! 🎉"\necho "You can now generate wallpapers from anywhere by typing: nothing-wp"\n
+#!/bin/bash
+
+# Nothing-Style Wallpaper Generator Installer
+# Installs the CLI tool globally as "nothing-wp"
+
+set -e
+
+INSTALL_DIR="/usr/local/bin"
+REPO_DIR="$(pwd)"
+
+echo "Installing Nothing Wallpaper Generator..."
+
+# Ensure dependencies are installed
+echo "Installing Python dependencies..."
+pip install -r requirements.txt --quiet
+
+# Create the wrapper script
+WRAPPER_SCRIPT="$INSTALL_DIR/nothing-wp"
+
+echo "Creating executable at $WRAPPER_SCRIPT..."
+
+# Use sudo if necessary to write to /usr/local/bin
+sudo bash -c "cat > \"$WRAPPER_SCRIPT\" << EOF
+#!/bin/bash
+# Wrapper script to execute the generator from its install directory
+cd \"$REPO_DIR\"
+python main.py \"\\\$@\"
+EOF"
+
+sudo chmod +x "$WRAPPER_SCRIPT"
+
+echo "Installation complete! 🎉"
+echo "You can now generate wallpapers from anywhere by typing: nothing-wp"
