@@ -11,13 +11,22 @@ A sophisticated procedural wallpaper generator designed for high-resolution (5K/
 ## 🛠️ Installation
 1. Ensure you have Python 3.12+ installed.
 2. Clone this repository and navigate to the folder.
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *Note: On macOS, you may need to grant "Screen Recording" permissions to your terminal for the color sampler to work.*
+
+### Option 1: Global Install (Recommended)
+We provide a helper script to install dependencies and create a global command `nothing-wp` that you can run from anywhere:
+```bash
+./install.sh
+```
+*Note: This will ask for your password to create a symlink in `/usr/local/bin`.*
+
+### Option 2: Manual Install
+If you prefer not to install globally, just install the dependencies and run it locally:
+```bash
+pip install -r requirements.txt
+```
+
 ## 📖 Usage
-Run the generator via the CLI. By default, it generates a **3024x1964** wallpaper, perfectly sized for a 14-inch MacBook Pro (M4 Pro).
+If you used the global install, simply type `nothing-wp` from any directory. Otherwise, use `python main.py` inside the repo folder. By default, it generates a **3024x1964** wallpaper, perfectly sized for a 14-inch MacBook Pro (M4 Pro).
 
 ### Visual CLI Examples
 
