@@ -32,6 +32,7 @@ def main():
     parser.add_argument("--no-nothing", action="store_true", help="Disable all 'Nothing' aesthetic filters and color snapping.")
     parser.add_argument("--seed", type=int, help="Random seed for reproducible gradients and colors.")
     parser.add_argument("--legacy-idw", action="store_true", help="Use the legacy Inverse Distance Weighting (IDW) gradient engine.")
+    parser.add_argument("--complexity", type=int, default=5, help="Complexity of the gradient pattern. Lower = simpler, wider sweeps. Higher = more folds (default: 5).")
     
     args = parser.parse_args()
 
@@ -103,9 +104,9 @@ def main():
         engine = MeshGradient(width=args.res[0], height=args.res[1])
         img = engine.generate(final_colors, p=2.5)
     else:
-        print(f"Generating Fluid Mesh Gradient ({args.res[0]}x{args.res[1]})...")
+        print(f"Generating Fluid Mesh Gradient ({args.res[0]}x{args.res[1]})... (Complexity: {args.complexity})")
         engine = FluidMeshGradient(width=args.res[0], height=args.res[1])
-        img = engine.generate(final_colors)
+        img = engine.generate(final_colors, grid_size=(args.complexity, args.complexity))
 
     # Apply Filters
     if not args.no_nothing:
