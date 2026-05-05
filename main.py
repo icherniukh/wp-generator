@@ -1,6 +1,7 @@
 import argparse
 import random
 import os
+from datetime import datetime
 
 def hex_to_rgb(hex_str):
     try:
@@ -16,21 +17,59 @@ def main():
     parser.add_argument("--style", choices=["generic", "nothing"], default="generic", help="Rendering style to apply.")
     parser.add_argument("--nothing", action="store_true", help="Enable Nothing-inspired filters and color harmonization.")
     parser.add_argument("--theme", choices=["dark", "light", "red", "orange", "glass"], help="Pre-defined aesthetic themes.")
-    parser.add_argument("--colors", nargs="+", help="Custom hex colors (e.g., #000000 #FFFFFF #FF0000).")
-    parser.add_argument("--dots", type=float, default=0.8, help="Intensity of the dot matrix filter (0.0 - 1.0).")
-    parser.add_argument("--dots-mode", choices=["size", "alpha"], default="size", help="How dots are modulated.")
-    parser.add_argument("--dots-spacing", type=int, default=25, help="Pixel spacing between dots.")
-    parser.add_argument("--noise", type=float, default=0.03, help="Amount of grain/noise (0.0 - 1.0).")
-    parser.add_argument("--output", default="output/wallpaper.png", help="Path to save the generated wallpaper.")
+    parser.add_argument("--colors", nargs="+", help="Custom hex colors (e.g., #FF0000 #00FF00).")
+    parser.add_argument("--dots", type=float, default=None, help="Dot matrix intensity (0.0–1.0). Randomized if omitted.")
+    parser.add_argument("--dots-mode", choices=["size", "alpha"], default=None, help="Dot modulation type. Randomized if omitted.")
+    parser.add_argument("--dots-spacing", type=int, default=None, help="Pixel spacing between dots. Randomized if omitted.")
+    parser.add_argument("--noise", type=float, default=None, help="Grain/noise amount (0.0–1.0). Randomized if omitted.")
+    parser.add_argument("--output", default=None, help="Output path. Defaults to wp_<colors>_<time>.png in current dir.")
     parser.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
     parser.add_argument("--no-adjust", action="store_true", help="Disable automatic color harmonization.")
-    parser.add_argument("--res", nargs=2, type=int, default=[3024, 1964], help="Output resolution (width height). Defaults to 14-inch MacBook Pro resolution.")
+    parser.add_argument("--res", nargs=2, type=int, default=[3024, 1964], metavar=("W", "H"), help="Output resolution (default: 3024x1964).")
     parser.add_argument("--no-nothing", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--seed", type=int, help="Random seed for reproducible gradients and colors.")
-    parser.add_argument("--legacy-idw", action="store_true", help="Use the legacy Inverse Distance Weighting (IDW) gradient engine.")
-    parser.add_argument("--complexity", type=int, default=5, help="Complexity of the gradient pattern. Lower = simpler, wider sweeps. Higher = more folds (default: 5).")
-    
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible output.")
+    parser.add_argument("--legacy-idw", action="store_true", help="Use legacy Inverse Distance Weighting gradient engine.")
+    parser.add_argument("--complexity", type=int, default=None, help="Gradient complexity (grid points). Randomized if omitted.")
+
     args = parser.parse_args()
+
+    nothing_style = args.nothing or args.style == "nothing"
+    if args.no_nothing:
+        nothing_style = False
+
+    # --- Seed: always use one so every run is fully reproducible ---
+    if args.seed is None:
+        args.seed = random.randint(0, 2**31 - 1)
+        print(f"Seed: {args.seed}  (pass --seed {args.seed} to reproduce)")
+    random.seed(args.seed)
+    import numpy as np
+    np.random.seed(args.seed)
+
+    # --- Randomize omitted parameters (after seed so they're reproducible) ---
+    if args.complexity is None:
+        args.complexity = random.randint(3, 9)
+        print(f"Complexity: {args.complexity}  (randomized)")
+
+    if args.noise is None:
+        args.noise = round(random.uniform(0.01, 0.06), 3)
+        print(f"Noise: {args.noise}  (randomized)")
+
+    if nothing_style:
+        if args.dots is None:
+            args.dots = round(random.uniform(0.3, 0.9), 2)
+            print(f"Dots intensity: {args.dots}  (randomized)")
+        if args.dots_spacing is None:
+            args.dots_spacing = random.randint(12, 35)
+            print(f"Dots spacing: {args.dots_spacing}  (randomized)")
+        if args.dots_mode is None:
+            args.dots_mode = random.choice(["size", "alpha"])
+            print(f"Dots mode: {args.dots_mode}  (randomized)")
+    else:
+        args.dots = args.dots if args.dots is not None else 0.8
+        args.dots_spacing = args.dots_spacing if args.dots_spacing is not None else 25
+        args.dots_mode = args.dots_mode if args.dots_mode is not None else "size"
+
+    # --- Validate ---
     if args.res[0] <= 0 or args.res[1] <= 0:
         parser.error("--res values must be positive")
     if args.dots_spacing <= 0:
@@ -42,82 +81,71 @@ def main():
     if not 0 <= args.noise <= 1:
         parser.error("--noise must be between 0.0 and 1.0")
 
-    nothing_style = args.nothing or args.style == "nothing"
-    if args.no_nothing:
-        nothing_style = False
-
-    if args.seed is not None:
-        import numpy as np
-
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-
-    # Handle screen sampling if requested
+    # --- Screen sampling ---
     if args.sample:
         from tools.sampler import ScreenSampler
-
         sampler = ScreenSampler()
         print("Sampling screen color in 3 seconds... move your mouse!")
         import time
         time.sleep(3)
         color = sampler.sample_pixel()
-        print(f"Sampled Color: {color} ({sampler.to_hex(color)})")
-        # For now, let's just use it as a base if no colors were provided
+        print(f"Sampled color: {color} ({sampler.to_hex(color)})")
         if not args.colors:
             args.colors = [sampler.to_hex(color)]
 
-    # Theme definitions
+    # --- Theme definitions ---
     themes = {
-        "dark": [(10, 10, 12), (25, 25, 28), (35, 35, 40)],
-        "light": [(210, 210, 215), (230, 230, 235), (190, 190, 195)],
-        "red": [(15, 10, 10), (180, 30, 30), (35, 15, 15)],
-        "orange": [(15, 12, 10), (200, 70, 20), (35, 20, 15)],
-        "glass": [(40, 45, 55), (110, 115, 130), (25, 30, 40)]
+        "dark":   [(10, 10, 12),   (25, 25, 28),   (35, 35, 40)],
+        "light":  [(210, 210, 215),(230, 230, 235), (190, 190, 195)],
+        "red":    [(15, 10, 10),   (180, 30, 30),   (35, 15, 15)],
+        "orange": [(15, 12, 10),   (200, 70, 20),   (35, 20, 15)],
+        "glass":  [(40, 45, 55),   (110, 115, 130), (25, 30, 40)],
     }
 
-    # Prepare Colors
+    # --- Resolve base colors ---
     if args.colors:
         try:
             base_colors = [hex_to_rgb(h) for h in args.colors]
         except ValueError as e:
             parser.error(str(e))
     elif args.theme:
-        base_colors = themes[args.theme]
+        base_colors = list(themes[args.theme])
+    elif nothing_style:
+        base_colors = list(themes["dark"])
     else:
-        # Default the opt-in Nothing-inspired style to its dark theme.
-        if nothing_style:
-            base_colors = list(themes["dark"])
-        else:
-            print("No colors provided. Generating random palette...")
-            base_colors = [
-                (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-                for _ in range(3)
-            ]
+        base_colors = [
+            (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            for _ in range(3)
+        ]
+        print(f"Colors: {['#{:02x}{:02x}{:02x}'.format(*c) for c in base_colors]}  (randomized)")
 
-    # Add random variations if only 1 color is provided
+    # Pad to at least 3 colors
     while len(base_colors) < 3:
         if not nothing_style:
             base_colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        elif random.random() > 0.5:
+            base_colors.append((random.randint(0, 30), random.randint(0, 30), random.randint(0, 30)))
         else:
-            # Generate a color that is either very dark or very light to provide contrast
-            if random.random() > 0.5:
-                base_colors.append((random.randint(0, 30), random.randint(0, 30), random.randint(0, 30)))
-            else:
-                base_colors.append((random.randint(220, 255), random.randint(220, 255), random.randint(220, 255)))
+            base_colors.append((random.randint(220, 255), random.randint(220, 255), random.randint(220, 255)))
 
-    # Color Harmonization
+    # --- Color harmonization ---
     if not args.no_adjust and nothing_style:
         from engine.colors import StyleHarmonizer
-
-        print("Evaluating and adjusting colors for Nothing-inspired style...")
+        print("Adjusting colors for Nothing-inspired style...")
         score = StyleHarmonizer.evaluate_fit(base_colors)
-        print(f"Initial Contrast Score (Delta E): {score:.2f}")
+        print(f"Contrast score (Delta E): {score:.2f}")
         final_colors = StyleHarmonizer.adjust_for_nothing(base_colors)
-        print(f"Final Adjusted Colors: {final_colors}")
+        print(f"Adjusted colors: {final_colors}")
     else:
         final_colors = base_colors
 
-    # Generate Gradient
+    # --- Smart output filename ---
+    if args.output is None:
+        timestamp = datetime.now().strftime("%H%M%S")
+        color_str = "-".join(f"{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors[:3])
+        args.output = f"wp_{color_str}_{timestamp}.png"
+
+    # --- Generate gradient ---
     from engine.gradient import MeshGradient, FluidMeshGradient
 
     if args.legacy_idw:
@@ -125,36 +153,29 @@ def main():
         engine = MeshGradient(width=args.res[0], height=args.res[1])
         img = engine.generate(final_colors, p=2.5)
     else:
-        print(f"Generating Fluid Mesh Gradient ({args.res[0]}x{args.res[1]})... (Complexity: {args.complexity})")
+        print(f"Generating Fluid Mesh Gradient ({args.res[0]}x{args.res[1]}, complexity {args.complexity})...")
         engine = FluidMeshGradient(width=args.res[0], height=args.res[1])
         img = engine.generate(final_colors, complexity=args.complexity)
 
-    # Apply Filters
+    # --- Apply filters ---
     from engine.filters import WallpaperFilters
 
     if nothing_style:
         print("Applying Nothing-inspired filters...")
-        # Add noise first to prevent banding
         img = WallpaperFilters.apply_noise(img, amount=args.noise)
-        
-        # Apply dot matrix
         img = WallpaperFilters.apply_dot_matrix(img, spacing=args.dots_spacing, intensity=args.dots, mode=args.dots_mode)
-        
         if args.theme == "glass":
             print("Applying Frosted Glass effect...")
             img = WallpaperFilters.apply_frosted_glass(img, blur_radius=80, noise_amount=0.01)
     else:
-        # For generic gradients, just add a tiny bit of noise to prevent banding
-        print("Applying minimal dither noise...")
-        img = WallpaperFilters.apply_noise(img, amount=0.01)
+        img = WallpaperFilters.apply_noise(img, amount=args.noise)
 
-    # Save
+    # --- Save ---
     output_dir = os.path.dirname(args.output)
     if output_dir and not os.path.exists(output_dir):
-        print(f"Creating directory: {output_dir}")
         os.makedirs(output_dir)
 
-    print(f"Saving wallpaper to {args.output}...")
+    print(f"Saving to {args.output}...")
     img.save(args.output, "PNG")
     print("Done!")
 
