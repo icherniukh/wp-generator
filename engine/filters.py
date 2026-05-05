@@ -1,11 +1,11 @@
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageFilter
 
-class NothingFilters:
+class WallpaperFilters:
     @staticmethod
     def apply_dot_matrix(image, spacing=25, max_radius=4, intensity=0.8, mode="size"):
         """
-        Applies a signature 'Nothing' dot-matrix overlay.
+        Applies a dot-matrix overlay.
         :param mode: 'size' modulates dot radius, 'alpha' modulates dot opacity.
         """
         width, height = image.size
@@ -78,15 +78,21 @@ class NothingFilters:
         """
         # Downsample for speed
         width, height = image.size
-        small = image.resize((width // 4, height // 4), Image.NEAREST)
+        small_width = max(1, width // 4)
+        small_height = max(1, height // 4)
+        small = image.resize((small_width, small_height), Image.NEAREST)
         blurred = small.filter(ImageFilter.GaussianBlur(radius=blur_radius // 4))
         # Upscale back to original resolution
         final = blurred.resize((width, height), Image.LANCZOS)
-        return NothingFilters.apply_noise(final, amount=noise_amount)
+        return WallpaperFilters.apply_noise(final, amount=noise_amount)
+
+
+# Backward-compatible alias for older imports.
+NothingFilters = WallpaperFilters
 
 if __name__ == "__main__":
     # Test
     test_img = Image.new("RGB", (1280, 720), (30, 30, 30))
-    filtered = NothingFilters.apply_dot_matrix(test_img)
+    filtered = WallpaperFilters.apply_dot_matrix(test_img)
     filtered.save("output/test_filters.png")
     print("Test filter saved to output/test_filters.png")
