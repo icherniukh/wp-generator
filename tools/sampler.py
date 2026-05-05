@@ -1,7 +1,6 @@
 import mss
 import numpy as np
 from AppKit import NSEvent, NSScreen
-from Quartz import CGEventSourceCreate, kCGEventSourceStateCombinedSessionState
 
 class ScreenSampler:
     def __init__(self):

@@ -1,8 +1,6 @@
 import numpy as np
-import colour
-from PIL import Image
 
-class ColorHarmonizer:
+class StyleHarmonizer:
     NOTHING_PALETTE = {
         "black": (15, 15, 18),
         "white": (220, 220, 225),
@@ -15,17 +13,16 @@ class ColorHarmonizer:
     @staticmethod
     def evaluate_fit(colors):
         """
-        Evaluates the fit of the input colors using CIELAB space.
-        Returns a 'harmony score'.
+        Evaluates palette contrast using CIELAB space.
+        Returns a contrast score.
         """
-        # Convert RGB to CIELAB
-        lab_colors = [colour.XYZ_to_Lab(colour.sRGB_to_XYZ(np.array(c)/255.0)) for c in colors]
+        lab_colors = [rgb_to_lab(c) for c in colors]
         
         # Calculate Delta E distances (76 or 2000)
         distances = []
         for i in range(len(lab_colors)):
             for j in range(i + 1, len(lab_colors)):
-                d_e = colour.delta_E(lab_colors[i], lab_colors[j])
+                d_e = np.linalg.norm(lab_colors[i] - lab_colors[j])
                 distances.append(d_e)
         
         # In Nothing style, we want high contrast (large Delta E) 
@@ -44,11 +41,10 @@ class ColorHarmonizer:
         adjusted = []
         for c in colors:
             rgb = np.array(c) / 255.0
-            xyz = colour.sRGB_to_XYZ(rgb)
-            lab = colour.XYZ_to_Lab(xyz)
+            lab = rgb_to_lab(rgb)
             
             # Convert to LCH for easier adjustment
-            lch = colour.Lab_to_LCHab(lab)
+            lch = lab_to_lch(lab)
             L, C, H = lch
             
             if C > 30: # Vibrant color
@@ -72,11 +68,93 @@ class ColorHarmonizer:
             
             # Reconstruct color
             lch_new = np.array([L, C, H])
-            lab_new = colour.LCHab_to_Lab(lch_new)
-            rgb_new = colour.XYZ_to_sRGB(colour.Lab_to_XYZ(lab_new))
-            adjusted.append(tuple((np.clip(rgb_new, 0, 1) * 255).astype(int)))
+            lab_new = lch_to_lab(lch_new)
+            rgb_new = lab_to_rgb(lab_new)
+            adjusted.append(tuple(int(v) for v in (np.clip(rgb_new, 0, 1) * 255).astype(int)))
         
         return adjusted
+
+
+def rgb_to_lab(rgb):
+    rgb = np.array(rgb, dtype=np.float64)
+    if np.max(rgb) > 1:
+        rgb = rgb / 255.0
+
+    linear = np.where(
+        rgb <= 0.04045,
+        rgb / 12.92,
+        ((rgb + 0.055) / 1.055) ** 2.4,
+    )
+    xyz = np.array([
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041],
+    ]) @ linear
+    return xyz_to_lab(xyz)
+
+
+def lab_to_rgb(lab):
+    xyz = lab_to_xyz(lab)
+    linear = np.array([
+        [3.2404542, -1.5371385, -0.4985314],
+        [-0.9692660, 1.8760108, 0.0415560],
+        [0.0556434, -0.2040259, 1.0572252],
+    ]) @ xyz
+    linear = np.clip(linear, 0, 1)
+    return np.where(
+        linear <= 0.0031308,
+        12.92 * linear,
+        1.055 * (linear ** (1 / 2.4)) - 0.055,
+    )
+
+
+def xyz_to_lab(xyz):
+    white = np.array([0.95047, 1.0, 1.08883])
+    ratio = xyz / white
+    delta = 6 / 29
+    f = np.where(
+        ratio > delta ** 3,
+        np.cbrt(ratio),
+        ratio / (3 * delta ** 2) + 4 / 29,
+    )
+    return np.array([
+        116 * f[1] - 16,
+        500 * (f[0] - f[1]),
+        200 * (f[1] - f[2]),
+    ])
+
+
+def lab_to_xyz(lab):
+    white = np.array([0.95047, 1.0, 1.08883])
+    L, a, b = lab
+    fy = (L + 16) / 116
+    fx = fy + a / 500
+    fz = fy - b / 200
+    delta = 6 / 29
+    f = np.array([fx, fy, fz])
+    ratio = np.where(
+        f > delta,
+        f ** 3,
+        3 * delta ** 2 * (f - 4 / 29),
+    )
+    return ratio * white
+
+
+def lab_to_lch(lab):
+    L, a, b = lab
+    C = np.hypot(a, b)
+    H = np.degrees(np.arctan2(b, a)) % 360
+    return np.array([L, C, H])
+
+
+def lch_to_lab(lch):
+    L, C, H = lch
+    h_rad = np.radians(H)
+    return np.array([L, C * np.cos(h_rad), C * np.sin(h_rad)])
+
+
+# Backward-compatible alias for older imports.
+ColorHarmonizer = StyleHarmonizer
 
 if __name__ == "__main__":
     # Test
@@ -84,7 +162,7 @@ if __name__ == "__main__":
     score = ColorHarmonizer.evaluate_fit(input_colors)
     print(f"Initial Harmony Score: {score:.2f}")
     
-    adjusted = ColorHarmonizer.adjust_for_nothing(input_colors)
+    adjusted = StyleHarmonizer.adjust_for_nothing(input_colors)
     print(f"Adjusted Colors: {adjusted}")
     
     score_new = ColorHarmonizer.evaluate_fit(adjusted)
