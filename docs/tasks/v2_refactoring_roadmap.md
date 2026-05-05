@@ -14,7 +14,7 @@ This document captures the technical feedback and outlines the necessary work it
     *   *Requirements:* Ensure the edges of the canvas pin to background colors to avoid edge-bleeding.
 
 ## Epic 2: High-Performance Filter Pipeline (Vectorization)
-**The Problem:** The `apply_dot_matrix` function uses native Python `for` loops and Pillow's `ImageDraw` to render thousands of circles. This is a massive CPU bottleneck for 5K images.
+**The Problem:** Earlier versions of `apply_dot_matrix` used native Python `for` loops and Pillow's `ImageDraw` to render thousands of circles. That approach is a massive CPU bottleneck for 5K images.
 **The Goal:** Shift all pixel-level operations to pure, vectorized NumPy matrix math.
 
 *   **Task 2.1: Vectorize Dot-Matrix Generation**
@@ -67,4 +67,4 @@ This document captures the technical feedback and outlines the necessary work it
 
 *   **Task 7.1: Create a Homebrew Tap**
     *   *Description:* Package the Python script using `pyinstaller` or `shiv` into a standalone binary to eliminate the need for the end-user to manage Python dependencies.
-    *   *Requirements:* Create a GitHub repository (e.g., `homebrew-nothing-wp`) and author a `Formula/nothing-wp.rb` file so users can install it globally via `brew install username/tap/nothing-wp`.
+    *   *Requirements:* Create a GitHub repository (e.g., `homebrew-wp-generator`) and author a `Formula/wp-generator.rb` file so users can install it globally via `brew install username/tap/wp-generator`.

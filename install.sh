@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Nothing-Style Wallpaper Generator Installer
+# Wallpaper Generator Installer
 # Packages the tool into a standalone binary and installs it globally
 
 set -e
 
 INSTALL_DIR="/usr/local/bin"
-BINARY_NAME="nothing-wp"
+BINARY_NAME="wp-generator"
 
-echo "📦 Packaging Nothing Wallpaper Generator into a standalone binary..."
+echo "Packaging Wallpaper Generator into a standalone binary..."
 
 # Ensure dependencies are installed for the build
 echo "Installing Python dependencies..."
@@ -19,7 +19,6 @@ pip install -r requirements.txt --quiet
 echo "Building binary (this may take a minute)..."
 pyinstaller --onefile \
             --name "$BINARY_NAME" \
-            --collect-all colour \
             --collect-all scipy \
             --collect-all numpy \
             --hidden-import engine.gradient \
