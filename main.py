@@ -1,25 +1,20 @@
 import argparse
 import random
 import os
-import numpy as np
-from engine.gradient import MeshGradient, FluidMeshGradient
-from engine.filters import NothingFilters
-from engine.colors import ColorHarmonizer
-from tools.sampler import ScreenSampler
-from PIL import Image
 
 def hex_to_rgb(hex_str):
     try:
-        hex_str = hex_str.lstrip('#')
+        hex_str = hex_str.strip().lstrip('#')
         if len(hex_str) != 6:
             raise ValueError(f"Invalid hex color: {hex_str}")
         return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
     except Exception as e:
-        print(f"Error parsing color '{hex_str}': {e}. Defaulting to Gray.")
-        return (128, 128, 128)
+        raise ValueError(f"Invalid hex color '{hex_str}'") from e
 
 def main():
-    parser = argparse.ArgumentParser(description="Nothing-Style Wallpaper Generator for macOS")
+    parser = argparse.ArgumentParser(description="Wallpaper Generator for macOS")
+    parser.add_argument("--style", choices=["generic", "nothing"], default="generic", help="Rendering style to apply.")
+    parser.add_argument("--nothing", action="store_true", help="Enable Nothing-inspired filters and color harmonization.")
     parser.add_argument("--theme", choices=["dark", "light", "red", "orange", "glass"], help="Pre-defined aesthetic themes.")
     parser.add_argument("--colors", nargs="+", help="Custom hex colors (e.g., #000000 #FFFFFF #FF0000).")
     parser.add_argument("--dots", type=float, default=0.8, help="Intensity of the dot matrix filter (0.0 - 1.0).")
@@ -30,19 +25,37 @@ def main():
     parser.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
     parser.add_argument("--no-adjust", action="store_true", help="Disable automatic color harmonization.")
     parser.add_argument("--res", nargs=2, type=int, default=[3024, 1964], help="Output resolution (width height). Defaults to 14-inch MacBook Pro resolution.")
-    parser.add_argument("--no-nothing", action="store_true", help="Disable all 'Nothing' aesthetic filters and color snapping.")
+    parser.add_argument("--no-nothing", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, help="Random seed for reproducible gradients and colors.")
     parser.add_argument("--legacy-idw", action="store_true", help="Use the legacy Inverse Distance Weighting (IDW) gradient engine.")
     parser.add_argument("--complexity", type=int, default=5, help="Complexity of the gradient pattern. Lower = simpler, wider sweeps. Higher = more folds (default: 5).")
     
     args = parser.parse_args()
+    if args.res[0] <= 0 or args.res[1] <= 0:
+        parser.error("--res values must be positive")
+    if args.dots_spacing <= 0:
+        parser.error("--dots-spacing must be positive")
+    if args.complexity <= 0:
+        parser.error("--complexity must be positive")
+    if not 0 <= args.dots <= 1:
+        parser.error("--dots must be between 0.0 and 1.0")
+    if not 0 <= args.noise <= 1:
+        parser.error("--noise must be between 0.0 and 1.0")
+
+    nothing_style = args.nothing or args.style == "nothing"
+    if args.no_nothing:
+        nothing_style = False
 
     if args.seed is not None:
+        import numpy as np
+
         random.seed(args.seed)
         np.random.seed(args.seed)
 
     # Handle screen sampling if requested
     if args.sample:
+        from tools.sampler import ScreenSampler
+
         sampler = ScreenSampler()
         print("Sampling screen color in 3 seconds... move your mouse!")
         import time
@@ -64,12 +77,15 @@ def main():
 
     # Prepare Colors
     if args.colors:
-        base_colors = [hex_to_rgb(h) for h in args.colors]
+        try:
+            base_colors = [hex_to_rgb(h) for h in args.colors]
+        except ValueError as e:
+            parser.error(str(e))
     elif args.theme:
         base_colors = themes[args.theme]
     else:
-        # Default to dark theme if nothing provided, unless no-nothing is set
-        if not args.no_nothing:
+        # Default the opt-in Nothing-inspired style to its dark theme.
+        if nothing_style:
             base_colors = list(themes["dark"])
         else:
             print("No colors provided. Generating random palette...")
@@ -80,7 +96,7 @@ def main():
 
     # Add random variations if only 1 color is provided
     while len(base_colors) < 3:
-        if args.no_nothing:
+        if not nothing_style:
             base_colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
         else:
             # Generate a color that is either very dark or very light to provide contrast
@@ -90,16 +106,20 @@ def main():
                 base_colors.append((random.randint(220, 255), random.randint(220, 255), random.randint(220, 255)))
 
     # Color Harmonization
-    if not args.no_adjust and not args.no_nothing:
-        print("Evaluating and adjusting colors for 'Nothing' aesthetic...")
-        score = ColorHarmonizer.evaluate_fit(base_colors)
-        print(f"Initial Harmony Score (Delta E): {score:.2f}")
-        final_colors = ColorHarmonizer.adjust_for_nothing(base_colors)
+    if not args.no_adjust and nothing_style:
+        from engine.colors import StyleHarmonizer
+
+        print("Evaluating and adjusting colors for Nothing-inspired style...")
+        score = StyleHarmonizer.evaluate_fit(base_colors)
+        print(f"Initial Contrast Score (Delta E): {score:.2f}")
+        final_colors = StyleHarmonizer.adjust_for_nothing(base_colors)
         print(f"Final Adjusted Colors: {final_colors}")
     else:
         final_colors = base_colors
 
     # Generate Gradient
+    from engine.gradient import MeshGradient, FluidMeshGradient
+
     if args.legacy_idw:
         print(f"Generating Legacy IDW Mesh Gradient ({args.res[0]}x{args.res[1]})...")
         engine = MeshGradient(width=args.res[0], height=args.res[1])
@@ -110,21 +130,23 @@ def main():
         img = engine.generate(final_colors, complexity=args.complexity)
 
     # Apply Filters
-    if not args.no_nothing:
-        print("Applying Nothing aesthetic filters...")
+    from engine.filters import WallpaperFilters
+
+    if nothing_style:
+        print("Applying Nothing-inspired filters...")
         # Add noise first to prevent banding
-        img = NothingFilters.apply_noise(img, amount=args.noise)
+        img = WallpaperFilters.apply_noise(img, amount=args.noise)
         
         # Apply dot matrix
-        img = NothingFilters.apply_dot_matrix(img, spacing=args.dots_spacing, intensity=args.dots, mode=args.dots_mode)
+        img = WallpaperFilters.apply_dot_matrix(img, spacing=args.dots_spacing, intensity=args.dots, mode=args.dots_mode)
         
         if args.theme == "glass":
             print("Applying Frosted Glass effect...")
-            img = NothingFilters.apply_frosted_glass(img, blur_radius=80, noise_amount=0.01)
+            img = WallpaperFilters.apply_frosted_glass(img, blur_radius=80, noise_amount=0.01)
     else:
         # For generic gradients, just add a tiny bit of noise to prevent banding
-        print("Nothing style disabled. Applying minimal dither noise...")
-        img = NothingFilters.apply_noise(img, amount=0.01)
+        print("Applying minimal dither noise...")
+        img = WallpaperFilters.apply_noise(img, amount=0.01)
 
     # Save
     output_dir = os.path.dirname(args.output)
