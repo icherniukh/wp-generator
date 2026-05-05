@@ -1,39 +1,28 @@
 #!/bin/bash
 
 # Wallpaper Generator Installer
-# Packages the tool into a standalone binary and installs it globally
+# Installs Python dependencies and creates a global shell wrapper
 
 set -e
 
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="wp-generator"
 
-echo "Packaging Wallpaper Generator into a standalone binary..."
-
-# Ensure dependencies are installed for the build
 echo "Installing Python dependencies..."
-pip install -r requirements.txt --quiet
+pip install -r "$REPO_DIR/requirements.txt" --quiet
 
-# Use PyInstaller to create a single-file executable
-# --collect-all ensures data files for heavy libraries are included
-echo "Building binary (this may take a minute)..."
-pyinstaller --onefile \
-            --name "$BINARY_NAME" \
-            --collect-all scipy \
-            --collect-all numpy \
-            --hidden-import engine.gradient \
-            --hidden-import engine.filters \
-            --hidden-import engine.colors \
-            --hidden-import tools.sampler \
-            main.py --noconfirm
+echo "Installing $BINARY_NAME to $INSTALL_DIR..."
+sudo tee "$INSTALL_DIR/$BINARY_NAME" > /dev/null <<EOF
+#!/bin/bash
+exec python3 "$REPO_DIR/main.py" "\$@"
+EOF
+sudo chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-# Move the resulting binary to /usr/local/bin
-echo "Installing binary to $INSTALL_DIR/$BINARY_NAME..."
-sudo mv "dist/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+# Remove old binary name if present
+if [ -f "$INSTALL_DIR/nothing-wp" ]; then
+    echo "Removing old 'nothing-wp' binary..."
+    sudo rm "$INSTALL_DIR/nothing-wp"
+fi
 
-# Clean up build artifacts
-echo "Cleaning up build artifacts..."
-rm -rf build dist "$BINARY_NAME.spec"
-
-echo "Installation complete! 🎉"
-echo "You can now run '$BINARY_NAME' from any directory."
+echo "Done. Run '$BINARY_NAME --help' from any directory."
