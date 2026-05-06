@@ -36,15 +36,20 @@ class WallpaperFilters:
             # Modulate radius: Brighter pixels = smaller dots
             radius = max_radius * (1.0 - cell_lum) * intensity
             alpha_val = int(255 * intensity)
-            mask = (dist_sq <= radius**2) & (radius > 0.5)
-            overlay[..., 3] = np.where(mask, alpha_val, 0)
+            dist = np.sqrt(dist_sq)
+            # Smoothstep-like falloff for anti-aliasing
+            coverage = np.clip(radius - dist + 0.5, 0, 1)
+            # Only apply if radius > 0.5
+            coverage = np.where(radius > 0.5, coverage, 0)
+            overlay[..., 3] = (coverage * alpha_val).astype(np.uint8)
         else: # alpha mode
             radius = max_radius
             # Darker pixels = higher opacity
-            alpha = np.clip(255 * (1.0 - cell_lum) * intensity, 0, 255).astype(np.uint8)
-            mask = dist_sq <= radius**2
-            # Only apply alpha if greater than a threshold (e.g. 5)
-            overlay[..., 3] = np.where(mask & (alpha > 5), alpha, 0)
+            alpha = np.clip(255 * (1.0 - cell_lum) * intensity, 0, 255)
+            dist = np.sqrt(dist_sq)
+            coverage = np.clip(radius - dist + 0.5, 0, 1)
+            final_alpha = coverage * alpha
+            overlay[..., 3] = np.where(final_alpha > 5, final_alpha, 0).astype(np.uint8)
         
         overlay_img = Image.fromarray(overlay, mode="RGBA")
         return Image.alpha_composite(image.convert("RGBA"), overlay_img)
