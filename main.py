@@ -68,21 +68,26 @@ def generate(args, nothing_style, seed):
     elif nothing_style:
         base_colors = list(themes["dark"])
     else:
-        # Scale colors based on complexity, but cap at 4 because 5+ colors often get muddy.
-        num_colors = max(2, min(4, complexity // 2))
+        import colorsys
+        # Scale colors based on complexity, max 5.
+        num_colors = max(2, min(5, complexity // 2))
         base_colors = []
-        for _ in range(num_colors):
-            roll = random.random()
-            if roll < 0.25:
-                # 25% chance for a dark/gray anchor color (often black-ish)
-                v = random.randint(5, 45)
-                base_colors.append((v, v, v + random.randint(0, 8)))
-            elif roll < 0.40:
-                # 15% chance for a neutral mid/light gray
-                v = random.randint(100, 210)
-                base_colors.append((v, v, v))
-            else:
-                base_colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        
+        # 1. Grounding Anchor (70% chance dark, 30% light, low saturation)
+        is_dark = random.random() < 0.7
+        h = random.random()
+        s = random.uniform(0.0, 0.25)
+        l = random.uniform(0.05, 0.18) if is_dark else random.uniform(0.85, 0.95)
+        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        base_colors.append((int(r*255), int(g*255), int(b*255)))
+        
+        # 2. Accents (Vibrant colors spread across hue space)
+        for _ in range(num_colors - 1):
+            h = random.random()
+            s = random.uniform(0.5, 1.0)
+            l = random.uniform(0.3, 0.7)
+            r, g, b = colorsys.hls_to_rgb(h, l, s)
+            base_colors.append((int(r*255), int(g*255), int(b*255)))
 
     # No padding needed for max colors, just ensure minimum 2
     while len(base_colors) < 2:
