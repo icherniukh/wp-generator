@@ -104,11 +104,11 @@ def generate(args, nothing_style, seed):
     if args.output is not None:
         output_path = args.output
     else:
-        timestamp = datetime.now().strftime("%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         color_str = "-".join(f"{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors[:3])
         if len(final_colors) > 3:
             color_str += f"-plus{len(final_colors)-3}"
-        output_path = f"wp_{color_str}_{timestamp}.png"
+        output_path = f"wp_{timestamp}_{color_str}.png"
 
     color_hex = " ".join(f"#{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors[:3])
     if len(final_colors) > 3:
