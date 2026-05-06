@@ -1,0 +1,22 @@
+{
+  "preset_id": "balanced",
+  "color_space": "hls",
+  "color_count": { "type": "uniform_int", "min": 2, "max": 5 },
+  "palette_structure": [
+    {
+      "role": "grounding_anchor",
+      "hue": { "type": "uniform", "min": 0, "max": 1.0 },
+      "lightness": { "type": "gaussian", "mu": 0.1, "sigma": 0.05, "clip": [0.0, 0.2] },
+      "chroma": { "type": "beta", "alpha": 2, "beta": 5, "scale": 0.3 }
+    },
+    {
+      "role": "accent_core",
+      "hue": { "type": "uniform", "min": 0, "max": 1.0 },
+      "lightness": { "type": "gaussian", "mu": 0.6, "sigma": 0.15, "clip": [0.3, 0.9] },
+      "chroma": { "type": "beta", "alpha": 5, "beta": 2, "scale": 0.6, "offset": 0.3 }
+    }
+  ],
+  "overrides": {
+      "fluid_mode": "spatial"
+  }
+}

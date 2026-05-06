@@ -33,6 +33,7 @@ venv/
 *.swo
 
 # Project specific
+wp_*.png
 output/*.png
 !output/.gitkeep
 .DS_Store

@@ -200,7 +200,14 @@ def main():
     # --- Color Group ---
     color_group = parser.add_argument_group("Color Palettes")
     color_source = color_group.add_mutually_exclusive_group()
-    color_source.add_argument("--preset", choices=["dark", "light", "red", "orange", "glass", "cupertino", "nothing"], help="Pre-defined aesthetic preset.")
+    
+    import os
+    try:
+        available_presets = [f.replace(".json", "") for f in os.listdir("presets") if f.endswith(".json")]
+    except FileNotFoundError:
+        available_presets = []
+
+    color_source.add_argument("--preset", choices=available_presets, help="Pre-defined aesthetic preset.")
     color_source.add_argument("--colors", nargs="+", metavar="HEX", help="Custom hex colors.")
     color_source.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
     
@@ -209,8 +216,8 @@ def main():
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
     engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default="random", help=adv_help("Fluid mesh generation logic."))
-    engine_group.add_argument("--legacy-idw", action="store_true", help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
+    engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
+    engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
     engine_group.add_argument("--harmonize", choices=["theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer override."))
 
     # --- Filters Overrides ---
@@ -220,16 +227,16 @@ def main():
     filter_group.add_argument("--dots-mode", choices=["size", "alpha"], default=None, help=adv_help("Vary dot 'size' or 'alpha'."))
     filter_group.add_argument("--dots-spacing", type=int, default=None, help=adv_help("Pixel spacing between dots."))
     filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
-    filter_group.add_argument("--preview-fx", action="store_true", help=adv_help("Preview FX rendering layers for development."))
+    filter_group.add_argument("--preview-fx", action="store_true", default=None, help=adv_help("Preview FX rendering layers for development."))
 
     # --- Misc & Legacy ---
     misc_group = parser.add_argument_group("Miscellaneous" if show_all else "Miscellaneous (hidden, use --help-all)")
     misc_group.add_argument("--seed", type=int, default=None, help=adv_help("Base seed for reproducibility."))
     
-    parser.add_argument("--style", choices=["generic", "nothing"], default="generic", help=argparse.SUPPRESS)
-    parser.add_argument("--nothing", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--no-adjust", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--no-nothing", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--style", choices=["generic", "nothing"], default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--nothing", action="store_true", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--no-adjust", action="store_true", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--no-nothing", action="store_true", default=None, help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
