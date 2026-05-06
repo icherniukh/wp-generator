@@ -160,48 +160,62 @@ def generate(args, nothing_style, seed):
 
 
 def main():
+    import sys
+    show_all = "--help-all" in sys.argv
+
     parser = argparse.ArgumentParser(
-        description="Wallpaper Generator for macOS",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description="Wallpaper Generator for macOS\nRun with --help-all to see advanced engine and filter overrides.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False
     )
     
-    # --- Output Group ---
-    output_group = parser.add_argument_group("Output Options")
-    output_group.add_argument("--output", default=None, help="Output path (single image). Auto-named if omitted.")
-    output_group.add_argument("--preset", choices=list(SCREEN_PRESETS.keys()), default="mbp14", help="Standard screen resolution preset.")
-    output_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help="Custom resolution. Overrides preset.")
-    output_group.add_argument("--count", type=int, default=1, help="Number of wallpapers to generate.")
+    # --- Help Options ---
+    help_group = parser.add_argument_group("Help")
+    help_group.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="Show this compact help message and exit.")
+    help_group.add_argument("--help-all", action="help", default=argparse.SUPPRESS, help="Show full help message including advanced overrides and exit.")
+
+    def adv_help(text):
+        return text if show_all else argparse.SUPPRESS
+
+    # --- Core Group ---
+    core_group = parser.add_argument_group("Core Settings")
+    core_group.add_argument("--preset", choices=list(SCREEN_PRESETS.keys()), default="mbp14", help="Standard screen resolution preset.")
+    core_group.add_argument("--count", type=int, default=1, help="Number of wallpapers to generate.")
+    core_group.add_argument("--output", default=None, help="Output path (single image). Auto-named if omitted.")
 
     # --- Color Group ---
-    color_group = parser.add_argument_group("Colors & Styling")
+    color_group = parser.add_argument_group("Color Palettes")
     color_source = color_group.add_mutually_exclusive_group()
+    color_source.add_argument("--theme", choices=["dark", "light", "red", "orange", "glass", "cupertino", "nothing"], help="Pre-defined color palette or aesthetic.")
     color_source.add_argument("--colors", nargs="+", metavar="HEX", help="Custom hex colors.")
-    color_source.add_argument("--theme", choices=["dark", "light", "red", "orange", "glass"], help="Pre-defined color palette.")
     color_source.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
     
-    color_group.add_argument("--style", choices=["generic", "nothing"], default="generic", help="Overall visual style.")
-    color_group.add_argument("--harmonize", choices=["theory", "nothing", "none"], default=None,
-                        help="Color harmonizer: 'theory' (classical hue rules), 'nothing' (Nothing-style), 'none' (raw).")
-    color_group.add_argument("--no-adjust", action="store_true", help=argparse.SUPPRESS) # Alias for --harmonize none
+    # --- Engine Overrides ---
+    engine_title = "Advanced Engine Overrides" if show_all else "Advanced Engine Overrides (hidden, use --help-all)"
+    engine_group = parser.add_argument_group(engine_title)
+    engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
+    engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
+    engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default="random", help=adv_help("Fluid mesh generation logic."))
+    engine_group.add_argument("--legacy-idw", action="store_true", help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
+    engine_group.add_argument("--harmonize", choices=["theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer override."))
+
+    # --- Filters Overrides ---
+    filter_title = "Advanced Filter Overrides" if show_all else "Advanced Filter Overrides (hidden, use --help-all)"
+    filter_group = parser.add_argument_group(filter_title)
+    filter_group.add_argument("--dots", type=float, default=None, help=adv_help("Dot matrix intensity (0.0-1.0)."))
+    filter_group.add_argument("--dots-mode", choices=["size", "alpha"], default=None, help=adv_help("Vary dot 'size' or 'alpha'."))
+    filter_group.add_argument("--dots-spacing", type=int, default=None, help=adv_help("Pixel spacing between dots."))
+    filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
+    filter_group.add_argument("--preview-fx", action="store_true", help=adv_help("Preview FX rendering layers for development."))
+
+    # --- Misc & Legacy ---
+    misc_group = parser.add_argument_group("Miscellaneous" if show_all else "Miscellaneous (hidden, use --help-all)")
+    misc_group.add_argument("--seed", type=int, default=None, help=adv_help("Base seed for reproducibility."))
     
-    # --- Engine Group ---
-    engine_group = parser.add_argument_group("Rendering Engine")
-    engine_group.add_argument("--complexity", type=int, default=None, help="Gradient complexity (folds/points).")
-    engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default="random", help="Fluid mesh generation logic.")
-    engine_group.add_argument("--legacy-idw", action="store_true", help="Use legacy IDW gradient engine instead of fluid mesh.")
-
-    # --- Filters Group ---
-    filter_group = parser.add_argument_group("Filters & Effects")
-    filter_group.add_argument("--nothing", action="store_true", help="Enable Nothing-inspired filters and color harmonization (alias).")
-    filter_group.add_argument("--dots", type=float, default=None, help="Dot matrix intensity (0.0-1.0).")
-    filter_group.add_argument("--dots-mode", choices=["size", "alpha"], default=None, help="Vary dot 'size' or 'alpha'.")
-    filter_group.add_argument("--dots-spacing", type=int, default=None, help="Pixel spacing between dots.")
-    filter_group.add_argument("--noise", type=float, default=None, help="Grain/noise amount (0.0-1.0).")
-
-    # --- Misc Group ---
-    misc_group = parser.add_argument_group("Miscellaneous")
-    misc_group.add_argument("--seed", type=int, default=None, help="Base seed for reproducibility.")
-    misc_group.add_argument("--no-nothing", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--style", choices=["generic", "nothing"], default="generic", help=argparse.SUPPRESS)
+    parser.add_argument("--nothing", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--no-adjust", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--no-nothing", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
