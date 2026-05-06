@@ -1,0 +1,32 @@
+{
+  "preset_id": "nothing",
+  "color_space": "hls",
+  "color_count": {
+    "type": "uniform_int",
+    "min": 2,
+    "max": 3
+  },
+  "palette_structure": [
+    {
+      "role": "grounding_anchor",
+      "hue": { "type": "uniform", "min": 0, "max": 1.0 },
+      "lightness": { "type": "gaussian", "mu": 0.08, "sigma": 0.02, "clip": [0.0, 0.15] },
+      "chroma": { "type": "gaussian", "mu": 0.05, "sigma": 0.02, "clip": [0.0, 0.1] }
+    },
+    {
+      "role": "accent_core",
+      "hue": { "type": "uniform", "min": 0.0, "max": 1.0 },
+      "lightness": { "type": "bimodal", "modes": [
+        { "weight": 0.5, "type": "gaussian", "mu": 0.5, "sigma": 0.1 },
+        { "weight": 0.5, "type": "gaussian", "mu": 0.9, "sigma": 0.05 }
+      ]},
+      "chroma": { "type": "gaussian", "mu": 0.8, "sigma": 0.1, "clip": [0.5, 1.0] }
+    }
+  ],
+  "overrides": {
+    "noise": { "type": "gaussian", "mu": 0.15, "sigma": 0.05, "clip": [0.1, 0.25] },
+    "dots_mode": "size",
+    "dots_spacing": { "type": "gaussian", "mu": 30, "sigma": 10, "clip": [10, 60] },
+    "dots": { "type": "gaussian", "mu": 0.8, "sigma": 0.1, "clip": [0.5, 1.0] }
+  }
+}
