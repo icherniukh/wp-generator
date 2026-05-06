@@ -39,19 +39,37 @@ def generate(args, nothing_style, seed):
     random.seed(seed)
     np.random.seed(seed)
 
-    # Randomize any param the user left unset
-    complexity  = args.complexity  if args.complexity  is not None else random.randint(2, 18)
-    noise       = args.noise       if args.noise       is not None else round(random.uniform(0.005, 0.20), 3)
-    fluid_mode  = args.fluid_mode  if getattr(args, 'fluid_mode', None) else "random"
+    # --- Preset Engine ---
+    from engine.presets import PresetEngine
+    preset_engine = PresetEngine()
+    
+    preset_data = {}
+    if getattr(args, 'preset', None) and args.preset not in ["dark", "light", "red", "orange", "glass"]:
+        try:
+            preset_data = preset_engine.load_preset(args.preset)
+        except FileNotFoundError:
+            pass # fallback to legacy if missing
 
-    if nothing_style:
-        dots         = args.dots         if args.dots         is not None else round(random.uniform(0.1, 1.0), 2)
-        dots_spacing = args.dots_spacing if args.dots_spacing is not None else random.randint(6, 80)
-        dots_mode    = args.dots_mode    if args.dots_mode    is not None else random.choice(["size", "alpha"])
-    else:
-        dots         = args.dots         if args.dots         is not None else round(random.uniform(0.2, 1.0), 2)
-        dots_spacing = args.dots_spacing if args.dots_spacing is not None else random.randint(8, 60)
-        dots_mode    = args.dots_mode    if args.dots_mode    is not None else random.choice(["size", "alpha"])
+    overrides = preset_engine.get_engine_overrides(preset_data)
+
+    # Helper to resolve param: CLI arg > Preset Override > Fallback Random
+    def resolve_param(arg_val, override_key, fallback_gen):
+        if arg_val is not None:
+            return arg_val
+        if override_key in overrides:
+            val = overrides[override_key]
+            if isinstance(val, dict):
+                return int(preset_engine._sample_distribution(val)) if val.get("type", "").endswith("int") else preset_engine._sample_distribution(val)
+            return val
+        return fallback_gen()
+
+    complexity  = resolve_param(args.complexity, "complexity", lambda: random.randint(2, 18))
+    noise       = resolve_param(args.noise, "noise", lambda: round(random.uniform(0.005, 0.20), 3))
+    fluid_mode  = resolve_param(getattr(args, 'fluid_mode', None), "fluid_mode", lambda: "random")
+    
+    dots         = resolve_param(args.dots, "dots", lambda: round(random.uniform(0.2, 1.0), 2))
+    dots_spacing = resolve_param(args.dots_spacing, "dots_spacing", lambda: random.randint(8, 60))
+    dots_mode    = resolve_param(args.dots_mode, "dots_mode", lambda: random.choice(["size", "alpha"]))
 
     themes = {
         "dark":   [(10, 10, 12),    (25, 25, 28),    (35, 35, 40)],
@@ -63,25 +81,21 @@ def generate(args, nothing_style, seed):
 
     if args.colors:
         base_colors = [hex_to_rgb(h) for h in args.colors]
-    elif args.theme:
-        base_colors = list(themes[args.theme])
-    elif nothing_style:
-        base_colors = list(themes["dark"])
+    elif getattr(args, 'preset', None) in themes:
+        base_colors = list(themes[args.preset])
+    elif preset_data:
+        base_colors = preset_engine.generate_palette(preset_data, count=complexity//2 if args.complexity else None)
     else:
+        # Fallback dynamic generation if no preset matched
         import colorsys
-        # Scale colors based on complexity, max 5.
         num_colors = max(2, min(5, complexity // 2))
         base_colors = []
-        
-        # 1. Grounding Anchor (70% chance dark, 30% light, low saturation)
         is_dark = random.random() < 0.7
         h = random.random()
         s = random.uniform(0.0, 0.25)
         l = random.uniform(0.05, 0.18) if is_dark else random.uniform(0.85, 0.95)
         r, g, b = colorsys.hls_to_rgb(h, l, s)
         base_colors.append((int(r*255), int(g*255), int(b*255)))
-        
-        # 2. Accents (Vibrant colors spread across hue space)
         for _ in range(num_colors - 1):
             h = random.random()
             s = random.uniform(0.5, 1.0)
@@ -179,14 +193,14 @@ def main():
 
     # --- Core Group ---
     core_group = parser.add_argument_group("Core Settings")
-    core_group.add_argument("--preset", choices=list(SCREEN_PRESETS.keys()), default="mbp14", help="Standard screen resolution preset.")
+    core_group.add_argument("--device", choices=list(SCREEN_PRESETS.keys()), default="mbp14", help="Standard screen resolution device.")
     core_group.add_argument("--count", type=int, default=1, help="Number of wallpapers to generate.")
     core_group.add_argument("--output", default=None, help="Output path (single image). Auto-named if omitted.")
 
     # --- Color Group ---
     color_group = parser.add_argument_group("Color Palettes")
     color_source = color_group.add_mutually_exclusive_group()
-    color_source.add_argument("--theme", choices=["dark", "light", "red", "orange", "glass", "cupertino", "nothing"], help="Pre-defined color palette or aesthetic.")
+    color_source.add_argument("--preset", choices=["dark", "light", "red", "orange", "glass", "cupertino", "nothing"], help="Pre-defined aesthetic preset.")
     color_source.add_argument("--colors", nargs="+", metavar="HEX", help="Custom hex colors.")
     color_source.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
     

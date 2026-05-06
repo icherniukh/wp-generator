@@ -1,0 +1,71 @@
+import unittest
+import random
+from engine.presets import PresetEngine
+
+class TestPresetEngine(unittest.TestCase):
+    def setUp(self):
+        self.engine = PresetEngine(preset_dir="presets")
+        
+        self.mock_preset = {
+            "preset_id": "test_preset",
+            "color_count": {"type": "uniform_int", "min": 3, "max": 3},
+            "palette_structure": [
+                {
+                    "role": "grounding_anchor",
+                    "hue": {"type": "uniform", "min": 0.0, "max": 1.0},
+                    "lightness": {"type": "gaussian", "mu": 0.2, "sigma": 0.05, "clip": [0.0, 0.4]},
+                    "chroma": {"type": "beta", "alpha": 2, "beta": 5, "scale": 0.3}
+                },
+                {
+                    "role": "accent_core",
+                    "hue": {"type": "relative", "target": "grounding_anchor", "mu_offset": 90, "sigma": 10},
+                    "lightness": {"type": "gaussian", "mu": 0.7, "sigma": 0.1, "clip": [0.5, 0.9]},
+                    "chroma": {"type": "beta", "alpha": 5, "beta": 2, "scale": 0.5, "offset": 0.5}
+                }
+            ],
+            "overrides": {
+                "noise": {"type": "gaussian", "mu": 0.05, "sigma": 0.01, "clip": [0.0, 0.1]},
+                "fluid_mode": "spatial"
+            }
+        }
+
+    def test_sample_distribution_uniform(self):
+        conf = {"type": "uniform", "min": 10, "max": 20}
+        samples = [self.engine._sample_distribution(conf) for _ in range(50)]
+        for val in samples:
+            self.assertGreaterEqual(val, 10)
+            self.assertLessEqual(val, 20)
+
+    def test_sample_distribution_clip(self):
+        conf = {"type": "gaussian", "mu": 0.5, "sigma": 1.0, "clip": [0.3, 0.7]}
+        samples = [self.engine._sample_distribution(conf) for _ in range(100)]
+        for val in samples:
+            self.assertGreaterEqual(val, 0.3)
+            self.assertLessEqual(val, 0.7)
+
+    def test_generate_palette_count(self):
+        colors = self.engine.generate_palette(self.mock_preset)
+        self.assertEqual(len(colors), 3)
+        # Check type
+        for c in colors:
+            self.assertIsInstance(c, tuple)
+            self.assertEqual(len(c), 3)
+            for channel in c:
+                self.assertIsInstance(channel, int)
+                self.assertTrue(0 <= channel <= 255)
+                
+    def test_get_engine_overrides(self):
+        overrides = self.engine.get_engine_overrides(self.mock_preset)
+        self.assertEqual(overrides["fluid_mode"], "spatial")
+        self.assertIn("noise", overrides)
+
+    def test_live_preset_loading(self):
+        # Ensure cupertino.json is valid
+        data = self.engine.load_preset("cupertino")
+        self.assertEqual(data["preset_id"], "cupertino")
+        colors = self.engine.generate_palette(data)
+        self.assertGreaterEqual(len(colors), 2)
+        self.assertLessEqual(len(colors), 5)
+
+if __name__ == '__main__':
+    unittest.main()
