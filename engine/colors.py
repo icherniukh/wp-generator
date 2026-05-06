@@ -153,6 +153,57 @@ def lch_to_lab(lch):
     return np.array([L, C * np.cos(h_rad), C * np.sin(h_rad)])
 
 
+class ColorTheoryHarmonizer:
+    """Applies classical color harmony rules (hue rotation in LCH space)."""
+
+    MODES = ["complementary", "analogous", "triadic", "split_complementary", "tetradic"]
+
+    _HUE_OFFSETS = {
+        "complementary":       [0, 180, 30],
+        "analogous":           [0, 30, -30],
+        "triadic":             [0, 120, 240],
+        "split_complementary": [0, 150, 210],
+        "tetradic":            [0, 90, 180],
+    }
+
+    @classmethod
+    def harmonize(cls, colors, mode=None):
+        import random as _rnd
+        if mode is None:
+            mode = _rnd.choice(cls.MODES)
+
+        offsets = cls._HUE_OFFSETS[mode]
+
+        # Find seed hue from the most chromatic input color
+        lchs = [lab_to_lch(rgb_to_lab(c)) for c in colors]
+        seed_hue = max(lchs, key=lambda lch: lch[1])[2]
+
+        # Sort inputs by lightness so output preserves dark/light character
+        sorted_lchs = sorted(lchs, key=lambda lch: lch[0])
+
+        result = []
+        for i, lch in enumerate(sorted_lchs):
+            L, C, _ = lch
+            # Determine offset based on i
+            # If there are more colors than offsets, we vary Lightness and Chroma to create tonal variations
+            base_offset = offsets[i % len(offsets)]
+            new_H = (seed_hue + base_offset) % 360
+            
+            # Tonal variation for N > len(offsets)
+            cycle = i // len(offsets)
+            if cycle > 0:
+                L = max(10, min(90, L + (cycle * 10 * (1 if cycle % 2 == 0 else -1))))
+                new_C = max(C * (0.8 ** cycle), 10.0)
+            else:
+                new_C = max(C, 10.0)
+                
+            lab_new = lch_to_lab(np.array([L, new_C, new_H]))
+            rgb_new = lab_to_rgb(lab_new)
+            result.append(tuple(int(v) for v in (np.clip(rgb_new, 0, 1) * 255).astype(int)))
+
+        return result
+
+
 # Backward-compatible alias for older imports.
 ColorHarmonizer = StyleHarmonizer
 
