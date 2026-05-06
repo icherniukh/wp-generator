@@ -1,0 +1,31 @@
+{
+  "preset_id": "cyberpunk",
+  "color_space": "hls",
+  "color_count": { "type": "uniform_int", "min": 4, "max": 5 },
+  "palette_structure": [
+    {
+      "role": "grounding_anchor",
+      "hue": { "type": "bimodal", "modes": [
+        { "weight": 0.5, "type": "gaussian", "mu": 0.65, "sigma": 0.05 },
+        { "weight": 0.5, "type": "gaussian", "mu": 0.8, "sigma": 0.05 }
+      ]},
+      "lightness": { "type": "gaussian", "mu": 0.05, "sigma": 0.02, "clip": [0.0, 0.1] },
+      "chroma": { "type": "gaussian", "mu": 0.3, "sigma": 0.1, "clip": [0.1, 0.5] }
+    },
+    {
+      "role": "accent_core",
+      "hue": { "type": "bimodal", "modes": [
+        { "weight": 0.33, "type": "gaussian", "mu": 0.15, "sigma": 0.05 }, 
+        { "weight": 0.33, "type": "gaussian", "mu": 0.5, "sigma": 0.05 },  
+        { "weight": 0.34, "type": "gaussian", "mu": 0.85, "sigma": 0.05 }  
+      ]},
+      "lightness": { "type": "gaussian", "mu": 0.5, "sigma": 0.1, "clip": [0.4, 0.6] },
+      "chroma": { "type": "gaussian", "mu": 0.9, "sigma": 0.1, "clip": [0.8, 1.0] }
+    }
+  ],
+  "overrides": {
+    "noise": {"type": "gaussian", "mu": 0.08, "sigma": 0.02, "clip": [0.05, 0.12]},
+    "fluid_mode": "spatial",
+    "harmonize": "none"
+  }
+}

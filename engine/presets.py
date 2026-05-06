@@ -2,10 +2,13 @@ import json
 import os
 import random
 import math
+import colorsys
 from typing import Dict, Any, List
 
 def hls_to_rgb(h, l, s):
-    import colorsys
+    h = max(0.0, min(1.0, h))
+    l = max(0.0, min(1.0, l))
+    s = max(0.0, min(1.0, s))
     r, g, b = colorsys.hls_to_rgb(h, l, s)
     return int(r * 255), int(g * 255), int(b * 255)
 
@@ -15,13 +18,15 @@ class PresetEngine:
 
     def load_preset(self, preset_id: str) -> Dict[str, Any]:
         """Loads a JSON preset file from disk."""
-        # Special case for legacy basic themes, we can still generate them on the fly if needed,
-        # but let's assume they are all JSON files now.
         path = os.path.join(self.preset_dir, f"{preset_id}.json")
         if not os.path.exists(path):
             raise FileNotFoundError(f"Preset file not found: {path}")
-        with open(path, "r") as f:
-            return json.load(f)
+        try:
+            with open(path, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"Warning: Failed to parse preset '{preset_id}': {e}")
+            return {}
 
     def _sample_distribution(self, config: Dict[str, Any]) -> float:
         """Samples a value based on a distribution configuration."""
