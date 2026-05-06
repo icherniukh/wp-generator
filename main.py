@@ -68,12 +68,21 @@ def generate(args, nothing_style, seed):
     elif nothing_style:
         base_colors = list(themes["dark"])
     else:
-        # Scale colors based on complexity. Higher complexity = more colors can be used effectively.
-        num_colors = max(2, min(8, complexity // 2))
-        base_colors = [
-            (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-            for _ in range(num_colors)
-        ]
+        # Scale colors based on complexity, but cap at 4 because 5+ colors often get muddy.
+        num_colors = max(2, min(4, complexity // 2))
+        base_colors = []
+        for _ in range(num_colors):
+            roll = random.random()
+            if roll < 0.25:
+                # 25% chance for a dark/gray anchor color (often black-ish)
+                v = random.randint(5, 45)
+                base_colors.append((v, v, v + random.randint(0, 8)))
+            elif roll < 0.40:
+                # 15% chance for a neutral mid/light gray
+                v = random.randint(100, 210)
+                base_colors.append((v, v, v))
+            else:
+                base_colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
     # No padding needed for max colors, just ensure minimum 2
     while len(base_colors) < 2:
