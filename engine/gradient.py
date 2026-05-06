@@ -8,7 +8,7 @@ class FluidMeshGradient:
         self.width = width
         self.height = height
 
-    def generate(self, colors, complexity=5):
+    def generate(self, colors, complexity=5, fluid_mode="random"):
         """
         Generates a fluid mesh gradient using bicubic interpolation of a low-res color grid.
         Produces much more organic, overlapping folds of color than IDW.
@@ -16,6 +16,7 @@ class FluidMeshGradient:
         :param complexity: Approximates the number of "points" or "directions" of color.
                            We map this to a grid size to ensure the total number of points 
                            roughly matches the requested complexity.
+        :param fluid_mode: "random" or "spatial".
         """
         # Determine grid size based on target complexity and aspect ratio.
         # We want (cols * rows) roughly equal to complexity.
@@ -33,13 +34,33 @@ class FluidMeshGradient:
         # Create a low-res color grid
         grid = np.zeros((rows, cols, 3), dtype=np.float32)
         
+        num_colors = len(colors)
+        colors_arr = np.array(colors, dtype=np.float32)
+
         for y in range(rows):
             for x in range(cols):
-                # Blend 2 random colors for smooth transitions in the base grid
-                c1 = np.array(random.choice(colors), dtype=np.float32)
-                c2 = np.array(random.choice(colors), dtype=np.float32)
-                alpha = random.random()
-                grid[y, x] = c1 * alpha + c2 * (1 - alpha)
+                if fluid_mode == "spatial":
+                    # Spatial mode: map position to color index using sine waves
+                    nx = x / max(1, cols - 1)
+                    ny = y / max(1, rows - 1)
+                    
+                    val1 = np.sin(nx * np.pi + ny * np.pi) * 0.5 + 0.5
+                    val2 = np.cos(nx * 2 * np.pi - ny * np.pi) * 0.5 + 0.5
+                    
+                    idx1 = int(val1 * (num_colors - 1))
+                    idx2 = int(val2 * (num_colors - 1))
+                    
+                    c1 = colors_arr[idx1 % num_colors]
+                    c2 = colors_arr[idx2 % num_colors]
+                    alpha = (val1 + val2) / 2
+                else:
+                    # Blend 2 random colors for smooth transitions in the base grid
+                    c1 = np.array(random.choice(colors), dtype=np.float32)
+                    c2 = np.array(random.choice(colors), dtype=np.float32)
+                    alpha = random.random()
+                
+                # Gamma-corrected blending (sqrt of sum of squares)
+                grid[y, x] = np.sqrt(c1**2 * alpha + c2**2 * (1 - alpha))
         
         # Scale factors to reach target resolution
         zoom_y = self.height / rows
