@@ -148,12 +148,13 @@ def generate(args, nothing_style, seed):
     if not res:
         res = SCREEN_PRESETS.get(args.preset, SCREEN_PRESETS["mbp14"])
 
-    from engine.gradient import MeshGradient, FluidMeshGradient
+    from engine.gradient import MeshGradient, FluidMeshGradient, SimplexMeshGradient
     if getattr(args, 'legacy_idw', False):
         engine = MeshGradient(width=res[0], height=res[1])
         img = engine.generate(final_colors, p=2.5)
     else:
-        engine = FluidMeshGradient(width=res[0], height=res[1])
+        # Default to the new Simplex Noise Warp engine
+        engine = SimplexMeshGradient(width=res[0], height=res[1])
         img = engine.generate(final_colors, complexity=complexity, fluid_mode=fluid_mode)
 
     from engine.filters import WallpaperFilters

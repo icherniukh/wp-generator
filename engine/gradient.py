@@ -2,6 +2,10 @@ import numpy as np
 from PIL import Image
 import random
 import scipy.ndimage
+try:
+    import noise
+except ImportError:
+    noise = None
 
 class FluidMeshGradient:
     def __init__(self, width=5120, height=2880):
@@ -71,6 +75,97 @@ class FluidMeshGradient:
         res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=3, mode='nearest')
         
         # Clip to valid RGB range and convert
+        res = np.clip(res, 0, 255).astype(np.uint8)
+        return Image.fromarray(res)
+
+class SimplexMeshGradient:
+    def __init__(self, width=5120, height=2880):
+        self.width = width
+        self.height = height
+
+    def generate(self, colors, complexity=5, fluid_mode="random"):
+        if noise is None:
+            raise ImportError("The 'noise' package is required for SimplexMeshGradient. Install with 'pip install noise'.")
+            
+        # 1. Base gradient: low-res color grid
+        aspect_ratio = self.width / self.height
+        min_complexity = max(4, complexity)
+        rows = max(2, int(np.sqrt(min_complexity / aspect_ratio)))
+        cols = max(2, int(rows * aspect_ratio))
+        
+        grid = np.zeros((rows, cols, 3), dtype=np.float32)
+        num_colors = len(colors)
+        colors_arr = np.array(colors, dtype=np.float32)
+
+        for y in range(rows):
+            for x in range(cols):
+                if fluid_mode == "spatial":
+                    nx = x / max(1, cols - 1)
+                    ny = y / max(1, rows - 1)
+                    val1 = np.sin(nx * np.pi + ny * np.pi) * 0.5 + 0.5
+                    val2 = np.cos(nx * 2 * np.pi - ny * np.pi) * 0.5 + 0.5
+                    idx1 = int(val1 * (num_colors - 1))
+                    idx2 = int(val2 * (num_colors - 1))
+                    c1 = colors_arr[idx1 % num_colors]
+                    c2 = colors_arr[idx2 % num_colors]
+                    alpha = (val1 + val2) / 2
+                else:
+                    c1 = np.array(random.choice(colors), dtype=np.float32)
+                    c2 = np.array(random.choice(colors), dtype=np.float32)
+                    alpha = random.random()
+                grid[y, x] = np.sqrt(c1**2 * alpha + c2**2 * (1 - alpha))
+
+        # 2. Coordinate mesh
+        x = np.linspace(0, cols - 1, self.width, dtype=np.float32)
+        y = np.linspace(0, rows - 1, self.height, dtype=np.float32)
+        xv, yv = np.meshgrid(x, y)
+
+        # 3. Generate Simplex Noise warp
+        # Calculate noise on a low-res grid for performance, then scale up
+        noise_scale = 0.05 * (10 / complexity)
+        noise_res_w = max(2, self.width // 10)
+        noise_res_h = max(2, self.height // 10)
+        warp_x = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
+        warp_y = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
+        
+        offset_x = random.random() * 1000
+        offset_y = random.random() * 1000
+
+        for ny in range(noise_res_h):
+            for nx in range(noise_res_w):
+                warp_x[ny, nx] = noise.snoise2(nx * noise_scale + offset_x, ny * noise_scale + offset_y, octaves=3)
+                warp_y[ny, nx] = noise.snoise2(nx * noise_scale + offset_x + 100, ny * noise_scale + offset_y + 100, octaves=3)
+
+        # Scale up the noise grids using bilinear interpolation (order=1) for speed
+        zoom_y = self.height / noise_res_h
+        zoom_x = self.width / noise_res_w
+        warp_x = scipy.ndimage.zoom(warp_x, (zoom_y, zoom_x), order=1)
+        warp_y = scipy.ndimage.zoom(warp_y, (zoom_y, zoom_x), order=1)
+
+        # Adjust dimensions if zoom didn't perfectly match (e.g. rounding issues)
+        if warp_x.shape != (self.height, self.width):
+            warp_x = np.resize(warp_x, (self.height, self.width))
+            warp_y = np.resize(warp_y, (self.height, self.width))
+
+        # Warp coordinates
+        # Strength based on complexity and dimensions
+        warp_strength = min(cols, rows) * 0.4
+        xv_warped = xv + warp_x * warp_strength
+        yv_warped = yv + warp_y * warp_strength
+
+        # Clip to valid range so map_coordinates doesn't pull outside colors
+        xv_warped = np.clip(xv_warped, 0, cols - 1)
+        yv_warped = np.clip(yv_warped, 0, rows - 1)
+
+        # 4. Sample colors
+        # map_coordinates requires coordinates in shape (dim, ...), so (2, height, width)
+        coords = np.stack((yv_warped, xv_warped))
+        
+        res = np.zeros((self.height, self.width, 3), dtype=np.float32)
+        for i in range(3):
+            # Bicubic interpolation (order=3) for smooth color transitions
+            res[..., i] = scipy.ndimage.map_coordinates(grid[..., i], coords, order=3, mode='nearest')
+        
         res = np.clip(res, 0, 255).astype(np.uint8)
         return Image.fromarray(res)
 

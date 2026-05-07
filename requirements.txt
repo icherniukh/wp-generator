@@ -4,3 +4,4 @@ mss
 pyobjc-core
 pyobjc-framework-Quartz
 scipy
+noise
