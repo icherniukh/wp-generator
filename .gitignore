@@ -37,3 +37,8 @@ wp_*.png
 output/*.png
 !output/.gitkeep
 .DS_Store
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
