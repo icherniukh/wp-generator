@@ -155,7 +155,7 @@ def generate(args, nothing_style, seed):
     else:
         # Default to the new Simplex Noise Warp engine
         engine = SimplexMeshGradient(width=res[0], height=res[1])
-        img = engine.generate(final_colors, complexity=complexity, fluid_mode=fluid_mode)
+        img = engine.generate(final_colors, complexity=complexity, fluid_mode=fluid_mode, seed=seed)
 
     from engine.filters import WallpaperFilters
     if nothing_style:

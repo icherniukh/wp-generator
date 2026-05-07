@@ -83,10 +83,14 @@ class SimplexMeshGradient:
         self.width = width
         self.height = height
 
-    def generate(self, colors, complexity=5, fluid_mode="random"):
+    def generate(self, colors, complexity=5, fluid_mode="random", seed=None):
         if noise is None:
             raise ImportError("The 'noise' package is required for SimplexMeshGradient. Install with 'pip install noise'.")
             
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
         # 1. Base gradient: low-res color grid
         aspect_ratio = self.width / self.height
         min_complexity = max(4, complexity)
@@ -123,8 +127,8 @@ class SimplexMeshGradient:
         # 3. Generate Simplex Noise warp
         # Calculate noise on a low-res grid for performance, then scale up
         noise_scale = 0.05 * (10 / complexity)
-        noise_res_w = max(2, self.width // 10)
-        noise_res_h = max(2, self.height // 10)
+        noise_res_w = max(2, self.width // 20)
+        noise_res_h = max(2, self.height // 20)
         warp_x = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
         warp_y = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
         
@@ -143,9 +147,15 @@ class SimplexMeshGradient:
         warp_y = scipy.ndimage.zoom(warp_y, (zoom_y, zoom_x), order=1)
 
         # Adjust dimensions if zoom didn't perfectly match (e.g. rounding issues)
-        if warp_x.shape != (self.height, self.width):
-            warp_x = np.resize(warp_x, (self.height, self.width))
-            warp_y = np.resize(warp_y, (self.height, self.width))
+        if warp_x.shape[0] > self.height or warp_x.shape[1] > self.width:
+            warp_x = warp_x[:self.height, :self.width]
+            warp_y = warp_y[:self.height, :self.width]
+        elif warp_x.shape[0] < self.height or warp_x.shape[1] < self.width:
+            # Pad if slightly smaller
+            pad_h = max(0, self.height - warp_x.shape[0])
+            pad_w = max(0, self.width - warp_x.shape[1])
+            warp_x = np.pad(warp_x, ((0, pad_h), (0, pad_w)), mode='edge')
+            warp_y = np.pad(warp_y, ((0, pad_h), (0, pad_w)), mode='edge')
 
         # Warp coordinates
         # Strength based on complexity and dimensions
