@@ -63,8 +63,8 @@ def generate(args, nothing_style, seed):
             return val
         return fallback_gen()
 
-    complexity  = resolve_param(args.complexity, "complexity", lambda: random.randint(2, 18))
-    noise       = resolve_param(args.noise, "noise", lambda: round(random.uniform(0.005, 0.20), 3))
+    complexity  = resolve_param(args.complexity, "complexity", lambda: random.randint(2, 6))
+    noise       = resolve_param(args.noise, "noise", lambda: round(random.uniform(0.005, 0.05), 3))
     fluid_mode  = resolve_param(getattr(args, 'fluid_mode', None), "fluid_mode", lambda: "random")
     
     dots         = resolve_param(args.dots, "dots", lambda: round(random.uniform(0.2, 1.0), 2))
@@ -133,10 +133,8 @@ def generate(args, nothing_style, seed):
         output_path = args.output
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        color_str = "-".join(f"{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors[:3])
-        if len(final_colors) > 3:
-            color_str += f"-plus{len(final_colors)-3}"
-        output_path = f"wp_{timestamp}_{color_str}.png"
+        preset_name = args.preset if getattr(args, 'preset', None) else "custom"
+        output_path = f"wp_{preset_name}_{timestamp}.png"
 
     color_hex = " ".join(f"#{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors[:3])
     if len(final_colors) > 3:
@@ -158,6 +156,10 @@ def generate(args, nothing_style, seed):
         img = engine.generate(final_colors, complexity=complexity, fluid_mode=fluid_mode, seed=seed)
 
     from engine.filters import WallpaperFilters
+    
+    # Base mesh for preview
+    base_img = img.copy() if getattr(args, 'preview_fx', False) else None
+
     if nothing_style:
         img = WallpaperFilters.apply_noise(img, amount=noise)
         img = WallpaperFilters.apply_dot_matrix(img, spacing=dots_spacing, intensity=dots, mode=dots_mode)
@@ -169,6 +171,24 @@ def generate(args, nothing_style, seed):
     output_dir = os.path.dirname(output_path)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
+
+    if getattr(args, 'preview_fx', False) and base_img:
+        # Create a side-by-side preview composite
+        from PIL import Image, ImageDraw, ImageFont
+        w, h = img.size
+        preview_img = Image.new('RGB', (w * 2, h))
+        preview_img.paste(base_img, (0, 0))
+        preview_img.paste(img, (w, 0))
+        
+        # Add labels if possible
+        draw = ImageDraw.Draw(preview_img)
+        # Using default font
+        draw.text((10, 10), "BASE MESH", fill=(255, 255, 255))
+        draw.text((w + 10, 10), "FX APPLIED", fill=(255, 255, 255))
+        
+        preview_path = output_path.replace('.png', '_preview.png')
+        preview_img.save(preview_path, "PNG")
+        print(f"  -> Preview saved to {preview_path}")
 
     img.save(output_path, "PNG")
     return output_path
@@ -204,7 +224,10 @@ def main():
     
     import os
     try:
-        available_presets = [f.replace(".json", "") for f in os.listdir("presets") if f.endswith(".json")]
+        # Resolve the directory where main.py lives, so it works globally
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        presets_dir = os.path.join(base_dir, "presets")
+        available_presets = [f.replace(".json", "") for f in os.listdir(presets_dir) if f.endswith(".json")]
     except FileNotFoundError:
         available_presets = []
 

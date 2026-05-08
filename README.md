@@ -87,6 +87,17 @@ Run `--help-all` for advanced flags including `--complexity`, `--noise`, `--dots
 python main.py --help-all
 ```
 
+### Preview Mechanism (FX Testing)
+
+When developing or evaluating new visual effects (e.g. volumetric lighting, dot matrix overlays), you can isolate the effects from the underlying base mesh. Pass the `--preview-fx` flag to generate an additional side-by-side composite image:
+
+```bash
+# Generates both the final wallpaper and a side-by-side "_preview" image
+python main.py --preset nothing --preview-fx
+```
+
+This output file (`*_preview.png`) places the raw, un-filtered fluid mesh on the left and the fully processed final render on the right, making it convenient to immediately see the impact of effects like noise and dot-matrix patterns.
+
 ### Sample Outputs
 
 ![Nothing Preset](samples/nothing.png)
