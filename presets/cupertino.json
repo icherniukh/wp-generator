@@ -1,6 +1,6 @@
 {
   "preset_id": "cupertino",
-  "color_space": "hls",
+  "color_space": "oklch",
   "color_count": {
     "type": "uniform_int",
     "min": 2,
@@ -14,17 +14,17 @@
         "type": "bimodal",
         "description": "70% chance dark mode, 30% chance light mode",
         "modes": [
-          { "weight": 0.7, "type": "gaussian", "mu": 0.15, "sigma": 0.05, "clip": [0.0, 0.3] },
-          { "weight": 0.3, "type": "gaussian", "mu": 0.90, "sigma": 0.04, "clip": [0.8, 1.0] }
+          { "weight": 0.7, "type": "gaussian", "mu": 0.18, "sigma": 0.04, "clip": [0.08, 0.28] },
+          { "weight": 0.3, "type": "gaussian", "mu": 0.94, "sigma": 0.02, "clip": [0.88, 0.98] }
         ]
       },
-      "chroma": { "type": "beta", "alpha": 2, "beta": 8, "scale": 0.4 }
+      "chroma": { "type": "beta", "alpha": 2, "beta": 8, "scale": 0.10 }
     },
     {
       "role": "accent_core",
       "hue": { "type": "relative", "target": "grounding_anchor", "mu_offset": 0, "sigma": 60 },
-      "lightness": { "type": "gaussian", "mu": 0.65, "sigma": 0.1, "clip": [0.4, 0.8] },
-      "chroma": { "type": "beta", "alpha": 5, "beta": 2, "scale": 0.5, "offset": 0.5 }
+      "lightness": { "type": "gaussian", "mu": 0.68, "sigma": 0.07, "clip": [0.52, 0.82] },
+      "chroma": { "type": "gaussian", "mu": 0.50, "sigma": 0.12, "clip": [0.28, 0.70] }
     }
   ],
   "overrides": {
