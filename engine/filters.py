@@ -62,8 +62,10 @@ class WallpaperFilters:
         img_arr = np.array(image).astype(np.float32)
         channels = img_arr.shape[2]
         
-        # Create noise for the RGB channels only, ignore Alpha
-        noise = np.random.normal(0, 255 * amount, img_arr.shape[:2])
+        # Create noise for the RGB channels only, ignore Alpha.
+        # Scale down amount significantly so 1.0 isn't pure white noise,
+        # making it a subtle film grain even at higher settings.
+        noise = np.random.normal(0, 255 * amount * 0.2, img_arr.shape[:2])
         noise_stack = [noise] * 3
         if channels == 4:
             noise_stack.append(np.zeros(img_arr.shape[:2])) # No noise on alpha

@@ -126,25 +126,28 @@ class SimplexMeshGradient:
 
         # 3. Generate Simplex Noise warp
         # Calculate noise on a low-res grid for performance, then scale up
-        noise_scale = 0.05 * (10 / complexity)
-        noise_res_w = max(2, self.width // 20)
-        noise_res_h = max(2, self.height // 20)
+        # We randomize noise_scale and warp_strength for varying levels of smoothness per run.
+        noise_scale = random.uniform(0.002, 0.015) * (10 / max(1, complexity))
+        octaves = random.randint(1, 2)
+        
+        noise_res_w = max(2, self.width // 10)
+        noise_res_h = max(2, self.height // 10)
         warp_x = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
         warp_y = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
-        
+
         offset_x = random.random() * 1000
         offset_y = random.random() * 1000
 
         for ny in range(noise_res_h):
             for nx in range(noise_res_w):
-                warp_x[ny, nx] = noise.snoise2(nx * noise_scale + offset_x, ny * noise_scale + offset_y, octaves=3)
-                warp_y[ny, nx] = noise.snoise2(nx * noise_scale + offset_x + 100, ny * noise_scale + offset_y + 100, octaves=3)
+                warp_x[ny, nx] = noise.snoise2(nx * noise_scale + offset_x, ny * noise_scale + offset_y, octaves=octaves)
+                warp_y[ny, nx] = noise.snoise2(nx * noise_scale + offset_x + 100, ny * noise_scale + offset_y + 100, octaves=octaves)
 
-        # Scale up the noise grids using bilinear interpolation (order=1) for speed
+        # Scale up the noise grids using bicubic interpolation (order=3) for smooth warp field
         zoom_y = self.height / noise_res_h
         zoom_x = self.width / noise_res_w
-        warp_x = scipy.ndimage.zoom(warp_x, (zoom_y, zoom_x), order=1)
-        warp_y = scipy.ndimage.zoom(warp_y, (zoom_y, zoom_x), order=1)
+        warp_x = scipy.ndimage.zoom(warp_x, (zoom_y, zoom_x), order=3)
+        warp_y = scipy.ndimage.zoom(warp_y, (zoom_y, zoom_x), order=3)
 
         # Adjust dimensions if zoom didn't perfectly match (e.g. rounding issues)
         if warp_x.shape[0] > self.height or warp_x.shape[1] > self.width:
@@ -158,8 +161,8 @@ class SimplexMeshGradient:
             warp_y = np.pad(warp_y, ((0, pad_h), (0, pad_w)), mode='edge')
 
         # Warp coordinates
-        # Strength based on complexity and dimensions
-        warp_strength = min(cols, rows) * 0.4
+        # Strength based on complexity and dimensions, now randomized for smoother folds
+        warp_strength = min(cols, rows) * random.uniform(0.1, 0.5)
         xv_warped = xv + warp_x * warp_strength
         yv_warped = yv + warp_y * warp_strength
 
