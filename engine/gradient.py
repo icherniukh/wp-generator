@@ -132,6 +132,7 @@ class SimplexMeshGradient:
         color_order = list(range(num_colors))
         random.shuffle(color_order)
 
+        # For Simplex, we use IDW on simplex-warped coordinates
         x = np.linspace(0, 1, self.width, dtype=np.float32)
         y = np.linspace(0, 1, self.height, dtype=np.float32)
         xv, yv = np.meshgrid(x, y)
@@ -154,8 +155,8 @@ class SimplexMeshGradient:
                 warp_x[ny, nx] = noise.snoise2(nx * noise_scale + offset_x, ny * noise_scale + offset_y, octaves=octaves)
                 warp_y[ny, nx] = noise.snoise2(nx * noise_scale + offset_x + 100, ny * noise_scale + offset_y + 100, octaves=octaves)
 
-        warp_x = scipy.ndimage.zoom(warp_x, (self.height / noise_res_h, self.width / noise_res_w), order=3)
-        warp_y = scipy.ndimage.zoom(warp_y, (self.height / noise_res_h, self.width / noise_res_w), order=3)
+        warp_x = scipy.ndimage.zoom(warp_x, (self.height / noise_res_h, self.width / noise_res_w), order=1)
+        warp_y = scipy.ndimage.zoom(warp_y, (self.height / noise_res_h, self.width / noise_res_w), order=1)
 
         if warp_x.shape != xv.shape:
             warp_x = np.pad(warp_x, ((0, max(0, xv.shape[0]-warp_x.shape[0])), (0, max(0, xv.shape[1]-warp_x.shape[1]))))[:xv.shape[0], :xv.shape[1]]
@@ -165,33 +166,27 @@ class SimplexMeshGradient:
         xv_warped = xv + warp_x * warp_strength
         yv_warped = yv + warp_y * warp_strength
 
-        angle = random.uniform(0, 2 * np.pi)
-        dx_dir = np.cos(angle)
-        dy_dir = np.sin(angle)
-        
-        t_values = xv_warped * dx_dir + yv_warped * dy_dir
-        
-        t_min, t_max = t_values.min(), t_values.max()
-        if t_max > t_min:
-            t_values = (t_values - t_min) / (t_max - t_min)
+        points = []
+        for i in range(num_colors):
+            angle = i * (2 * np.pi / num_colors) + random.uniform(0, np.pi)
+            dist = random.uniform(0.5, 1.2)
+            px = 0.5 + np.cos(angle) * dist
+            py = 0.5 + np.sin(angle) * dist
+            points.append((px, py))
             
-        t_values = np.clip(t_values, 0, 1)
-        t_values = t_values * t_values * (3 - 2 * t_values)
-        
-        idx_f = t_values * (num_colors - 1)
-        idx0 = np.clip(idx_f.astype(np.int32), 0, num_colors - 2)
-        frac = idx_f - idx0
-        
-        res = np.zeros((self.height, self.width, 3), dtype=np.float32)
-        for i in range(num_colors - 1):
-            mask = (idx0 == i)
-            if not np.any(mask):
-                continue
-            f = frac[mask, None]
-            c0 = colors_oklab[color_order[i]]
-            c1 = colors_oklab[color_order[i+1]]
-            res[mask] = c0 * (1 - f) + c1 * f
+        distances = np.zeros((num_colors, self.height, self.width), dtype=np.float32)
+        for i, (px, py) in enumerate(points):
+            distances[i] = np.sqrt((xv_warped - px)**2 + (yv_warped - py)**2)
             
+        distances[0] *= 0.6 # Anchor is larger
+        distances = np.maximum(distances, 0.15)
+        
+        p = 2.0
+        weights = 1.0 / (distances**p)
+        sum_weights = np.sum(weights, axis=0)
+        weights /= sum_weights
+        
+        res = np.einsum('ihw,ic->hwc', weights, colors_oklab[color_order])
         srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
         return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
 
@@ -215,6 +210,7 @@ class FlowFieldGradient:
         # FlowField respects the aesthetic palette order (Anchor -> Accents)
         color_order = list(range(num_colors))
 
+        # For FlowField, we use IDW on curl-noise warped coordinates
         x = np.linspace(0, 1, self.width, dtype=np.float32)
         y = np.linspace(0, 1, self.height, dtype=np.float32)
         xv, yv = np.meshgrid(x, y)
@@ -238,8 +234,8 @@ class FlowFieldGradient:
                 dx[sy, sx] = noise.pnoise2(nx + ox, ny + oy, octaves=3)
                 dy[sy, sx] = noise.pnoise2(nx + ox + 500, ny + oy + 500, octaves=3)
                 
-        dx = scipy.ndimage.zoom(dx, (self.height / small_h, self.width / small_w), order=3)
-        dy = scipy.ndimage.zoom(dy, (self.height / small_h, self.width / small_w), order=3)
+        dx = scipy.ndimage.zoom(dx, (self.height / small_h, self.width / small_w), order=1)
+        dy = scipy.ndimage.zoom(dy, (self.height / small_h, self.width / small_w), order=1)
         
         if dx.shape != xv.shape:
             dx = np.pad(dx, ((0, max(0, xv.shape[0]-dx.shape[0])), (0, max(0, xv.shape[1]-dx.shape[1]))))[:xv.shape[0], :xv.shape[1]]
@@ -248,33 +244,27 @@ class FlowFieldGradient:
         xv_warped = xv + dx * warp_strength
         yv_warped = yv + dy * warp_strength
         
-        angle = random.uniform(0, 2 * np.pi)
-        dx_dir = np.cos(angle)
-        dy_dir = np.sin(angle)
-        
-        t_values = xv_warped * dx_dir + yv_warped * dy_dir
-        
-        t_min, t_max = t_values.min(), t_values.max()
-        if t_max > t_min:
-            t_values = (t_values - t_min) / (t_max - t_min)
+        points = []
+        for i in range(num_colors):
+            angle = i * (2 * np.pi / num_colors) + random.uniform(0, np.pi)
+            dist = random.uniform(0.5, 1.2)
+            px = 0.5 + np.cos(angle) * dist
+            py = 0.5 + np.sin(angle) * dist
+            points.append((px, py))
             
-        t_values = np.clip(t_values, 0, 1)
-        t_values = t_values * t_values * (3 - 2 * t_values)
-        
-        idx_f = t_values * (num_colors - 1)
-        idx0 = np.clip(idx_f.astype(np.int32), 0, num_colors - 2)
-        frac = idx_f - idx0
-        
-        res = np.zeros((self.height, self.width, 3), dtype=np.float32)
-        for i in range(num_colors - 1):
-            mask = (idx0 == i)
-            if not np.any(mask):
-                continue
-            f = frac[mask, None]
-            c0 = colors_oklab[color_order[i]]
-            c1 = colors_oklab[color_order[i+1]]
-            res[mask] = c0 * (1 - f) + c1 * f
+        distances = np.zeros((num_colors, self.height, self.width), dtype=np.float32)
+        for i, (px, py) in enumerate(points):
+            distances[i] = np.sqrt((xv_warped - px)**2 + (yv_warped - py)**2)
             
+        distances[0] *= 0.6
+        distances = np.maximum(distances, 0.15)
+        
+        p = 2.0
+        weights = 1.0 / (distances**p)
+        sum_weights = np.sum(weights, axis=0)
+        weights /= sum_weights
+        
+        res = np.einsum('ihw,ic->hwc', weights, colors_oklab[color_order])
         srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
         return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
 
