@@ -173,12 +173,15 @@ def generate(args, nothing_style, seed):
     base_img = img.copy() if getattr(args, 'preview_fx', False) else None
 
     if nothing_style:
-        img = WallpaperFilters.apply_dither(img, amount=noise)
+        img = WallpaperFilters.apply_film_grain(img, amount=noise)
         img = WallpaperFilters.apply_dot_matrix(img, spacing=dots_spacing, intensity=dots, mode=dots_mode)
-        if getattr(args, 'theme', None) == "glass":
-            img = WallpaperFilters.apply_frosted_glass(img, blur_radius=80, noise_amount=0.01)
+        if getattr(args, 'theme', None) == "glass" or getattr(args, 'glass', False):
+            img = WallpaperFilters.apply_frosted_glass(img, blur_radius=60, noise_amount=0.15)
     else:
-        img = WallpaperFilters.apply_dither(img, amount=noise)
+        if getattr(args, 'glass', False):
+            img = WallpaperFilters.apply_frosted_glass(img, blur_radius=60, noise_amount=0.15)
+        else:
+            img = WallpaperFilters.apply_film_grain(img, amount=noise)
 
     img = WallpaperFilters.apply_vignette(img, strength=vignette)
 
@@ -267,6 +270,7 @@ def main():
     filter_group.add_argument("--dots-spacing", type=int, default=None, help=adv_help("Pixel spacing between dots."))
     filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
     filter_group.add_argument("--vignette", type=float, default=None, help=adv_help("Subtle radial edge darkening (0.0-1.0)."))
+    filter_group.add_argument("--glass", action="store_true", default=None, help=adv_help("Apply premium frosted glass texture overlay."))
     filter_group.add_argument("--preview-fx", action="store_true", default=None, help=adv_help("Preview FX rendering layers for development."))
 
     # --- Misc & Legacy ---

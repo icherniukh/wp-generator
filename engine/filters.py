@@ -55,27 +55,37 @@ class WallpaperFilters:
         return Image.alpha_composite(image.convert("RGBA"), overlay_img)
 
     @staticmethod
-    def apply_dither(image, amount=0.05):
+    def apply_film_grain(image, amount=0.08):
         """
-        Adds bounded monochromatic dither before final PNG quantization.
+        Applies a high-quality cinematic film grain using Overlay blending.
+        This prevents harsh black clipping and respects the underlying luminance.
+        """
+        if amount <= 0:
+            return image
 
-        ``amount`` retains the existing 0-1 CLI scale, but output amplitude is
-        capped so presets cannot overwhelm the underlying gradient with grain.
-        """
-        img_arr = np.array(image).astype(np.float32)
+        img_arr = np.array(image).astype(np.float32) / 255.0
         channels = img_arr.shape[2]
 
-        amplitude = min(5.0, 255.0 * max(0.0, amount))
-        dither = np.random.uniform(-amplitude, amplitude, img_arr.shape[:2])
-        dither_stack = [dither] * 3
-        if channels == 4:
-            dither_stack.append(np.zeros(img_arr.shape[:2]))
+        sigma = amount * 0.15
+        noise = np.random.normal(0.5, sigma, img_arr.shape[:2])
+        noise = np.clip(noise, 0.0, 1.0)
+        
+        noise_stack = np.stack([noise] * 3, axis=-1)
+        
+        base = img_arr[..., :3]
+        mask = base < 0.5
+        
+        res_rgb = np.empty_like(base)
+        res_rgb[mask] = 2.0 * base[mask] * noise_stack[mask]
+        res_rgb[~mask] = 1.0 - 2.0 * (1.0 - base[~mask]) * (1.0 - noise_stack[~mask])
+        
+        res = img_arr.copy()
+        res[..., :3] = res_rgb
+        
+        return Image.fromarray(np.clip(res * 255.0, 0, 255).astype(np.uint8))
 
-        res = img_arr + np.stack(dither_stack, axis=-1)
-        res = np.clip(res, 0, 255).astype(np.uint8)
-        return Image.fromarray(res)
-
-    apply_noise = apply_dither
+    apply_noise = apply_film_grain
+    apply_dither = apply_film_grain
 
     @staticmethod
     def apply_vignette(image, strength=0.08):
@@ -93,20 +103,35 @@ class WallpaperFilters:
         return Image.fromarray(np.clip(img_arr, 0, 255).astype(np.uint8))
 
     @staticmethod
-    def apply_frosted_glass(image, blur_radius=50, noise_amount=0.02):
+    def apply_frosted_glass(image, blur_radius=30, noise_amount=0.15):
         """
-        Simulates the 'Glass' look by blurring and adding subtle noise.
-        Uses downsampling for performance on large images.
+        Simulates a premium frosted glass texture across the entire image.
+        Uses a diffusion blur followed by a specular frost noise overlay.
         """
-        # Downsample for speed
         width, height = image.size
-        small_width = max(1, width // 4)
-        small_height = max(1, height // 4)
-        small = image.resize((small_width, small_height), Image.NEAREST)
-        blurred = small.filter(ImageFilter.GaussianBlur(radius=blur_radius // 4))
-        # Upscale back to original resolution
+        # Diffusion blur (downsample for performance and softer blur)
+        small_width = max(1, width // 2)
+        small_height = max(1, height // 2)
+        small = image.resize((small_width, small_height), Image.BILINEAR)
+        blurred = small.filter(ImageFilter.GaussianBlur(radius=blur_radius // 2))
         final = blurred.resize((width, height), Image.LANCZOS)
-        return WallpaperFilters.apply_dither(final, amount=noise_amount)
+        
+        img_arr = np.array(final).astype(np.float32) / 255.0
+        
+        # Specular frost noise
+        frost_noise = np.random.normal(0.6, noise_amount * 0.2, img_arr.shape[:2])
+        frost_noise = np.clip(frost_noise, 0.0, 1.0)
+        
+        # Screen blend mode for the frost (makes it luminous and translucent)
+        frost_stack = np.stack([frost_noise] * 3, axis=-1)
+        
+        # Blend factor for the frost
+        blend = 0.15 * noise_amount / 0.15
+        res_rgb = 1.0 - (1.0 - img_arr[..., :3]) * (1.0 - frost_stack * blend)
+        
+        res = img_arr.copy()
+        res[..., :3] = res_rgb
+        return Image.fromarray(np.clip(res * 255.0, 0, 255).astype(np.uint8))
 
 
 # Backward-compatible alias for older imports.
