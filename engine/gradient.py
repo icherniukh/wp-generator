@@ -51,66 +51,60 @@ class FluidMeshGradient:
         # Determine grid size based on target complexity and aspect ratio.
         # We want (cols * rows) roughly equal to complexity.
         aspect_ratio = self.width / self.height
-        
-        # Ensure we have at least a 2x2 grid for interpolation to work smoothly
         min_complexity = max(4, complexity)
-        
-        # Math: cols * rows = min_complexity
-        # cols / rows = aspect_ratio -> cols = rows * aspect_ratio
-        # rows^2 * aspect_ratio = min_complexity
         rows = max(2, int(np.sqrt(min_complexity / aspect_ratio)))
         cols = max(2, int(rows * aspect_ratio))
         
-        # Create a low-res color grid
-        grid = np.zeros((rows, cols, 3), dtype=np.float32)
+        # Increase grid size slightly to give bicubic more control points
+        rows *= 2
+        cols *= 2
         
+        grid = np.zeros((rows, cols, 3), dtype=np.float32)
         num_colors = len(colors)
         colors_arr = _colors_to_oklab(colors)
 
-        flip_x = random.random() < 0.5
-        flip_y = random.random() < 0.5
-        color_order = list(range(num_colors))
-        random.shuffle(color_order)
-
+        # Random sweep direction
+        angle = random.uniform(0, 2 * np.pi)
+        
+        t_values = np.zeros((rows, cols))
         for y in range(rows):
             for x in range(cols):
-                if fluid_mode == "spatial":
-                    # Spatial mode: map position to color index using sine waves
-                    nx = x / max(1, cols - 1)
-                    ny = y / max(1, rows - 1)
+                nx = (x / max(1, cols - 1)) - 0.5
+                ny = (y / max(1, rows - 1)) - 0.5
+                
+                # Rotate for random sweep direction
+                t = nx * np.cos(angle) + ny * np.sin(angle)
+                
+                # Add a massive, low-frequency fold so the wave bends organically
+                fold = np.sin(nx * 3.14) * np.cos(ny * 3.14) * 0.25
+                
+                t_values[y, x] = t + fold
 
-                    val1 = np.sin(nx * np.pi + ny * np.pi) * 0.5 + 0.5
-                    val2 = np.cos(nx * 2 * np.pi - ny * np.pi) * 0.5 + 0.5
-
-                    idx1 = int(val1 * (num_colors - 1))
-                    idx2 = int(val2 * (num_colors - 1))
-
-                    c1 = colors_arr[idx1 % num_colors]
-                    c2 = colors_arr[idx2 % num_colors]
-                    alpha = (val1 + val2) / 2
-                else:
-                    nx = (1.0 - x / max(1, cols - 1)) if flip_x else x / max(1, cols - 1)
-                    ny = (1.0 - y / max(1, rows - 1)) if flip_y else y / max(1, rows - 1)
-                    t = (nx + ny) / 2.0
-                    scaled = t * (num_colors - 1)
-                    lo = int(scaled)
-                    hi = min(lo + 1, num_colors - 1)
-                    frac = scaled - lo
-                    c1 = colors_arr[color_order[lo]]
-                    c2 = colors_arr[color_order[hi]]
-                    alpha = frac
-
-                grid[y, x] = c1 * (1 - alpha) + c2 * alpha
+        t_min = t_values.min()
+        t_max = t_values.max()
+        if t_max > t_min:
+            t_values = (t_values - t_min) / (t_max - t_min)
+            
+        # Optional: Ease-in/out to avoid harsh start/end points
+        t_values = np.clip(t_values, 0, 1)
         
-        # Scale factors to reach target resolution
+        # We need a smooth spline mapping over the colors, so we don't
+        # create piecewise-linear plateaus. We use PchipInterpolator here.
+        from scipy.interpolate import PchipInterpolator
+        nodes = np.linspace(0, 1, num_colors)
+        interpolator = PchipInterpolator(nodes, colors_arr, axis=0)
+        
+        for y in range(rows):
+            for x in range(cols):
+                grid[y, x] = interpolator(t_values[y, x])
+        
         zoom_y = self.height / rows
         zoom_x = self.width / cols
         
-        # Apply bicubic interpolation (order=1) for fluid folds
-        # mode='nearest' prevents dark borders
-        res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=1, mode='nearest')
-        
-        return _oklab_image_to_pil(res)
+        # order=3 (bicubic) eliminates the piecewise linear "plateau" and "white paper edges"
+        res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=3, mode='nearest')
+        srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
+        return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
 
 class SimplexMeshGradient:
     def __init__(self, width=5120, height=2880):

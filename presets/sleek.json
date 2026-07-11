@@ -22,7 +22,7 @@
         }
     ],
     "overrides": {
-        "engine": "spline-wave",
+        "engine": "fluid-wave",
         "complexity": 5,
         "noise": 0.04,
         "vignette": 0.15,
