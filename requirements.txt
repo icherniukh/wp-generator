@@ -1,7 +1,6 @@
-numpy
-pillow
-mss
-pyobjc-core
-pyobjc-framework-Quartz
-scipy
-noise
+# Compatibility input for tools that do not understand pyproject.toml.
+# `uv sync` with uv.lock is the authoritative reproducible installation path.
+noise>=1.2.2
+numpy>=2.0
+pillow>=11.0
+scipy>=1.14
