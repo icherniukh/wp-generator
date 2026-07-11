@@ -1,29 +1,31 @@
 {
-  "preset_id": "sleek",
-  "color_space": "oklch",
-  "color_count": {
-    "type": "uniform_int",
-    "min": 3,
-    "max": 4
-  },
-  "palette_structure": [
-    {
-      "role": "grounding_anchor",
-      "hue": { "type": "uniform", "min": 200, "max": 280 }, 
-      "lightness": { "type": "gaussian", "mu": 0.12, "sigma": 0.02, "clip": [0.08, 0.15] },
-      "chroma": { "type": "gaussian", "mu": 0.02, "sigma": 0.01, "clip": [0.0, 0.04] }
-    },
-    {
-      "role": "accent_core",
-      "hue": { "type": "relative", "target": "grounding_anchor", "mu_offset": 60, "sigma": 45 },
-      "lightness": { "type": "gaussian", "mu": 0.65, "sigma": 0.05, "clip": [0.5, 0.8] },
-      "chroma": { "type": "gaussian", "mu": 0.16, "sigma": 0.04, "clip": [0.12, 0.25] }
+    "name": "Sleek",
+    "description": "Vibrant, pronounced, smooth sweeps of color with premium glassmorphism finish.",
+    "palette_structure": [
+        {
+            "role": "primary",
+            "hue": {"type": "uniform", "min": 200, "max": 320},
+            "lightness": {"type": "gaussian", "mu": 0.45, "sigma": 0.1, "clip": [0.3, 0.6]},
+            "chroma": {"type": "gaussian", "mu": 0.35, "sigma": 0.05, "clip": [0.25, 0.45]}
+        },
+        {
+            "role": "secondary",
+            "hue": {"type": "relative", "target": "primary", "mu_offset": 60, "sigma": 30},
+            "lightness": {"type": "gaussian", "mu": 0.60, "sigma": 0.1, "clip": [0.4, 0.8]},
+            "chroma": {"type": "gaussian", "mu": 0.35, "sigma": 0.05, "clip": [0.25, 0.45]}
+        },
+        {
+            "role": "accent",
+            "hue": {"type": "relative", "target": "primary", "mu_offset": -40, "sigma": 20},
+            "lightness": {"type": "gaussian", "mu": 0.50, "sigma": 0.1, "clip": [0.3, 0.7]},
+            "chroma": {"type": "gaussian", "mu": 0.40, "sigma": 0.05, "clip": [0.3, 0.5]}
+        }
+    ],
+    "overrides": {
+        "engine": "fluid-wave",
+        "complexity": 1,
+        "noise": 0.02,
+        "vignette": 0.15,
+        "dots": 0.0
     }
-  ],
-  "overrides": {
-    "engine": "flow-field",
-    "complexity": 3,
-    "noise": 0.015,
-    "vignette": 0.15
-  }
 }
