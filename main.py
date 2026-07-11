@@ -114,7 +114,7 @@ def generate(args, nothing_style, seed):
         base_colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
     harmonize = getattr(args, 'harmonize', None)
-    colors_were_specified = bool(args.colors or getattr(args, 'theme', None))
+    colors_were_specified = bool(args.colors or getattr(args, 'preset', None))
 
     if getattr(args, 'no_adjust', False) or harmonize == "none":
         final_colors = base_colors
