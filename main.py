@@ -65,6 +65,7 @@ def generate(args, nothing_style, seed):
 
     complexity  = resolve_param(args.complexity, "complexity", lambda: random.randint(2, 6))
     noise       = resolve_param(args.noise, "noise", lambda: round(random.uniform(0.005, 0.05), 3))
+    glass_param = resolve_param(getattr(args, 'glass', None), "glass", lambda: False)
     fluid_mode  = resolve_param(getattr(args, 'fluid_mode', None), "fluid_mode", lambda: "random")
     vignette    = resolve_param(getattr(args, "vignette", None), "vignette", lambda: 0.0)
     engine_type = resolve_param(getattr(args, 'engine', None), "engine", lambda: "simplex")
@@ -179,10 +180,10 @@ def generate(args, nothing_style, seed):
     if nothing_style:
         img = WallpaperFilters.apply_film_grain(img, amount=noise)
         img = WallpaperFilters.apply_dot_matrix(img, spacing=dots_spacing, intensity=dots, mode=dots_mode)
-        if getattr(args, 'theme', None) == "glass" or getattr(args, 'glass', False):
+        if getattr(args, 'theme', None) == "glass" or glass_param:
             img = WallpaperFilters.apply_frosted_glass(img, blur_radius=60, noise_amount=0.15)
     else:
-        if getattr(args, 'glass', False):
+        if glass_param:
             img = WallpaperFilters.apply_frosted_glass(img, blur_radius=60, noise_amount=0.15)
         else:
             img = WallpaperFilters.apply_film_grain(img, amount=noise)
