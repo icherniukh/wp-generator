@@ -55,27 +55,42 @@ class WallpaperFilters:
         return Image.alpha_composite(image.convert("RGBA"), overlay_img)
 
     @staticmethod
-    def apply_noise(image, amount=0.05):
+    def apply_dither(image, amount=0.05):
         """
-        Adds monochromatic grain to the image to prevent banding and add texture.
+        Adds bounded monochromatic dither before final PNG quantization.
+
+        ``amount`` retains the existing 0-1 CLI scale, but output amplitude is
+        capped so presets cannot overwhelm the underlying gradient with grain.
         """
         img_arr = np.array(image).astype(np.float32)
         channels = img_arr.shape[2]
-        
-        # Create noise for the RGB channels only, ignore Alpha.
-        # Scale down amount significantly so 1.0 isn't pure white noise,
-        # making it a subtle film grain even at higher settings.
-        noise = np.random.normal(0, 255 * amount * 0.2, img_arr.shape[:2])
-        noise_stack = [noise] * 3
+
+        amplitude = min(5.0, 255.0 * max(0.0, amount))
+        dither = np.random.uniform(-amplitude, amplitude, img_arr.shape[:2])
+        dither_stack = [dither] * 3
         if channels == 4:
-            noise_stack.append(np.zeros(img_arr.shape[:2])) # No noise on alpha
-        
-        noise = np.stack(noise_stack, axis=-1)
-        
-        res = img_arr + noise
+            dither_stack.append(np.zeros(img_arr.shape[:2]))
+
+        res = img_arr + np.stack(dither_stack, axis=-1)
         res = np.clip(res, 0, 255).astype(np.uint8)
-        
         return Image.fromarray(res)
+
+    apply_noise = apply_dither
+
+    @staticmethod
+    def apply_vignette(image, strength=0.08):
+        """Apply a restrained radial edge falloff while preserving image mode."""
+        if strength <= 0:
+            return image.copy()
+
+        img_arr = np.asarray(image).astype(np.float32)
+        height, width = img_arr.shape[:2]
+        y = np.linspace(-1.0, 1.0, height, dtype=np.float32)[:, None]
+        x = np.linspace(-1.0, 1.0, width, dtype=np.float32)[None, :]
+        distance_sq = (x * x + y * y) / 2.0
+        falloff = 1.0 - np.clip(strength, 0.0, 1.0) * distance_sq
+        img_arr[..., :3] *= falloff[..., None]
+        return Image.fromarray(np.clip(img_arr, 0, 255).astype(np.uint8))
 
     @staticmethod
     def apply_frosted_glass(image, blur_radius=50, noise_amount=0.02):
@@ -91,7 +106,7 @@ class WallpaperFilters:
         blurred = small.filter(ImageFilter.GaussianBlur(radius=blur_radius // 4))
         # Upscale back to original resolution
         final = blurred.resize((width, height), Image.LANCZOS)
-        return WallpaperFilters.apply_noise(final, amount=noise_amount)
+        return WallpaperFilters.apply_dither(final, amount=noise_amount)
 
 
 # Backward-compatible alias for older imports.
