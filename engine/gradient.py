@@ -135,38 +135,35 @@ class SimplexMeshGradient:
         num_colors = len(colors)
         colors_arr = _colors_to_oklab(colors)
 
-        # Random diagonal direction for variety across runs
-        flip_x = random.random() < 0.5
-        flip_y = random.random() < 0.5
+        angle = random.uniform(0, 2 * np.pi)
+        dx_dir = np.cos(angle)
+        dy_dir = np.sin(angle)
+        
         color_order = list(range(num_colors))
         random.shuffle(color_order)
+        
+        t_values = np.zeros((rows, cols), dtype=np.float32)
+        for y in range(rows):
+            for x in range(cols):
+                nx = x / max(1, cols - 1)
+                ny = y / max(1, rows - 1)
+                t_values[y, x] = nx * dx_dir + ny * dy_dir
+                
+        t_min, t_max = t_values.min(), t_values.max()
+        if t_max > t_min:
+            t_values = (t_values - t_min) / (t_max - t_min)
+        t_values = t_values * t_values * (3 - 2 * t_values) # Smoothstep
 
         for y in range(rows):
             for x in range(cols):
-                if fluid_mode == "spatial":
-                    nx = x / max(1, cols - 1)
-                    ny = y / max(1, rows - 1)
-                    val1 = np.sin(nx * np.pi + ny * np.pi) * 0.5 + 0.5
-                    val2 = np.cos(nx * 2 * np.pi - ny * np.pi) * 0.5 + 0.5
-                    idx1 = int(val1 * (num_colors - 1))
-                    idx2 = int(val2 * (num_colors - 1))
-                    c1 = colors_arr[idx1 % num_colors]
-                    c2 = colors_arr[idx2 % num_colors]
-                    alpha = (val1 + val2) / 2
-                else:
-                    # Diagonal sweep: spread colors across the grid directionally so the
-                    # warp engine gets a wide gradient base instead of random blobs.
-                    nx = (1.0 - x / max(1, cols - 1)) if flip_x else x / max(1, cols - 1)
-                    ny = (1.0 - y / max(1, rows - 1)) if flip_y else y / max(1, rows - 1)
-                    t = (nx + ny) / 2.0
-                    scaled = t * (num_colors - 1)
-                    lo = int(scaled)
-                    hi = min(lo + 1, num_colors - 1)
-                    frac = scaled - lo
-                    c1 = colors_arr[color_order[lo]]
-                    c2 = colors_arr[color_order[hi]]
-                    alpha = frac
-                grid[y, x] = c1 * (1 - alpha) + c2 * alpha
+                t = t_values[y, x]
+                idx_f = t * (num_colors - 1)
+                idx0 = int(idx_f)
+                idx1 = min(idx0 + 1, num_colors - 1)
+                frac = idx_f - idx0
+                c1 = colors_arr[color_order[idx0]]
+                c2 = colors_arr[color_order[idx1]]
+                grid[y, x] = c1 * (1 - frac) + c2 * frac
 
         # 2. Coordinate mesh
         x = np.linspace(0, cols - 1, self.width, dtype=np.float32)
@@ -254,9 +251,25 @@ class FlowFieldGradient:
         color_order = list(range(num_colors))
         import random
         random.shuffle(color_order)
+        angle = random.uniform(0, 2 * np.pi)
+        dx_dir = np.cos(angle)
+        dy_dir = np.sin(angle)
+        
+        t_values = np.zeros((grid_h, grid_w), dtype=np.float32)
         for y in range(grid_h):
             for x in range(grid_w):
-                t = (x / (grid_w - 1) + y / (grid_h - 1)) / 2.0
+                nx = x / max(1, grid_w - 1)
+                ny = y / max(1, grid_h - 1)
+                t_values[y, x] = nx * dx_dir + ny * dy_dir
+                
+        t_min, t_max = t_values.min(), t_values.max()
+        if t_max > t_min:
+            t_values = (t_values - t_min) / (t_max - t_min)
+        t_values = t_values * t_values * (3 - 2 * t_values)
+
+        for y in range(grid_h):
+            for x in range(grid_w):
+                t = t_values[y, x]
                 idx_f = t * (num_colors - 1)
                 idx0 = int(idx_f)
                 idx1 = min(idx0 + 1, num_colors - 1)
