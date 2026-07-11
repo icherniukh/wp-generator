@@ -1,39 +1,21 @@
 {
     "name": "Sleek",
-    "description": "Breathtaking curated color palettes for the fluid-wave engine.",
+    "description": "Hand-picked, ultra-premium luminous high-contrast palettes with a frosted glass finishing touch.",
     "color_space": "oklch",
     "palette_families": [
-        ["#00387e", "#585d00", "#d09af4"],
         ["#0a2931", "#803843", "#bb925e"],
-        ["#ef6dd2", "#d33c22", "#25095f"],
         ["#ff4b1f", "#ff9068", "#200122"],
-        ["#00c6ff", "#0072ff", "#001133"],
         ["#f7ff00", "#db36a4", "#050505"],
-        ["#0575e6", "#021b79", "#000508"],
-        ["#43c6ac", "#191654", "#0a0a0a"],
         ["#ffafbd", "#ffc3a0", "#2c3e50"],
-        ["#0f2027", "#2c5364", "#00d2ff"],
-        ["#c31432", "#240b36", "#ff0066"],
-        ["#11998e", "#38ef7d", "#080808"],
-        ["#8e2de2", "#4a00e0", "#080808"],
         ["#fc466b", "#3f5efb", "#080808"],
-        ["#3a1c71", "#d76d77", "#ffaf7b"],
-        ["#ff9966", "#ff5e62", "#20002c"],
-        ["#000428", "#004e92", "#00b4db"],
-        ["#e52d27", "#b31217", "#0a0a0a"],
-        ["#1a2a6c", "#b21f1f", "#fdbb2d"],
-        ["#4b6cb7", "#182848", "#00d2ff"],
-        ["#ff0844", "#ffb199", "#2a0845"],
-        ["#30e8bf", "#ff8235", "#121212"],
-        ["#83a4d4", "#b6fbff", "#182848"],
-        ["#e65c00", "#f9d423", "#121212"],
-        ["#2193b0", "#6dd5ed", "#0a0a0a"]
+        ["#3a1c71", "#d76d77", "#ffaf7b"]
     ],
     "overrides": {
         "engine": "fluid-wave",
         "complexity": 5,
         "noise": 0.04,
-        "vignette": 0.15,
-        "dots": 0.0
+        "vignette": 0.25,
+        "dots": 0.0,
+        "glass": true
     }
 }
