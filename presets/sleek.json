@@ -21,7 +21,7 @@
     }
   ],
   "overrides": {
-    "engine": "fluid-wave",
+    "engine": "flow-field",
     "complexity": 3,
     "noise": 0.015,
     "vignette": 0.15

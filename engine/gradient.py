@@ -106,9 +106,9 @@ class FluidMeshGradient:
         zoom_y = self.height / rows
         zoom_x = self.width / cols
         
-        # Apply bicubic interpolation (order=3) for fluid folds
+        # Apply bicubic interpolation (order=1) for fluid folds
         # mode='nearest' prevents dark borders
-        res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=3, mode='nearest')
+        res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=1, mode='nearest')
         
         return _oklab_image_to_pil(res)
 
@@ -192,11 +192,11 @@ class SimplexMeshGradient:
                 warp_x[ny, nx] = noise.snoise2(nx * noise_scale + offset_x, ny * noise_scale + offset_y, octaves=octaves)
                 warp_y[ny, nx] = noise.snoise2(nx * noise_scale + offset_x + 100, ny * noise_scale + offset_y + 100, octaves=octaves)
 
-        # Scale up the noise grids using bicubic interpolation (order=3) for smooth warp field
+        # Scale up the noise grids using bicubic interpolation (order=1) for smooth warp field
         zoom_y = self.height / noise_res_h
         zoom_x = self.width / noise_res_w
-        warp_x = scipy.ndimage.zoom(warp_x, (zoom_y, zoom_x), order=3)
-        warp_y = scipy.ndimage.zoom(warp_y, (zoom_y, zoom_x), order=3)
+        warp_x = scipy.ndimage.zoom(warp_x, (zoom_y, zoom_x), order=1)
+        warp_y = scipy.ndimage.zoom(warp_y, (zoom_y, zoom_x), order=1)
 
         # Adjust dimensions if zoom didn't perfectly match (e.g. rounding issues)
         if warp_x.shape[0] > self.height or warp_x.shape[1] > self.width:
@@ -225,9 +225,83 @@ class SimplexMeshGradient:
         
         res = np.zeros((self.height, self.width, 3), dtype=np.float32)
         for i in range(3):
-            # Bicubic interpolation (order=3) for smooth color transitions
-            res[..., i] = scipy.ndimage.map_coordinates(grid[..., i], coords, order=3, mode='nearest')
+            # Bicubic interpolation (order=1) for smooth color transitions
+            res[..., i] = scipy.ndimage.map_coordinates(grid[..., i], coords, order=1, mode='nearest')
         
+        return _oklab_image_to_pil(res)
+
+
+class FlowFieldGradient:
+    def __init__(self, width=5120, height=2880):
+        self.width = width
+        self.height = height
+
+    def generate(self, colors, complexity=5, fluid_mode="random", seed=None):
+        if noise is None:
+            raise ImportError("The 'noise' package is required for FlowFieldGradient.")
+            
+        if seed is not None:
+            import random
+            random.seed(seed)
+            np.random.seed(seed)
+            
+        num_colors = len(colors)
+        colors_oklab = _colors_to_oklab(colors)
+
+        grid_w, grid_h = max(2, complexity), max(2, complexity)
+        grid = np.zeros((grid_h, grid_w, 3), dtype=np.float32)
+        
+        color_order = list(range(num_colors))
+        import random
+        random.shuffle(color_order)
+        for y in range(grid_h):
+            for x in range(grid_w):
+                t = (x / (grid_w - 1) + y / (grid_h - 1)) / 2.0
+                idx_f = t * (num_colors - 1)
+                idx0 = int(idx_f)
+                idx1 = min(idx0 + 1, num_colors - 1)
+                frac = idx_f - idx0
+                c0 = colors_oklab[color_order[idx0]]
+                c1 = colors_oklab[color_order[idx1]]
+                grid[y, x] = c0 * (1 - frac) + c1 * frac
+
+        yv, xv = np.mgrid[0:grid_h:self.height*1j, 0:grid_w:self.width*1j]
+        
+        warp_strength = random.uniform(0.6, 1.8)
+        scale = random.uniform(0.003, 0.012)
+        
+        res_scale = 0.1
+        small_h = max(2, int(self.height * res_scale))
+        small_w = max(2, int(self.width * res_scale))
+        
+        ox = random.uniform(0, 1000)
+        oy = random.uniform(0, 1000)
+        
+        dx = np.zeros((small_h, small_w), dtype=np.float32)
+        dy = np.zeros((small_h, small_w), dtype=np.float32)
+        
+        for sy in range(small_h):
+            for sx in range(small_w):
+                nx, ny = sx * scale, sy * scale
+                dx[sy, sx] = noise.pnoise2(nx + ox, ny + oy, octaves=3)
+                dy[sy, sx] = noise.pnoise2(nx + ox + 500, ny + oy + 500, octaves=3)
+                
+        dx = scipy.ndimage.zoom(dx, (self.height / small_h, self.width / small_w), order=1)
+        dy = scipy.ndimage.zoom(dy, (self.height / small_h, self.width / small_w), order=1)
+        
+        if dx.shape != xv.shape:
+            dx = np.pad(dx, ((0, max(0, xv.shape[0]-dx.shape[0])), (0, max(0, xv.shape[1]-dx.shape[1]))))[:xv.shape[0], :xv.shape[1]]
+            dy = np.pad(dy, ((0, max(0, yv.shape[0]-dy.shape[0])), (0, max(0, yv.shape[1]-dy.shape[1]))))[:yv.shape[0], :yv.shape[1]]
+            
+        xv_warped = np.clip(xv + dx * warp_strength * grid_w, 0, grid_w - 1)
+        yv_warped = np.clip(yv + dy * warp_strength * grid_h, 0, grid_h - 1)
+        
+        coords = np.stack((yv_warped, xv_warped))
+        
+        res = np.zeros((self.height, self.width, 3), dtype=np.float32)
+        for i in range(3):
+            res[..., i] = scipy.ndimage.map_coordinates(grid[..., i], coords, order=1, mode='nearest')
+            
         return _oklab_image_to_pil(res)
 
 class MeshGradient:
