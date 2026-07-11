@@ -1,14 +1,21 @@
 {
     "name": "Sleek",
-    "description": "Hand-picked, ultra-premium luminous high-contrast palettes with a frosted glass finishing touch.",
+    "description": "Luminous, ultra-premium generative palettes. Dark anchors with screaming bright neon accents and a frosted glass finish.",
     "color_space": "oklch",
-    "palette_families": [
-        ["#0a2931", "#803843", "#bb925e"],
-        ["#ff4b1f", "#ff9068", "#200122"],
-        ["#f7ff00", "#db36a4", "#050505"],
-        ["#ffafbd", "#ffc3a0", "#2c3e50"],
-        ["#fc466b", "#3f5efb", "#080808"],
-        ["#3a1c71", "#d76d77", "#ffaf7b"]
+    "color_count": { "type": "uniform_int", "min": 3, "max": 4 },
+    "palette_structure": [
+        {
+            "role": "grounding_anchor",
+            "hue": {"type": "uniform", "min": 0.0, "max": 1.0},
+            "lightness": {"type": "gaussian", "mu": 0.15, "sigma": 0.05, "clip": [0.05, 0.25]},
+            "chroma": {"type": "gaussian", "mu": 0.4, "sigma": 0.1, "clip": [0.2, 0.6]}
+        },
+        {
+            "role": "accent_core",
+            "hue": {"type": "uniform", "min": 0.0, "max": 1.0},
+            "lightness": {"type": "gaussian", "mu": 0.65, "sigma": 0.08, "clip": [0.55, 0.85]},
+            "chroma": {"type": "gaussian", "mu": 0.85, "sigma": 0.1, "clip": [0.7, 1.0]}
+        }
     ],
     "overrides": {
         "engine": "fluid-wave",
