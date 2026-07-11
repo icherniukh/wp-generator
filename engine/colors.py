@@ -45,8 +45,10 @@ def _linear_to_srgb(c: np.ndarray) -> np.ndarray:
 
 def rgb_to_oklab(rgb) -> np.ndarray:
     """Convert one or more sRGB colors to Oklab, preserving the leading shape."""
+    orig_dtype = getattr(rgb, "dtype", type(rgb[0]) if isinstance(rgb, (list, tuple)) and len(rgb) > 0 else float)
     rgb = np.asarray(rgb, dtype=np.float32)
-    if rgb.size and rgb.max() > 1.0:
+    is_int = np.issubdtype(orig_dtype, np.integer) if hasattr(np, 'issubdtype') else isinstance(orig_dtype, int)
+    if is_int or (rgb.size and rgb.max() > 1.0):
         rgb = rgb / 255.0
     linear = _srgb_to_linear(rgb)
     lms = linear @ _M1.T
