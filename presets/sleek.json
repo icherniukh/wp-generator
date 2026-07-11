@@ -22,9 +22,9 @@
         }
     ],
     "overrides": {
-        "engine": "fluid-wave",
-        "complexity": 1,
-        "noise": 0.02,
+        "engine": "spline-wave",
+        "complexity": 5,
+        "noise": 0.04,
         "vignette": 0.15,
         "dots": 0.0
     }
