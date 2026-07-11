@@ -35,6 +35,7 @@ venv/
 # Project specific
 wp_*.png
 output/*.png
+output/*/
 !output/.gitkeep
 .DS_Store
 
