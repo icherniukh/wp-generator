@@ -1,21 +1,33 @@
 {
     "name": "Sleek",
-    "description": "Vibrant, highly contrasting smooth sweeps of color.",
+    "description": "Breathtaking curated color palettes for the fluid-wave engine.",
     "color_space": "oklch",
-    "color_count": { "type": "uniform_int", "min": 3, "max": 4 },
-    "palette_structure": [
-        {
-            "role": "grounding_anchor",
-            "hue": {"type": "uniform", "min": 0.0, "max": 1.0},
-            "lightness": {"type": "gaussian", "mu": 0.25, "sigma": 0.1, "clip": [0.15, 0.40]},
-            "chroma": {"type": "gaussian", "mu": 0.7, "sigma": 0.1, "clip": [0.5, 0.9]}
-        },
-        {
-            "role": "accent_core",
-            "hue": {"type": "uniform", "min": 0.0, "max": 1.0},
-            "lightness": {"type": "gaussian", "mu": 0.65, "sigma": 0.1, "clip": [0.50, 0.85]},
-            "chroma": {"type": "gaussian", "mu": 0.9, "sigma": 0.1, "clip": [0.7, 1.0]}
-        }
+    "palette_families": [
+        ["#00387e", "#585d00", "#d09af4"],
+        ["#0a2931", "#803843", "#bb925e"],
+        ["#ef6dd2", "#d33c22", "#25095f"],
+        ["#ff4b1f", "#ff9068", "#200122"],
+        ["#00c6ff", "#0072ff", "#001133"],
+        ["#f7ff00", "#db36a4", "#050505"],
+        ["#0575e6", "#021b79", "#000508"],
+        ["#43c6ac", "#191654", "#0a0a0a"],
+        ["#ffafbd", "#ffc3a0", "#2c3e50"],
+        ["#0f2027", "#2c5364", "#00d2ff"],
+        ["#c31432", "#240b36", "#ff0066"],
+        ["#11998e", "#38ef7d", "#080808"],
+        ["#8e2de2", "#4a00e0", "#080808"],
+        ["#fc466b", "#3f5efb", "#080808"],
+        ["#3a1c71", "#d76d77", "#ffaf7b"],
+        ["#ff9966", "#ff5e62", "#20002c"],
+        ["#000428", "#004e92", "#00b4db"],
+        ["#e52d27", "#b31217", "#0a0a0a"],
+        ["#1a2a6c", "#b21f1f", "#fdbb2d"],
+        ["#4b6cb7", "#182848", "#00d2ff"],
+        ["#ff0844", "#ffb199", "#2a0845"],
+        ["#30e8bf", "#ff8235", "#121212"],
+        ["#83a4d4", "#b6fbff", "#182848"],
+        ["#e65c00", "#f9d423", "#121212"],
+        ["#2193b0", "#6dd5ed", "#0a0a0a"]
     ],
     "overrides": {
         "engine": "fluid-wave",
