@@ -112,75 +112,57 @@ class SimplexMeshGradient:
         self.height = height
 
     def generate(self, colors, complexity=5, fluid_mode="random", seed=None):
-        if noise is None:
-            raise ImportError("The 'noise' package is required for SimplexMeshGradient. Install with 'pip install noise'.")
-            
+        """
+        Assigns colors to a low-res grid using Simplex noise, then upscales using bicubic interpolation.
+        This creates completely unpredictable, organic blobs with no corner anchoring and no flat plateaus.
+        """
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
-
-        num_colors = len(colors)
-        colors_oklab = _colors_to_oklab(colors)
-        
-        # Simplex randomizes color order for variety
-        color_order = list(range(num_colors))
-        random.shuffle(color_order)
-
-        # For Simplex, we use IDW on simplex-warped coordinates
-        x = np.linspace(0, 1, self.width, dtype=np.float32)
-        y = np.linspace(0, 1, self.height, dtype=np.float32)
-        xv, yv = np.meshgrid(x, y)
-
-        noise_scale = random.uniform(0.002, 0.015) * (10 / max(1, complexity))
-        octaves = random.randint(1, 2)
-        
-        res_scale = 0.1
-        noise_res_w = max(2, int(self.width * res_scale))
-        noise_res_h = max(2, int(self.height * res_scale))
-        
-        warp_x = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
-        warp_y = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
-
-        offset_x = random.random() * 1000
-        offset_y = random.random() * 1000
-
-        for ny in range(noise_res_h):
-            for nx in range(noise_res_w):
-                warp_x[ny, nx] = noise.snoise2(nx * noise_scale + offset_x, ny * noise_scale + offset_y, octaves=octaves)
-                warp_y[ny, nx] = noise.snoise2(nx * noise_scale + offset_x + 100, ny * noise_scale + offset_y + 100, octaves=octaves)
-
-        warp_x = scipy.ndimage.zoom(warp_x, (self.height / noise_res_h, self.width / noise_res_w), order=1)
-        warp_y = scipy.ndimage.zoom(warp_y, (self.height / noise_res_h, self.width / noise_res_w), order=1)
-
-        if warp_x.shape != xv.shape:
-            warp_x = np.pad(warp_x, ((0, max(0, xv.shape[0]-warp_x.shape[0])), (0, max(0, xv.shape[1]-warp_x.shape[1]))))[:xv.shape[0], :xv.shape[1]]
-            warp_y = np.pad(warp_y, ((0, max(0, yv.shape[0]-warp_y.shape[0])), (0, max(0, yv.shape[1]-warp_y.shape[1]))))[:yv.shape[0], :yv.shape[1]]
-
-        warp_strength = random.uniform(0.05, 0.20)
-        xv_warped = xv + warp_x * warp_strength
-        yv_warped = yv + warp_y * warp_strength
-
-        points = []
-        for i in range(num_colors):
-            angle = i * (2 * np.pi / num_colors) + random.uniform(0, np.pi)
-            dist = random.uniform(0.5, 1.2)
-            px = 0.5 + np.cos(angle) * dist
-            py = 0.5 + np.sin(angle) * dist
-            points.append((px, py))
             
-        distances = np.zeros((num_colors, self.height, self.width), dtype=np.float32)
-        for i, (px, py) in enumerate(points):
-            distances[i] = np.sqrt((xv_warped - px)**2 + (yv_warped - py)**2)
+        aspect_ratio = self.width / self.height
+        min_complexity = max(4, complexity)
+        rows = max(2, int(np.sqrt(min_complexity / aspect_ratio)))
+        cols = max(2, int(rows * aspect_ratio))
+        
+        # Increase grid size slightly to give bicubic more control points
+        rows *= 2
+        cols *= 2
+        
+        grid = np.zeros((rows, cols, 3), dtype=np.float32)
+        colors_arr = _colors_to_oklab(colors)
+
+        # To make it unpredictable, we assign colors using a Simplex noise map
+        try:
+            import noise
+            has_noise = True
+        except ImportError:
+            has_noise = False
             
-        distances[0] *= 0.6 # Anchor is larger
-        distances = np.maximum(distances, 0.15)
+        if has_noise:
+            offset_x = random.uniform(0, 1000)
+            offset_y = random.uniform(0, 1000)
+            scale = random.uniform(0.3, 0.8)
+            for y in range(rows):
+                for x in range(cols):
+                    val = noise.snoise2(x * scale + offset_x, y * scale + offset_y, octaves=1)
+                    val = (val + 1) / 2.0
+                    idx = int(val * len(colors))
+                    idx = min(len(colors)-1, max(0, idx))
+                    grid[y, x] = colors_arr[idx]
+        else:
+            for y in range(rows):
+                for x in range(cols):
+                    grid[y, x] = colors_arr[random.randint(0, len(colors)-1)]
+                    
+        # Smooth the grid values so they blend softly BEFORE the huge bicubic upscaling
+        grid = scipy.ndimage.gaussian_filter(grid, sigma=0.8, axes=(0,1))
         
-        p = 2.0
-        weights = 1.0 / (distances**p)
-        sum_weights = np.sum(weights, axis=0)
-        weights /= sum_weights
+        zoom_y = self.height / rows
+        zoom_x = self.width / cols
         
-        res = np.einsum('ihw,ic->hwc', weights, colors_oklab[color_order])
+        # order=3 (bicubic) eliminates the piecewise linear "plateau" and "white paper edges"
+        res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=3, mode='nearest')
         srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
         return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
 
