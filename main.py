@@ -66,6 +66,7 @@ def generate(args, nothing_style, seed):
     complexity  = resolve_param(args.complexity, "complexity", lambda: random.randint(2, 6))
     noise       = resolve_param(args.noise, "noise", lambda: round(random.uniform(0.005, 0.05), 3))
     fluid_mode  = resolve_param(getattr(args, 'fluid_mode', None), "fluid_mode", lambda: "random")
+    vignette    = resolve_param(getattr(args, "vignette", None), "vignette", lambda: 0.0)
     
     dots         = resolve_param(args.dots, "dots", lambda: round(random.uniform(0.2, 1.0), 2))
     dots_spacing = resolve_param(args.dots_spacing, "dots_spacing", lambda: random.randint(8, 60))
@@ -84,7 +85,11 @@ def generate(args, nothing_style, seed):
     elif getattr(args, 'preset', None) in themes:
         base_colors = list(themes[args.preset])
     elif preset_data:
-        base_colors = preset_engine.generate_palette(preset_data, count=complexity//2 if args.complexity else None)
+        base_colors = preset_engine.generate_palette(
+            preset_data,
+            count=complexity//2 if args.complexity else None,
+            family_index=seed
+        )
     else:
         # Fallback dynamic generation if no preset matched
         import colorsys
@@ -161,12 +166,14 @@ def generate(args, nothing_style, seed):
     base_img = img.copy() if getattr(args, 'preview_fx', False) else None
 
     if nothing_style:
-        img = WallpaperFilters.apply_noise(img, amount=noise)
+        img = WallpaperFilters.apply_dither(img, amount=noise)
         img = WallpaperFilters.apply_dot_matrix(img, spacing=dots_spacing, intensity=dots, mode=dots_mode)
         if getattr(args, 'theme', None) == "glass":
             img = WallpaperFilters.apply_frosted_glass(img, blur_radius=80, noise_amount=0.01)
     else:
-        img = WallpaperFilters.apply_noise(img, amount=noise)
+        img = WallpaperFilters.apply_dither(img, amount=noise)
+
+    img = WallpaperFilters.apply_vignette(img, strength=vignette)
 
     output_dir = os.path.dirname(output_path)
     if output_dir and not os.path.exists(output_dir):
@@ -251,6 +258,7 @@ def main():
     filter_group.add_argument("--dots-mode", choices=["size", "alpha"], default=None, help=adv_help("Vary dot 'size' or 'alpha'."))
     filter_group.add_argument("--dots-spacing", type=int, default=None, help=adv_help("Pixel spacing between dots."))
     filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
+    filter_group.add_argument("--vignette", type=float, default=None, help=adv_help("Subtle radial edge darkening (0.0-1.0)."))
     filter_group.add_argument("--preview-fx", action="store_true", default=None, help=adv_help("Preview FX rendering layers for development."))
 
     # --- Misc & Legacy ---
@@ -275,6 +283,8 @@ def main():
         parser.error("--dots must be between 0.0 and 1.0")
     if args.noise is not None and not 0 <= args.noise <= 1:
         parser.error("--noise must be between 0.0 and 1.0")
+    if args.vignette is not None and not 0 <= args.vignette <= 1:
+        parser.error("--vignette must be between 0.0 and 1.0")
     if args.count < 1:
         parser.error("--count must be at least 1")
     if args.count > 1 and args.output:

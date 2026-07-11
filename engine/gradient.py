@@ -2,10 +2,36 @@ import numpy as np
 from PIL import Image
 import random
 import scipy.ndimage
+from engine.colors import oklab_to_rgb, rgb_to_oklab
 try:
     import noise
 except ImportError:
     noise = None
+
+
+def _interpolate_oklab(c1, c2, alpha):
+    """Interpolate sRGB colors through perceptually uniform Oklab."""
+    lab1 = rgb_to_oklab(c1)
+    lab2 = rgb_to_oklab(c2)
+    mixed = lab1 * (1.0 - alpha) + lab2 * alpha
+    return np.clip(np.rint(oklab_to_rgb(mixed) * 255.0), 0, 255).astype(np.uint8)
+
+
+def _colors_to_oklab(colors):
+    return rgb_to_oklab(np.asarray(colors, dtype=np.float32))
+
+
+def _oklab_image_to_pil(values):
+    srgb = np.clip(oklab_to_rgb(values), 0.0, 1.0)
+    return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+
+
+def _random_anchor_points(count, margin=0.08):
+    """Place color anchors inside the canvas instead of pinning them to edges."""
+    return [
+        (random.uniform(margin, 1.0 - margin), random.uniform(margin, 1.0 - margin))
+        for _ in range(count)
+    ]
 
 class FluidMeshGradient:
     def __init__(self, width=5120, height=2880):
@@ -39,7 +65,12 @@ class FluidMeshGradient:
         grid = np.zeros((rows, cols, 3), dtype=np.float32)
         
         num_colors = len(colors)
-        colors_arr = np.array(colors, dtype=np.float32)
+        colors_arr = _colors_to_oklab(colors)
+
+        flip_x = random.random() < 0.5
+        flip_y = random.random() < 0.5
+        color_order = list(range(num_colors))
+        random.shuffle(color_order)
 
         for y in range(rows):
             for x in range(cols):
@@ -47,24 +78,29 @@ class FluidMeshGradient:
                     # Spatial mode: map position to color index using sine waves
                     nx = x / max(1, cols - 1)
                     ny = y / max(1, rows - 1)
-                    
+
                     val1 = np.sin(nx * np.pi + ny * np.pi) * 0.5 + 0.5
                     val2 = np.cos(nx * 2 * np.pi - ny * np.pi) * 0.5 + 0.5
-                    
+
                     idx1 = int(val1 * (num_colors - 1))
                     idx2 = int(val2 * (num_colors - 1))
-                    
+
                     c1 = colors_arr[idx1 % num_colors]
                     c2 = colors_arr[idx2 % num_colors]
                     alpha = (val1 + val2) / 2
                 else:
-                    # Blend 2 random colors for smooth transitions in the base grid
-                    c1 = np.array(random.choice(colors), dtype=np.float32)
-                    c2 = np.array(random.choice(colors), dtype=np.float32)
-                    alpha = random.random()
-                
-                # Gamma-corrected blending (sqrt of sum of squares)
-                grid[y, x] = np.sqrt(c1**2 * alpha + c2**2 * (1 - alpha))
+                    nx = (1.0 - x / max(1, cols - 1)) if flip_x else x / max(1, cols - 1)
+                    ny = (1.0 - y / max(1, rows - 1)) if flip_y else y / max(1, rows - 1)
+                    t = (nx + ny) / 2.0
+                    scaled = t * (num_colors - 1)
+                    lo = int(scaled)
+                    hi = min(lo + 1, num_colors - 1)
+                    frac = scaled - lo
+                    c1 = colors_arr[color_order[lo]]
+                    c2 = colors_arr[color_order[hi]]
+                    alpha = frac
+
+                grid[y, x] = c1 * (1 - alpha) + c2 * alpha
         
         # Scale factors to reach target resolution
         zoom_y = self.height / rows
@@ -74,9 +110,7 @@ class FluidMeshGradient:
         # mode='nearest' prevents dark borders
         res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=3, mode='nearest')
         
-        # Clip to valid RGB range and convert
-        res = np.clip(res, 0, 255).astype(np.uint8)
-        return Image.fromarray(res)
+        return _oklab_image_to_pil(res)
 
 class SimplexMeshGradient:
     def __init__(self, width=5120, height=2880):
@@ -99,7 +133,13 @@ class SimplexMeshGradient:
         
         grid = np.zeros((rows, cols, 3), dtype=np.float32)
         num_colors = len(colors)
-        colors_arr = np.array(colors, dtype=np.float32)
+        colors_arr = _colors_to_oklab(colors)
+
+        # Random diagonal direction for variety across runs
+        flip_x = random.random() < 0.5
+        flip_y = random.random() < 0.5
+        color_order = list(range(num_colors))
+        random.shuffle(color_order)
 
         for y in range(rows):
             for x in range(cols):
@@ -114,10 +154,19 @@ class SimplexMeshGradient:
                     c2 = colors_arr[idx2 % num_colors]
                     alpha = (val1 + val2) / 2
                 else:
-                    c1 = np.array(random.choice(colors), dtype=np.float32)
-                    c2 = np.array(random.choice(colors), dtype=np.float32)
-                    alpha = random.random()
-                grid[y, x] = np.sqrt(c1**2 * alpha + c2**2 * (1 - alpha))
+                    # Diagonal sweep: spread colors across the grid directionally so the
+                    # warp engine gets a wide gradient base instead of random blobs.
+                    nx = (1.0 - x / max(1, cols - 1)) if flip_x else x / max(1, cols - 1)
+                    ny = (1.0 - y / max(1, rows - 1)) if flip_y else y / max(1, rows - 1)
+                    t = (nx + ny) / 2.0
+                    scaled = t * (num_colors - 1)
+                    lo = int(scaled)
+                    hi = min(lo + 1, num_colors - 1)
+                    frac = scaled - lo
+                    c1 = colors_arr[color_order[lo]]
+                    c2 = colors_arr[color_order[hi]]
+                    alpha = frac
+                grid[y, x] = c1 * (1 - alpha) + c2 * alpha
 
         # 2. Coordinate mesh
         x = np.linspace(0, cols - 1, self.width, dtype=np.float32)
@@ -161,8 +210,8 @@ class SimplexMeshGradient:
             warp_y = np.pad(warp_y, ((0, pad_h), (0, pad_w)), mode='edge')
 
         # Warp coordinates
-        # Strength based on complexity and dimensions, now randomized for smoother folds
-        warp_strength = min(cols, rows) * random.uniform(0.1, 0.5)
+        # Keep strength well below 0.5 grid-cells to avoid tearing the field into isolated blobs
+        warp_strength = min(cols, rows) * random.uniform(0.05, 0.20)
         xv_warped = xv + warp_x * warp_strength
         yv_warped = yv + warp_y * warp_strength
 
@@ -179,26 +228,26 @@ class SimplexMeshGradient:
             # Bicubic interpolation (order=3) for smooth color transitions
             res[..., i] = scipy.ndimage.map_coordinates(grid[..., i], coords, order=3, mode='nearest')
         
-        res = np.clip(res, 0, 255).astype(np.uint8)
-        return Image.fromarray(res)
+        return _oklab_image_to_pil(res)
 
 class MeshGradient:
     def __init__(self, width=5120, height=2880):
         self.width = width
         self.height = height
 
-    def generate(self, colors, points=None, p=2.0):
+    def generate(self, colors, points=None, p=2.0, softness=0.12):
         """
         Generates a mesh gradient using Inverse Distance Weighting (IDW).
         
         :param colors: List of (R, G, B) tuples.
         :param points: List of (x, y) tuples in [0, 1] range. If None, random points are used.
         :param p: Power parameter for IDW (usually 2.0).
+        :param softness: Minimum normalized anchor radius, avoiding point-like singularities.
         :return: PIL Image.
         """
         num_colors = len(colors)
         if points is None:
-            points = [(random.random(), random.random()) for _ in range(num_colors)]
+            points = _random_anchor_points(num_colors)
         
         # Create coordinate grid
         x = np.linspace(0, 1, self.width, dtype=np.float32)
@@ -211,8 +260,9 @@ class MeshGradient:
         for i, (px, py) in enumerate(points):
             distances[i] = np.sqrt((xv - px)**2 + (yv - py)**2)
         
-        # Add a small epsilon to avoid division by zero
-        distances = np.maximum(distances, 1e-10)
+        # Treat each anchor as a soft region rather than an exact point. Besides
+        # avoiding division by zero, this prevents repetitive pinprick hotspots.
+        distances = np.maximum(distances, softness)
         
         # Calculate weights: W = 1 / d^p
         weights = 1.0 / (distances**p)
