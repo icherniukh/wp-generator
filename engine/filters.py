@@ -55,37 +55,33 @@ class WallpaperFilters:
         return Image.alpha_composite(image.convert("RGBA"), overlay_img)
 
     @staticmethod
-    def apply_film_grain(image, amount=0.08):
+    def apply_dither(image, amount=0.05):
         """
-        Applies a high-quality cinematic film grain using Overlay blending.
-        This prevents harsh black clipping and respects the underlying luminance.
+        Adds bounded monochromatic dither before final PNG quantization.
+        Scales amplitude in deep shadows/highlights to prevent clipping artifacts (black dots).
         """
-        if amount <= 0:
-            return image
-
-        img_arr = np.array(image).astype(np.float32) / 255.0
+        img_arr = np.array(image).astype(np.float32)
         channels = img_arr.shape[2]
 
-        sigma = amount * 0.15
-        noise = np.random.normal(0.5, sigma, img_arr.shape[:2])
-        noise = np.clip(noise, 0.0, 1.0)
+        amplitude = min(15.0, 255.0 * max(0.0, amount))
+        dither = np.random.uniform(-amplitude, amplitude, img_arr.shape[:2])
         
-        noise_stack = np.stack([noise] * 3, axis=-1)
+        lum = np.mean(img_arr[..., :3], axis=2) / 255.0
+        # Smooth roll-off near 0 and 1 to avoid clipping dots
+        mask = 4.0 * lum * (1.0 - lum)
+        mask = np.clip(mask, 0.2, 1.0)
         
-        base = img_arr[..., :3]
-        mask = base < 0.5
-        
-        res_rgb = np.empty_like(base)
-        res_rgb[mask] = 2.0 * base[mask] * noise_stack[mask]
-        res_rgb[~mask] = 1.0 - 2.0 * (1.0 - base[~mask]) * (1.0 - noise_stack[~mask])
-        
-        res = img_arr.copy()
-        res[..., :3] = res_rgb
-        
-        return Image.fromarray(np.clip(res * 255.0, 0, 255).astype(np.uint8))
+        dither_masked = dither * mask
+        dither_stack = [dither_masked] * 3
+        if channels == 4:
+            dither_stack.append(np.zeros(img_arr.shape[:2]))
 
-    apply_noise = apply_film_grain
-    apply_dither = apply_film_grain
+        res = img_arr + np.stack(dither_stack, axis=-1)
+        res = np.clip(res, 0, 255).astype(np.uint8)
+        return Image.fromarray(res)
+
+    apply_noise = apply_dither
+    apply_film_grain = apply_dither
 
     @staticmethod
     def apply_vignette(image, strength=0.08):
