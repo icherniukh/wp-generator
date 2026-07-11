@@ -113,26 +113,31 @@ class SimplexMeshGradient:
 
     def generate(self, colors, complexity=5, fluid_mode="random", seed=None):
         """
-        Assigns colors to a low-res grid using Simplex noise, then upscales using bicubic interpolation.
-        This creates completely unpredictable, organic blobs with no corner anchoring and no flat plateaus.
+        Generates a continuous scalar field mapped through a color spline.
+        Instead of a low-res grid pinned to the corners, it evaluates sweeping Simplex noise
+        across a moderate-res map and maps it directly to the palette, producing massive,
+        graceful, un-anchored flowing waves (the 'bigger picture').
         """
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
             
-        aspect_ratio = self.width / self.height
-        min_complexity = max(4, complexity)
-        rows = max(2, int(np.sqrt(min_complexity / aspect_ratio)))
-        cols = max(2, int(rows * aspect_ratio))
-        
-        # Increase grid size slightly to give bicubic more control points
-        rows *= 2
-        cols *= 2
-        
-        grid = np.zeros((rows, cols, 3), dtype=np.float32)
+        num_colors = len(colors)
         colors_arr = _colors_to_oklab(colors)
-
-        # To make it unpredictable, we assign colors using a Simplex noise map
+        
+        # Generate at a moderate resolution to keep things fast but continuous
+        scale_factor = 0.25
+        h = max(16, int(self.height * scale_factor))
+        w = max(16, int(self.width * scale_factor))
+        
+        x = np.linspace(-0.5, 0.5, w, dtype=np.float32)
+        y = np.linspace(-0.5, 0.5, h, dtype=np.float32)
+        xv, yv = np.meshgrid(x, y)
+        
+        # Random sweep direction
+        angle = random.uniform(0, 2 * np.pi)
+        t_base = xv * np.cos(angle) + yv * np.sin(angle)
+        
         try:
             import noise
             has_noise = True
@@ -140,31 +145,53 @@ class SimplexMeshGradient:
             has_noise = False
             
         if has_noise:
-            offset_x = random.uniform(0, 1000)
-            offset_y = random.uniform(0, 1000)
-            scale = random.uniform(0.3, 0.8)
-            for y in range(rows):
-                for x in range(cols):
-                    val = noise.snoise2(x * scale + offset_x, y * scale + offset_y, octaves=1)
-                    val = (val + 1) / 2.0
-                    idx = int(val * len(colors))
-                    idx = min(len(colors)-1, max(0, idx))
-                    grid[y, x] = colors_arr[idx]
+            ox = random.uniform(0, 1000)
+            oy = random.uniform(0, 1000)
+            # Complexity scales the frequency of the waves
+            noise_scale = 1.0 + (complexity * 0.2)
+            
+            # Vectorized evaluation of noise would be faster, but for 480x270 a loop is too slow.
+            # Let's generate a smaller noise map and upsample it to match h, w.
+            noise_h, noise_w = max(4, int(h/4)), max(4, int(w/4))
+            nx = np.linspace(-0.5, 0.5, noise_w, dtype=np.float32) * noise_scale
+            ny = np.linspace(-0.5, 0.5, noise_h, dtype=np.float32) * noise_scale
+            noise_grid = np.zeros((noise_h, noise_w), dtype=np.float32)
+            for iy in range(noise_h):
+                for ix in range(noise_w):
+                    noise_grid[iy, ix] = noise.snoise2(nx[ix] + ox, ny[iy] + oy, octaves=2)
+            
+            # Upsample noise to moderate resolution
+            import scipy.ndimage
+            t_noise = scipy.ndimage.zoom(noise_grid, (h / noise_h, w / noise_w), order=3)
+            # Trim padding issues from zoom
+            t_noise = t_noise[:h, :w]
+            
+            # Blend base linear progression with sweeping noise folds
+            t_values = t_base * 0.6 + t_noise * 1.5
         else:
-            for y in range(rows):
-                for x in range(cols):
-                    grid[y, x] = colors_arr[random.randint(0, len(colors)-1)]
-                    
-        # Smooth the grid values so they blend softly BEFORE the huge bicubic upscaling
-        grid = scipy.ndimage.gaussian_filter(grid, sigma=0.8, axes=(0,1))
+            fold = np.sin(xv * 3.14) * np.cos(yv * 3.14) * 0.5
+            t_values = t_base + fold
+            
+        t_min = t_values.min()
+        t_max = t_values.max()
+        if t_max > t_min:
+            t_values = (t_values - t_min) / (t_max - t_min)
+            
+        t_values = np.clip(t_values, 0, 1)
         
-        zoom_y = self.height / rows
-        zoom_x = self.width / cols
+        from scipy.interpolate import PchipInterpolator
+        nodes = np.linspace(0, 1, num_colors)
+        interpolator = PchipInterpolator(nodes, colors_arr, axis=0)
         
-        # order=3 (bicubic) eliminates the piecewise linear "plateau" and "white paper edges"
-        res = scipy.ndimage.zoom(grid, (zoom_y, zoom_x, 1), order=3, mode='nearest')
-        srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
-        return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+        # Flatten t_values, interpolate all colors, then reshape back to image dimensions
+        flat_t = t_values.flatten()
+        flat_colors = interpolator(flat_t)
+        grid_oklab = flat_colors.reshape((h, w, 3))
+        
+        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
+        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+        
+        return img_mod.resize((self.width, self.height), Image.LANCZOS)
 
 
 class FlowFieldGradient:
