@@ -162,6 +162,10 @@ def generate(args, nothing_style, seed):
     elif engine_type == "fluid-wave":
         engine = FluidMeshGradient(width=res[0], height=res[1])
         img = engine.generate(final_colors, complexity=complexity, fluid_mode=fluid_mode)
+    elif engine_type == "spline-wave":
+        from engine.spline_gradient import SplineWaveGradient
+        engine = SplineWaveGradient(width=res[0], height=res[1])
+        img = engine.generate(final_colors, complexity=complexity, seed=seed)
     else:
         # Default to the new Simplex Noise Warp engine
         engine = SimplexMeshGradient(width=res[0], height=res[1])
@@ -257,7 +261,7 @@ def main():
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
     engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave"], default=None, help=adv_help("Gradient engine to use."))
     engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
     engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
     engine_group.add_argument("--harmonize", choices=["theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer override."))
