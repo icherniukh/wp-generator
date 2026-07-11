@@ -1,24 +1,20 @@
 {
     "name": "Sleek",
     "description": "Vibrant, pronounced, smooth sweeps of color with premium glassmorphism finish.",
+    "color_space": "oklch",
+    "color_count": { "type": "uniform_int", "min": 3, "max": 4 },
     "palette_structure": [
         {
-            "role": "primary",
-            "hue": {"type": "uniform", "min": 200, "max": 320},
+            "role": "grounding_anchor",
+            "hue": {"type": "uniform", "min": 0.55, "max": 0.88},
             "lightness": {"type": "gaussian", "mu": 0.45, "sigma": 0.1, "clip": [0.3, 0.6]},
-            "chroma": {"type": "gaussian", "mu": 0.35, "sigma": 0.05, "clip": [0.25, 0.45]}
+            "chroma": {"type": "gaussian", "mu": 0.9, "sigma": 0.1, "clip": [0.7, 1.0]}
         },
         {
-            "role": "secondary",
-            "hue": {"type": "relative", "target": "primary", "mu_offset": 60, "sigma": 30},
-            "lightness": {"type": "gaussian", "mu": 0.60, "sigma": 0.1, "clip": [0.4, 0.8]},
-            "chroma": {"type": "gaussian", "mu": 0.35, "sigma": 0.05, "clip": [0.25, 0.45]}
-        },
-        {
-            "role": "accent",
-            "hue": {"type": "relative", "target": "primary", "mu_offset": -40, "sigma": 20},
-            "lightness": {"type": "gaussian", "mu": 0.50, "sigma": 0.1, "clip": [0.3, 0.7]},
-            "chroma": {"type": "gaussian", "mu": 0.40, "sigma": 0.05, "clip": [0.3, 0.5]}
+            "role": "accent_core",
+            "hue": {"type": "relative", "target": "grounding_anchor", "mu_offset": 60, "sigma": 30},
+            "lightness": {"type": "gaussian", "mu": 0.55, "sigma": 0.1, "clip": [0.4, 0.7]},
+            "chroma": {"type": "gaussian", "mu": 0.9, "sigma": 0.1, "clip": [0.7, 1.0]}
         }
     ],
     "overrides": {
