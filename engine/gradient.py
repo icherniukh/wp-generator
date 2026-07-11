@@ -125,59 +125,24 @@ class SimplexMeshGradient:
             random.seed(seed)
             np.random.seed(seed)
 
-        # 1. Base gradient: low-res color grid
-        aspect_ratio = self.width / self.height
-        min_complexity = max(4, complexity)
-        rows = max(2, int(np.sqrt(min_complexity / aspect_ratio)))
-        cols = max(2, int(rows * aspect_ratio))
-        
-        grid = np.zeros((rows, cols, 3), dtype=np.float32)
         num_colors = len(colors)
-        colors_arr = _colors_to_oklab(colors)
-
-        angle = random.uniform(0, 2 * np.pi)
-        dx_dir = np.cos(angle)
-        dy_dir = np.sin(angle)
+        colors_oklab = _colors_to_oklab(colors)
         
+        # Simplex randomizes color order for variety
         color_order = list(range(num_colors))
         random.shuffle(color_order)
-        
-        t_values = np.zeros((rows, cols), dtype=np.float32)
-        for y in range(rows):
-            for x in range(cols):
-                nx = x / max(1, cols - 1)
-                ny = y / max(1, rows - 1)
-                t_values[y, x] = nx * dx_dir + ny * dy_dir
-                
-        t_min, t_max = t_values.min(), t_values.max()
-        if t_max > t_min:
-            t_values = (t_values - t_min) / (t_max - t_min)
-        t_values = t_values * t_values * (3 - 2 * t_values) # Smoothstep
 
-        for y in range(rows):
-            for x in range(cols):
-                t = t_values[y, x]
-                idx_f = t * (num_colors - 1)
-                idx0 = int(idx_f)
-                idx1 = min(idx0 + 1, num_colors - 1)
-                frac = idx_f - idx0
-                c1 = colors_arr[color_order[idx0]]
-                c2 = colors_arr[color_order[idx1]]
-                grid[y, x] = c1 * (1 - frac) + c2 * frac
-
-        # 2. Coordinate mesh
-        x = np.linspace(0, cols - 1, self.width, dtype=np.float32)
-        y = np.linspace(0, rows - 1, self.height, dtype=np.float32)
+        x = np.linspace(0, 1, self.width, dtype=np.float32)
+        y = np.linspace(0, 1, self.height, dtype=np.float32)
         xv, yv = np.meshgrid(x, y)
 
-        # 3. Generate Simplex Noise warp
-        # Calculate noise on a low-res grid for performance, then scale up
-        # We randomize noise_scale and warp_strength for varying levels of smoothness per run.
         noise_scale = random.uniform(0.002, 0.015) * (10 / max(1, complexity))
         octaves = random.randint(1, 2)
         
-        noise_res_w = max(2, self.width // 10)
-        noise_res_h = max(2, self.height // 10)
+        res_scale = 0.1
+        noise_res_w = max(2, int(self.width * res_scale))
+        noise_res_h = max(2, int(self.height * res_scale))
+        
         warp_x = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
         warp_y = np.zeros((noise_res_h, noise_res_w), dtype=np.float32)
 
@@ -189,43 +154,46 @@ class SimplexMeshGradient:
                 warp_x[ny, nx] = noise.snoise2(nx * noise_scale + offset_x, ny * noise_scale + offset_y, octaves=octaves)
                 warp_y[ny, nx] = noise.snoise2(nx * noise_scale + offset_x + 100, ny * noise_scale + offset_y + 100, octaves=octaves)
 
-        # Scale up the noise grids using bicubic interpolation (order=1) for smooth warp field
-        zoom_y = self.height / noise_res_h
-        zoom_x = self.width / noise_res_w
-        warp_x = scipy.ndimage.zoom(warp_x, (zoom_y, zoom_x), order=1)
-        warp_y = scipy.ndimage.zoom(warp_y, (zoom_y, zoom_x), order=1)
+        warp_x = scipy.ndimage.zoom(warp_x, (self.height / noise_res_h, self.width / noise_res_w), order=3)
+        warp_y = scipy.ndimage.zoom(warp_y, (self.height / noise_res_h, self.width / noise_res_w), order=3)
 
-        # Adjust dimensions if zoom didn't perfectly match (e.g. rounding issues)
-        if warp_x.shape[0] > self.height or warp_x.shape[1] > self.width:
-            warp_x = warp_x[:self.height, :self.width]
-            warp_y = warp_y[:self.height, :self.width]
-        elif warp_x.shape[0] < self.height or warp_x.shape[1] < self.width:
-            # Pad if slightly smaller
-            pad_h = max(0, self.height - warp_x.shape[0])
-            pad_w = max(0, self.width - warp_x.shape[1])
-            warp_x = np.pad(warp_x, ((0, pad_h), (0, pad_w)), mode='edge')
-            warp_y = np.pad(warp_y, ((0, pad_h), (0, pad_w)), mode='edge')
+        if warp_x.shape != xv.shape:
+            warp_x = np.pad(warp_x, ((0, max(0, xv.shape[0]-warp_x.shape[0])), (0, max(0, xv.shape[1]-warp_x.shape[1]))))[:xv.shape[0], :xv.shape[1]]
+            warp_y = np.pad(warp_y, ((0, max(0, yv.shape[0]-warp_y.shape[0])), (0, max(0, yv.shape[1]-warp_y.shape[1]))))[:yv.shape[0], :yv.shape[1]]
 
-        # Warp coordinates
-        # Keep strength well below 0.5 grid-cells to avoid tearing the field into isolated blobs
-        warp_strength = min(cols, rows) * random.uniform(0.05, 0.20)
+        warp_strength = random.uniform(0.05, 0.20)
         xv_warped = xv + warp_x * warp_strength
         yv_warped = yv + warp_y * warp_strength
 
-        # Clip to valid range so map_coordinates doesn't pull outside colors
-        xv_warped = np.clip(xv_warped, 0, cols - 1)
-        yv_warped = np.clip(yv_warped, 0, rows - 1)
-
-        # 4. Sample colors
-        # map_coordinates requires coordinates in shape (dim, ...), so (2, height, width)
-        coords = np.stack((yv_warped, xv_warped))
+        angle = random.uniform(0, 2 * np.pi)
+        dx_dir = np.cos(angle)
+        dy_dir = np.sin(angle)
+        
+        t_values = xv_warped * dx_dir + yv_warped * dy_dir
+        
+        t_min, t_max = t_values.min(), t_values.max()
+        if t_max > t_min:
+            t_values = (t_values - t_min) / (t_max - t_min)
+            
+        t_values = np.clip(t_values, 0, 1)
+        t_values = t_values * t_values * (3 - 2 * t_values)
+        
+        idx_f = t_values * (num_colors - 1)
+        idx0 = np.clip(idx_f.astype(np.int32), 0, num_colors - 2)
+        frac = idx_f - idx0
         
         res = np.zeros((self.height, self.width, 3), dtype=np.float32)
-        for i in range(3):
-            # Bicubic interpolation (order=1) for smooth color transitions
-            res[..., i] = scipy.ndimage.map_coordinates(grid[..., i], coords, order=1, mode='nearest')
-        
-        return _oklab_image_to_pil(res)
+        for i in range(num_colors - 1):
+            mask = (idx0 == i)
+            if not np.any(mask):
+                continue
+            f = frac[mask, None]
+            c0 = colors_oklab[color_order[i]]
+            c1 = colors_oklab[color_order[i+1]]
+            res[mask] = c0 * (1 - f) + c1 * f
+            
+        srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
+        return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
 
 
 class FlowFieldGradient:
@@ -238,50 +206,18 @@ class FlowFieldGradient:
             raise ImportError("The 'noise' package is required for FlowFieldGradient.")
             
         if seed is not None:
-            import random
             random.seed(seed)
             np.random.seed(seed)
             
         num_colors = len(colors)
         colors_oklab = _colors_to_oklab(colors)
-
-        grid_w, grid_h = max(2, complexity), max(2, complexity)
-        grid = np.zeros((grid_h, grid_w, 3), dtype=np.float32)
         
+        # FlowField respects the aesthetic palette order (Anchor -> Accents)
         color_order = list(range(num_colors))
-        import random
-        random.shuffle(color_order)
-        angle = random.uniform(0, 2 * np.pi)
-        dx_dir = np.cos(angle)
-        dy_dir = np.sin(angle)
-        
-        t_values = np.zeros((grid_h, grid_w), dtype=np.float32)
-        for y in range(grid_h):
-            for x in range(grid_w):
-                nx = x / max(1, grid_w - 1)
-                ny = y / max(1, grid_h - 1)
-                t_values[y, x] = nx * dx_dir + ny * dy_dir
-                
-        t_min, t_max = t_values.min(), t_values.max()
-        if t_max > t_min:
-            t_values = (t_values - t_min) / (t_max - t_min)
-        t_values = t_values * t_values * (3 - 2 * t_values)
 
-        for y in range(grid_h):
-            for x in range(grid_w):
-                t = t_values[y, x]
-                idx_f = t * (num_colors - 1)
-                idx0 = int(idx_f)
-                idx1 = min(idx0 + 1, num_colors - 1)
-                frac = idx_f - idx0
-                c0 = colors_oklab[color_order[idx0]]
-                c1 = colors_oklab[color_order[idx1]]
-                grid[y, x] = c0 * (1 - frac) + c1 * frac
-
-        yv, xv = np.mgrid[0:grid_h:self.height*1j, 0:grid_w:self.width*1j]
-        
-        warp_strength = random.uniform(0.6, 1.8)
-        scale = random.uniform(0.003, 0.012)
+        x = np.linspace(0, 1, self.width, dtype=np.float32)
+        y = np.linspace(0, 1, self.height, dtype=np.float32)
+        xv, yv = np.meshgrid(x, y)
         
         res_scale = 0.1
         small_h = max(2, int(self.height * res_scale))
@@ -289,6 +225,9 @@ class FlowFieldGradient:
         
         ox = random.uniform(0, 1000)
         oy = random.uniform(0, 1000)
+        
+        warp_strength = random.uniform(0.2, 0.6)
+        scale = random.uniform(0.002, 0.006) * complexity
         
         dx = np.zeros((small_h, small_w), dtype=np.float32)
         dy = np.zeros((small_h, small_w), dtype=np.float32)
@@ -299,23 +238,45 @@ class FlowFieldGradient:
                 dx[sy, sx] = noise.pnoise2(nx + ox, ny + oy, octaves=3)
                 dy[sy, sx] = noise.pnoise2(nx + ox + 500, ny + oy + 500, octaves=3)
                 
-        dx = scipy.ndimage.zoom(dx, (self.height / small_h, self.width / small_w), order=1)
-        dy = scipy.ndimage.zoom(dy, (self.height / small_h, self.width / small_w), order=1)
+        dx = scipy.ndimage.zoom(dx, (self.height / small_h, self.width / small_w), order=3)
+        dy = scipy.ndimage.zoom(dy, (self.height / small_h, self.width / small_w), order=3)
         
         if dx.shape != xv.shape:
             dx = np.pad(dx, ((0, max(0, xv.shape[0]-dx.shape[0])), (0, max(0, xv.shape[1]-dx.shape[1]))))[:xv.shape[0], :xv.shape[1]]
             dy = np.pad(dy, ((0, max(0, yv.shape[0]-dy.shape[0])), (0, max(0, yv.shape[1]-dy.shape[1]))))[:yv.shape[0], :yv.shape[1]]
             
-        xv_warped = np.clip(xv + dx * warp_strength * grid_w, 0, grid_w - 1)
-        yv_warped = np.clip(yv + dy * warp_strength * grid_h, 0, grid_h - 1)
+        xv_warped = xv + dx * warp_strength
+        yv_warped = yv + dy * warp_strength
         
-        coords = np.stack((yv_warped, xv_warped))
+        angle = random.uniform(0, 2 * np.pi)
+        dx_dir = np.cos(angle)
+        dy_dir = np.sin(angle)
+        
+        t_values = xv_warped * dx_dir + yv_warped * dy_dir
+        
+        t_min, t_max = t_values.min(), t_values.max()
+        if t_max > t_min:
+            t_values = (t_values - t_min) / (t_max - t_min)
+            
+        t_values = np.clip(t_values, 0, 1)
+        t_values = t_values * t_values * (3 - 2 * t_values)
+        
+        idx_f = t_values * (num_colors - 1)
+        idx0 = np.clip(idx_f.astype(np.int32), 0, num_colors - 2)
+        frac = idx_f - idx0
         
         res = np.zeros((self.height, self.width, 3), dtype=np.float32)
-        for i in range(3):
-            res[..., i] = scipy.ndimage.map_coordinates(grid[..., i], coords, order=1, mode='nearest')
+        for i in range(num_colors - 1):
+            mask = (idx0 == i)
+            if not np.any(mask):
+                continue
+            f = frac[mask, None]
+            c0 = colors_oklab[color_order[i]]
+            c1 = colors_oklab[color_order[i+1]]
+            res[mask] = c0 * (1 - f) + c1 * f
             
-        return _oklab_image_to_pil(res)
+        srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
+        return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
 
 class MeshGradient:
     def __init__(self, width=5120, height=2880):
