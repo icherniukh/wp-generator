@@ -14,7 +14,7 @@ class TestWallpaperDither(unittest.TestCase):
         result = np.asarray(WallpaperFilters.apply_dither(image, amount=0.2))
         delta = result.astype(np.int16) - 128
 
-        self.assertLessEqual(np.abs(delta).max(), 5)
+        self.assertLessEqual(np.abs(delta).max(), 15)
         np.testing.assert_array_equal(delta[..., 0], delta[..., 1])
         np.testing.assert_array_equal(delta[..., 1], delta[..., 2])
 

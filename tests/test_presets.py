@@ -97,5 +97,14 @@ class TestPresetEngine(unittest.TestCase):
         self.assertEqual(self.engine.generate_palette(preset, family_index=1), [(255, 255, 255)])
         self.assertEqual(self.engine.generate_palette(preset, family_index=2), [(0, 0, 0)])
 
+    def test_nocturne_preset_has_tuned_defaults(self):
+        data = self.engine.load_preset("nocturne")
+        self.assertEqual(data["color_space"], "oklch")
+        self.assertEqual(data["overrides"]["engine"], "fluid-wave")
+        self.assertEqual(data["overrides"]["dots"], 0.0)
+        self.assertEqual(data["overrides"]["glass"], False)
+        colors = self.engine.generate_palette(data, count=3)
+        self.assertEqual(len(colors), 3)
+
 if __name__ == '__main__':
     unittest.main()
