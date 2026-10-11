@@ -63,6 +63,8 @@ python main.py --preset nothing --seed 42
 | `nothing` | Industrial dark with high-contrast accent and dot-matrix overlay |
 | `pastel` | Light anchors, desaturated accents |
 | `afterglow` | Vivid reference-derived violet, cyan, coral, orange, and magenta fields |
+| `sleek` | Luminous neon accents on dark anchor with frosted glass texture |
+| `nocturne` | Deep richly-tinted grounding anchors paired with luminous twilight and ember accents |
 
 ### Device Presets (`--device`)
 

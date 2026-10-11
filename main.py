@@ -52,7 +52,7 @@ def generate(args, nothing_style, seed):
 
     overrides = preset_engine.get_engine_overrides(preset_data)
 
-    # Helper to resolve param: CLI arg > Preset Override > Fallback Random
+    # Resolve parameter: CLI arg > Preset Override > Fallback Random
     def resolve_param(arg_val, override_key, fallback_gen):
         if arg_val is not None:
             return arg_val
@@ -141,7 +141,9 @@ def generate(args, nothing_style, seed):
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         preset_name = args.preset if getattr(args, 'preset', None) else "custom"
-        output_path = f"wp_{preset_name}_{timestamp}.png"
+        out_dir = getattr(args, 'out_dir', None)
+        filename = f"wp_{preset_name}_{timestamp}_{seed}.png" if getattr(args, 'count', 1) > 1 else f"wp_{preset_name}_{timestamp}.png"
+        output_path = os.path.join(out_dir, filename) if out_dir else filename
 
     color_hex = " ".join(f"#{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors[:3])
     if len(final_colors) > 3:
@@ -239,6 +241,8 @@ def main():
     core_group.add_argument("--device", choices=list(SCREEN_PRESETS.keys()), default="mbp14", help="Standard screen resolution device.")
     core_group.add_argument("--count", type=int, default=1, help="Number of wallpapers to generate.")
     core_group.add_argument("--output", default=None, help="Output path (single image). Auto-named if omitted.")
+    core_group.add_argument("--out-dir", default=None, help="Directory to save generated wallpapers.")
+    core_group.add_argument("--workers", type=int, default=None, help="Worker count for parallel generation.")
 
     # --- Color Group ---
     color_group = parser.add_argument_group("Color Palettes")
@@ -339,12 +343,30 @@ def main():
 
     # --- Generate ---
     total = args.count
-    for i in range(total):
-        seed = base_seed + i
-        if total > 1:
-            print(f"[{i+1}/{total}]", end=" ")
-        path = generate(args, nothing_style, seed)
-        print(f"  -> {path}")
+    workers = args.workers
+    if workers is None:
+        workers = min(total, os.cpu_count() or 1)
+
+    if total > 1 and workers > 1:
+        import concurrent.futures
+        print(f"Generating {total} wallpapers in parallel using {workers} workers...")
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(generate, args, nothing_style, base_seed + i): i + 1
+                for i in range(total)
+            }
+            completed_count = 0
+            for future in concurrent.futures.as_completed(futures):
+                completed_count += 1
+                path = future.result()
+                print(f"[{completed_count}/{total}] -> {path}")
+    else:
+        for i in range(total):
+            seed = base_seed + i
+            if total > 1:
+                print(f"[{i+1}/{total}]", end=" ")
+            path = generate(args, nothing_style, seed)
+            print(f"  -> {path}")
 
 if __name__ == "__main__":
     main()

@@ -34,6 +34,7 @@ venv/
 
 # Project specific
 wp_*.png
+wallpapers_*/
 output/*.png
 output/*/
 !output/.gitkeep
@@ -43,3 +44,4 @@ output/*/
 .dolt/
 *.db
 .beads-credential-key
+.beads*.lock
