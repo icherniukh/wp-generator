@@ -89,6 +89,7 @@ class RenderConfiguration:
     dots_spacing: Optional[int] = None
     dots_mode: Optional[str] = None
     glass: Optional[bool] = None
+    chromatic_aberration: Optional[float] = None
     legacy_idw: bool = False
     seed: Optional[int] = None
     capture_base_image: bool = False
@@ -105,6 +106,7 @@ class RenderResult:
     height: int
     complexity: int
     noise: float
+    chromatic_aberration: float = 0.0
     base_image: Optional[Image.Image] = None
 
 
@@ -191,6 +193,9 @@ class WallpaperPipeline:
         complexity = resolve_value(config.complexity, "complexity", lambda: random.randint(2, 6))
         noise = resolve_value(config.noise, "noise", lambda: round(random.uniform(0.005, 0.05), 3))
         glass_param = resolve_value(config.glass, "glass", lambda: False)
+        chromatic_aberration = resolve_value(
+            config.chromatic_aberration, "chromatic_aberration", lambda: 0.0
+        )
         fluid_mode = resolve_value(config.fluid_mode, "fluid_mode", lambda: "random")
         vignette = resolve_value(config.vignette, "vignette", lambda: 0.0)
         engine_type = resolve_value(config.engine, "engine", lambda: "simplex")
@@ -263,10 +268,16 @@ class WallpaperPipeline:
 
         if glass_param:
             image = WallpaperFilters.apply_frosted_glass(image, blur_radius=60, noise_amount=0.15)
-        elif noise > 0:
+
+        if chromatic_aberration > 0.0:
+            image = WallpaperFilters.apply_chromatic_aberration(
+                image, strength=chromatic_aberration
+            )
+
+        if noise > 0.0:
             image = WallpaperFilters.apply_film_grain(image, amount=noise)
 
-        if vignette > 0:
+        if vignette > 0.0:
             image = WallpaperFilters.apply_vignette(image, strength=vignette)
 
         color_hexes = [f"#{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors]
@@ -281,6 +292,7 @@ class WallpaperPipeline:
             height=config.height,
             complexity=complexity,
             noise=noise,
+            chromatic_aberration=chromatic_aberration,
             base_image=base_image,
         )
 

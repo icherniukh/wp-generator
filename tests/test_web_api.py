@@ -74,6 +74,13 @@ class TestWebAPI(unittest.TestCase):
         response = self.client.get("/api/render?width=5&height=100")
         self.assertEqual(response.status_code, 422)
 
+    def test_render_with_chromatic_aberration(self):
+        response = self.client.get(
+            "/api/render?preset=nocturne&width=160&height=100&seed=42&aberration=0.02"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["x-render-aberration"], "0.02")
+
 
 if __name__ == "__main__":
     unittest.main()
