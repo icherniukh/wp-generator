@@ -48,6 +48,7 @@ def generate(args, nothing_style, seed):
         dots_spacing=args.dots_spacing,
         dots_mode=args.dots_mode,
         glass=args.glass,
+        chromatic_aberration=args.chromatic_aberration,
         legacy_idw=bool(getattr(args, "legacy_idw", False)),
         seed=seed,
         capture_base_image=bool(getattr(args, "preview_fx", False)),
@@ -157,6 +158,7 @@ def main():
     filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
     filter_group.add_argument("--vignette", type=float, default=None, help=adv_help("Subtle radial edge darkening (0.0-1.0)."))
     filter_group.add_argument("--glass", action="store_true", default=None, help=adv_help("Apply premium frosted glass texture overlay."))
+    filter_group.add_argument("--aberration", "--chromatic-aberration", type=float, default=None, dest="chromatic_aberration", help=adv_help("Radial chromatic aberration strength (0.0-0.1)."))
     filter_group.add_argument("--preview-fx", action="store_true", default=None, help=adv_help("Preview FX rendering layers for development."))
 
     # --- Misc & Legacy ---
@@ -183,6 +185,8 @@ def main():
         parser.error("--noise must be between 0.0 and 1.0")
     if args.vignette is not None and not 0 <= args.vignette <= 1:
         parser.error("--vignette must be between 0.0 and 1.0")
+    if args.chromatic_aberration is not None and not 0 <= args.chromatic_aberration <= 0.1:
+        parser.error("--aberration must be between 0.0 and 0.1")
     if args.count < 1:
         parser.error("--count must be at least 1")
     if args.count > 1 and args.output:

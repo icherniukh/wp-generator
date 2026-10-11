@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.ndimage
 from PIL import Image, ImageFilter
 
 class WallpaperFilters:
@@ -80,8 +81,104 @@ class WallpaperFilters:
         res = np.clip(res, 0, 255).astype(np.uint8)
         return Image.fromarray(res)
 
-    apply_noise = apply_dither
-    apply_film_grain = apply_dither
+    @staticmethod
+    def apply_film_grain(image, amount=0.08):
+        """
+        Applies multi-scale photographic film grain with luminance roll-off.
+        Combines fine high-frequency noise with organic clumpiness visible on high-DPI displays.
+        :param amount: Grain intensity (0.0 to 1.0).
+        """
+        if amount <= 0.0:
+            return image.copy()
+
+        img_arr = np.asarray(image).astype(np.float32)
+        h, w = img_arr.shape[:2]
+        channels = img_arr.shape[2] if img_arr.ndim == 3 else 1
+
+        sigma = 255.0 * amount
+        fine_grain = np.random.normal(0.0, sigma * 0.7, (h, w)).astype(np.float32)
+
+        down_factor = 2
+        down_h, down_w = max(1, h // down_factor), max(1, w // down_factor)
+        coarse_small = np.random.normal(0.0, sigma * 0.6, (down_h, down_w)).astype(np.float32)
+        coarse_grain = scipy.ndimage.zoom(
+            coarse_small, (h / down_h, w / down_w), order=1
+        )[:h, :w]
+
+        combined_grain = fine_grain + coarse_grain
+
+        rgb = img_arr[..., :3] if channels >= 3 else img_arr
+        lum = np.mean(rgb, axis=2 if channels >= 3 else -1) / 255.0
+        # Preserve midtone grain while softening extreme shadows and specular highlights
+        lum_weight = 4.0 * lum * (1.0 - lum)
+        lum_weight = np.clip(lum_weight, 0.35, 1.0)
+
+        modulated_grain = combined_grain * lum_weight
+
+        out = img_arr.copy()
+        if channels >= 3:
+            for c in range(3):
+                out[..., c] += modulated_grain
+        else:
+            out += modulated_grain
+
+        return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
+    apply_noise = apply_film_grain
+
+    @staticmethod
+    def apply_chromatic_aberration(image, strength=0.012, mode="radial"):
+        """
+        Applies optical chromatic aberration (color fringing).
+        Displaces Red and Blue channels radially or directionally while Green remains fixed.
+        :param strength: Magnitude of channel displacement (0.0 to 0.05).
+        :param mode: 'radial' (lens falloff from optical center) or 'directional'.
+        """
+        if strength <= 0.0:
+            return image.copy()
+
+        img_arr = np.asarray(image).astype(np.float32)
+        h, w = img_arr.shape[:2]
+        channels = img_arr.shape[2] if img_arr.ndim == 3 else 1
+
+        if channels < 3:
+            return image.copy()
+
+        y_coords, x_coords = np.mgrid[0:h, 0:w].astype(np.float32)
+
+        if mode == "directional":
+            shift_px = strength * min(w, h)
+            rx = x_coords + shift_px
+            ry = y_coords
+            bx = x_coords - shift_px
+            by = y_coords
+        else:
+            cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+            norm_x = (x_coords - cx) / cx
+            norm_y = (y_coords - cy) / cy
+            r_sq = norm_x**2 + norm_y**2
+            disp = strength * r_sq
+
+            rx = x_coords + norm_x * cx * disp
+            ry = y_coords + norm_y * cy * disp
+            bx = x_coords - norm_x * cx * disp
+            by = y_coords - norm_y * cy * disp
+
+        red_coords = np.array([ry, rx])
+        blue_coords = np.array([by, bx])
+
+        r_channel = scipy.ndimage.map_coordinates(
+            img_arr[..., 0], red_coords, order=1, mode="nearest"
+        )
+        b_channel = scipy.ndimage.map_coordinates(
+            img_arr[..., 2], blue_coords, order=1, mode="nearest"
+        )
+
+        out = img_arr.copy()
+        out[..., 0] = r_channel
+        out[..., 2] = b_channel
+
+        return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
 
     @staticmethod
     def apply_vignette(image, strength=0.08):

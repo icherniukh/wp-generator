@@ -59,6 +59,7 @@ class RenderRequest(BaseModel):
     dots_spacing: Optional[int] = Field(default=None, ge=4, le=100)
     dots_mode: Optional[str] = Field(default=None)
     glass: Optional[bool] = Field(default=None)
+    chromatic_aberration: Optional[float] = Field(default=None, ge=0.0, le=0.1)
     seed: Optional[int] = Field(default=None)
 
 
@@ -136,6 +137,7 @@ async def render_get(
     vignette: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     dots: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     glass: Optional[bool] = Query(default=None),
+    aberration: Optional[float] = Query(default=None, ge=0.0, le=0.1),
 ) -> Response:
     """Renders wallpaper directly as a streaming PNG image response."""
     w, h = _resolve_dimensions(device, width, height)
@@ -151,6 +153,7 @@ async def render_get(
         vignette=vignette,
         dots=dots,
         glass=glass,
+        chromatic_aberration=aberration,
         seed=active_seed,
     )
 
@@ -176,6 +179,8 @@ async def render_get(
         "X-Render-Width": str(result.width),
         "X-Render-Height": str(result.height),
     }
+    if result.chromatic_aberration > 0.0:
+        headers["X-Render-Aberration"] = str(result.chromatic_aberration)
 
     return Response(content=png_bytes, media_type="image/png", headers=headers)
 
@@ -210,6 +215,7 @@ async def render_post(body: RenderRequest) -> Response:
         dots_spacing=body.dots_spacing,
         dots_mode=body.dots_mode,
         glass=body.glass,
+        chromatic_aberration=body.chromatic_aberration,
         seed=active_seed,
     )
 
@@ -235,5 +241,7 @@ async def render_post(body: RenderRequest) -> Response:
         "X-Render-Width": str(result.width),
         "X-Render-Height": str(result.height),
     }
+    if result.chromatic_aberration > 0.0:
+        headers["X-Render-Aberration"] = str(result.chromatic_aberration)
 
     return Response(content=png_bytes, media_type="image/png", headers=headers)

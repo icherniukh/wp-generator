@@ -93,6 +93,18 @@ class TestWallpaperPipeline(unittest.TestCase):
         # Ensure filtered and base image differ due to applied noise and dots
         self.assertFalse(np.array_equal(np.array(res.image), np.array(res.base_image)))
 
+    def test_chromatic_aberration_configured_in_pipeline(self):
+        cfg = RenderConfiguration(
+            preset="nocturne",
+            width=120,
+            height=80,
+            seed=99,
+            chromatic_aberration=0.03,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.chromatic_aberration, 0.03)
+        self.assertEqual(res.image.size, (120, 80))
+
 
 if __name__ == "__main__":
     unittest.main()
