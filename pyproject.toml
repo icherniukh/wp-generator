@@ -17,8 +17,15 @@ macos = [
   "pyobjc-core>=11.0",
   "pyobjc-framework-quartz>=11.0",
 ]
+web = [
+  "fastapi>=0.115",
+  "httpx>=0.27",
+  "uvicorn>=0.30",
+]
 
 [dependency-groups]
 dev = [
+  "fastapi>=0.115",
+  "httpx>=0.27",
   "pytest>=8.0",
 ]
