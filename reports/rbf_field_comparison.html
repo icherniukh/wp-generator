@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Spatial RBF Field Architecture Evaluation</title>
+    <style>
+        :root {
+            --bg: #0b0c10;
+            --surface: #151821;
+            --surface-hover: #1c2130;
+            --border: #232736;
+            --text-primary: #e6e8ee;
+            --text-secondary: #9097aa;
+            --accent: #58a6ff;
+            --accent-glow: rgba(88, 166, 255, 0.15);
+            --danger: #f85149;
+            --success: #3fb950;
+            --purple: #bc8cff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2.5rem 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1.5rem;
+        }
+
+        .badges {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            background: var(--accent-glow);
+            color: var(--accent);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+
+        .badge.purple {
+            background: rgba(188, 140, 255, 0.15);
+            color: var(--purple);
+            border: 1px solid rgba(188, 140, 255, 0.3);
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+        }
+
+        p.lead {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+        }
+
+        section {
+            margin-bottom: 3.5rem;
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links {
+            margin-top: 1rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-link {
+            font-size: 0.9rem;
+            color: var(--accent);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .nav-link:hover {
+            text-decoration: underline;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-weight: 600;
+            font-size: 1.05rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-body {
+            padding: 1.25rem;
+            flex: 1;
+        }
+
+        .img-container {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        .img-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .card-desc {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        .tag-pill {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .tag-danger {
+            background: rgba(248, 81, 73, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+
+        .tag-success {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
+
+        .metric-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+            margin-top: 1rem;
+        }
+
+        .metric-table th, .metric-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .metric-table th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .metric-table tr:hover td {
+            background: rgba(255, 255, 255, 0.015);
+        }
+
+        .interactive-viewer {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+            min-width: 250px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .value-display {
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            font-weight: 600;
+            font-size: 1rem;
+            min-width: 3.5rem;
+            text-align: right;
+            color: var(--accent);
+        }
+
+        .math-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            font-size: 0.88rem;
+            color: #c9d1d9;
+            overflow-x: auto;
+            margin-top: 1rem;
+            line-height: 1.5;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .tab-btn {
+            background: var(--surface-hover);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.4rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border-color: rgba(88, 166, 255, 0.4);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="badges">
+            <span class="badge">Architecture Enhancement 2</span>
+            <span class="badge purple">Radial Basis Functions</span>
+        </div>
+        <h1>Multi-Point 2D Spatial Weighting</h1>
+        <p class="lead">Decoupling color positioning from 1D scalar manifolds via warped radial basis emitters in Oklab space.</p>
+        <div class="nav-links">
+            <a href="domain_warp_comparison.html" class="nav-link">&larr; Back to Feature 1: Domain Warping Report</a>
+        </div>
+    </header>
+
+    <section>
+        <h2>1. The 1D Scalar Topology Bottleneck</h2>
+        <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+            In standard procedural gradient engines (such as Simplex Noise or 1D Domain Warping), pixel colors are derived by projecting a scalar field $t(x, y) \in [0, 1]$ onto a 1D spline sequence of palette colors $[C_0, C_1, C_2, C_3]$.
+            This imposes a rigid topological constraint: <strong>color $C_1$ can only ever touch $C_0$ and $C_2$</strong>. It is topologically impossible for $C_1$ and $C_3$ to meet without forcing a crossing through $C_2$, resulting in repetitive concentric contour bands across the canvas.
+        </p>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">1D Scalar Gradient (Domain Warp)</div>
+                    <span class="tag-pill tag-danger">Strict 1D Manifold</span>
+                </div>
+                <div class="card-body">
+                    <div class="img-container">
+                        <img src="assets/compare_1d_domain_warp.png" alt="1D Scalar Domain Warp" loading="lazy">
+                    </div>
+                    <p class="card-desc">
+                        Colors are bound to the sequential order: Deep Black &rarr; Crimson &rarr; Cyan &rarr; Gold. Every transition to Gold must cross through Cyan. Accents cannot exist as independent celestial or atmospheric emitters.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">2D Spatial Field (Radial Basis Function)</div>
+                    <span class="tag-pill tag-success">Independent 2D Emitters</span>
+                </div>
+                <div class="card-body">
+                    <div class="img-container">
+                        <img src="assets/compare_2d_rbf_field.png" alt="2D Radial Basis Gradient" loading="lazy">
+                    </div>
+                    <p class="card-desc">
+                        Colors are distributed as independent 2D spatial emitters anchored against an ambient background foundation. Crimson, Cyan, and Gold emerge and interact freely across canvas coordinates without forced intermediary transitions.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h2>2. Mathematical & Algorithmic Design</h2>
+        <div class="math-block">
+// 1. Ambient Foundation
+w_0(x, y) = ambient_weight  (anchors base canvas color C_0, e.g. 0.15)
+
+// 2. Coordinate Domain Warping
+(x', y') = (x + 0.35 * warp_strength * q_x(x, y), y + 0.35 * warp_strength * q_y(x, y))
+
+// 3. Anisotropic Rotated Distance Metric for Emitter k
+Δx_rot = (x' - c_x,k) * cos(θ_k) + (y' - c_y,k) * sin(θ_k)
+Δy_rot = -(x' - c_x,k) * sin(θ_k) + (y' - c_y,k) * cos(θ_k)
+d_k(x', y') = sqrt( (Δx_rot)^2 + (Δy_rot * aspect_k)^2 )
+
+// 4. Wendland C2-Smooth Compact Polynomial Falloff
+u_k = clip(1.0 - d_k / (1.8 * σ_k), 0.0, 1.0)
+w_k(x', y') = (u_k)^2 * (3.0 - 2.0 * u_k)
+
+// 5. Partition of Unity Weight Normalization
+w̄_i(x, y) = w_i(x, y) / [ Σ_j w_j(x, y) + ε ]
+
+// 6. Direct Perceptual Tensor Contraction in Oklab Space
+C_oklab(x, y) = Σ_i w̄_i(x, y) * C_i,oklab
+        </div>
+    </section>
+
+    <section>
+        <h2>3. Interactive Parameter Sweeps</h2>
+        
+        <div class="interactive-viewer">
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchTab('ambient')">Ambient Weight Sweep (Atmospheric Wash)</button>
+                <button class="tab-btn" onclick="switchTab('dispersion')">Dispersion Reach Sweep (Emitter Radius)</button>
+            </div>
+
+            <!-- Tab 1: Ambient Sweep -->
+            <div id="tab-ambient" class="tab-content active">
+                <div class="controls">
+                    <div class="slider-group">
+                        <label for="ambient-slider" style="font-size: 0.9rem; font-weight: 600;">Ambient Anchor Weight:</label>
+                        <input type="range" id="ambient-slider" min="0" max="3" step="1" value="1" oninput="updateAmbient(this.value)">
+                    </div>
+                    <div class="value-display" id="ambient-val">0.15</div>
+                </div>
+                <div class="img-container" style="max-height: 540px;">
+                    <img id="ambient-img" src="assets/rbf_ambient_0.15.png" alt="RBF Ambient Sweep">
+                </div>
+                <p id="ambient-desc" style="color: var(--text-secondary); font-size: 0.9rem;">
+                    <strong>0.15 (Balanced)</strong>: Provides a rich background anchor with punchy accent emission and delicate outer halos.
+                </p>
+            </div>
+
+            <!-- Tab 2: Dispersion Sweep -->
+            <div id="tab-dispersion" class="tab-content">
+                <div class="controls">
+                    <div class="slider-group">
+                        <label for="dispersion-slider" style="font-size: 0.9rem; font-weight: 600;">Emitter Dispersion (Reach):</label>
+                        <input type="range" id="dispersion-slider" min="0" max="3" step="1" value="1" oninput="updateDispersion(this.value)">
+                    </div>
+                    <div class="value-display" id="dispersion-val">0.35</div>
+                </div>
+                <div class="img-container" style="max-height: 540px;">
+                    <img id="dispersion-img" src="assets/rbf_dispersion_0.35.png" alt="RBF Dispersion Sweep">
+                </div>
+                <p id="dispersion-desc" style="color: var(--text-secondary); font-size: 0.9rem;">
+                    <strong>0.35 (Optimal)</strong>: Natural nebula filament radius with vibrant overlap without muddying the field.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h2>4. Performance & Latency Benchmarks</h2>
+        <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+            Measured on Apple Silicon across 5 consecutive runs with full pipeline execution (generation + direct Oklab tensor contraction + Lanczos upsampling).
+        </p>
+
+        <div class="card">
+            <table class="metric-table">
+                <thead>
+                    <tr>
+                        <th>Target Resolution</th>
+                        <th>Pixel Count</th>
+                        <th>Average Latency</th>
+                        <th>Standard Deviation</th>
+                        <th>Throughput</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>1080p Standard</strong> (1920 &times; 1080)</td>
+                        <td>2.07 MP</td>
+                        <td><span style="color: var(--success); font-weight: 600;">99.2 ms</span></td>
+                        <td>&plusmn; 0.8 ms</td>
+                        <td>10.1 fps</td>
+                    </tr>
+                    <tr>
+                        <td><strong>1440p QHD</strong> (2560 &times; 1440)</td>
+                        <td>3.69 MP</td>
+                        <td><span style="color: var(--success); font-weight: 600;">182.1 ms</span></td>
+                        <td>&plusmn; 11.9 ms</td>
+                        <td>5.5 fps</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Retina 3K (MBP 14")</strong> (3024 &times; 1964)</td>
+                        <td>5.94 MP</td>
+                        <td><span style="color: var(--accent); font-weight: 600;">288.2 ms</span></td>
+                        <td>&plusmn; 14.6 ms</td>
+                        <td>3.5 fps</td>
+                    </tr>
+                    <tr>
+                        <td><strong>5K Studio Display</strong> (5120 &times; 2880)</td>
+                        <td>14.75 MP</td>
+                        <td><span style="color: var(--purple); font-weight: 600;">739.1 ms</span></td>
+                        <td>&plusmn; 37.4 ms</td>
+                        <td>1.4 fps</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        const ambientSteps = ["0.05", "0.15", "0.3", "0.5"];
+        const ambientDesc = {
+            "0.05": "<strong>0.05 (Stark / Luminous)</strong>: Background anchor is minimal, causing accent emitters to dominate with high local contrast.",
+            "0.15": "<strong>0.15 (Default / Balanced)</strong>: Foundational background presence with punchy accent emission and delicate outer halos.",
+            "0.3": "<strong>0.30 (Atmospheric Wash)</strong>: Deep foundational presence gives an ethereal misty quality to all emitters.",
+            "0.5": "<strong>0.50 (Dense Submersion)</strong>: Accents blend softly into a rich atmospheric haze with muted contrast."
+        };
+
+        const dispersionSteps = ["0.2", "0.35", "0.55", "0.8"];
+        const dispersionDesc = {
+            "0.2": "<strong>0.20 (Compact / Stellar)</strong>: Tight concentrated emission cores with crisp negative space.",
+            "0.35": "<strong>0.35 (Default / Nebula)</strong>: Natural fluid filament radius with vibrant overlap.",
+            "0.55": "<strong>0.55 (Expansive Aurora)</strong>: Broad overlapping wings filling larger canvas quadrants.",
+            "0.8": "<strong>0.80 (Diffuse Ethereal)</strong>: Maximally soft field wash with full canvas interpenetration."
+        };
+
+        function updateAmbient(index) {
+            const val = ambientSteps[index];
+            document.getElementById('ambient-val').innerText = val;
+            document.getElementById('ambient-img').src = `assets/rbf_ambient_${val}.png`;
+            document.getElementById('ambient-desc').innerHTML = ambientDesc[val];
+        }
+
+        function updateDispersion(index) {
+            const val = dispersionSteps[index];
+            document.getElementById('dispersion-val').innerText = val;
+            document.getElementById('dispersion-img').src = `assets/rbf_dispersion_${val}.png`;
+            document.getElementById('dispersion-desc').innerHTML = dispersionDesc[val];
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            if (tab === 'ambient') {
+                document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+                document.getElementById('tab-ambient').classList.add('active');
+            } else {
+                document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+                document.getElementById('tab-dispersion').classList.add('active');
+            }
+        }
+    </script>
+</body>
+</html>
