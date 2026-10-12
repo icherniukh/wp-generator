@@ -105,6 +105,20 @@ class TestWallpaperPipeline(unittest.TestCase):
         self.assertEqual(res.chromatic_aberration, 0.03)
         self.assertEqual(res.image.size, (120, 80))
 
+    def test_domain_warp_engine_in_pipeline(self):
+        cfg = RenderConfiguration(
+            engine="domain-warp",
+            width=140,
+            height=90,
+            warp_strength=1.2,
+            colors=[(10, 10, 20), (220, 100, 150)],
+            seed=42,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.engine, "domain-warp")
+        self.assertEqual(res.warp_strength, 1.2)
+        self.assertEqual(res.image.size, (140, 90))
+
 
 if __name__ == "__main__":
     unittest.main()

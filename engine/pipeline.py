@@ -12,6 +12,7 @@ from PIL import Image
 from engine.colors import ColorTheoryHarmonizer, StyleHarmonizer
 from engine.filters import WallpaperFilters
 from engine.gradient import (
+    DomainWarpGradient,
     FlowFieldGradient,
     FluidMeshGradient,
     MeshGradient,
@@ -90,6 +91,7 @@ class RenderConfiguration:
     dots_mode: Optional[str] = None
     glass: Optional[bool] = None
     chromatic_aberration: Optional[float] = None
+    warp_strength: Optional[float] = None
     legacy_idw: bool = False
     seed: Optional[int] = None
     capture_base_image: bool = False
@@ -107,6 +109,7 @@ class RenderResult:
     complexity: int
     noise: float
     chromatic_aberration: float = 0.0
+    warp_strength: Optional[float] = None
     base_image: Optional[Image.Image] = None
 
 
@@ -196,6 +199,7 @@ class WallpaperPipeline:
         chromatic_aberration = resolve_value(
             config.chromatic_aberration, "chromatic_aberration", lambda: 0.0
         )
+        warp_strength = resolve_value(config.warp_strength, "warp_strength", lambda: 0.85)
         fluid_mode = resolve_value(config.fluid_mode, "fluid_mode", lambda: "random")
         vignette = resolve_value(config.vignette, "vignette", lambda: 0.0)
         engine_type = resolve_value(config.engine, "engine", lambda: "simplex")
@@ -252,6 +256,14 @@ class WallpaperPipeline:
         elif engine_type == "spline-wave":
             spline_engine = SplineWaveGradient(width=config.width, height=config.height)
             image = spline_engine.generate(final_colors, complexity=complexity, seed=active_seed)
+        elif engine_type == "domain-warp":
+            warp_engine = DomainWarpGradient(width=config.width, height=config.height)
+            image = warp_engine.generate(
+                final_colors,
+                complexity=complexity,
+                warp_strength=warp_strength,
+                seed=active_seed,
+            )
         else:
             simplex_engine = SimplexMeshGradient(width=config.width, height=config.height)
             image = simplex_engine.generate(
@@ -293,6 +305,7 @@ class WallpaperPipeline:
             complexity=complexity,
             noise=noise,
             chromatic_aberration=chromatic_aberration,
+            warp_strength=warp_strength,
             base_image=base_image,
         )
 

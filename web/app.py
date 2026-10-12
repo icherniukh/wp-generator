@@ -60,6 +60,7 @@ class RenderRequest(BaseModel):
     dots_mode: Optional[str] = Field(default=None)
     glass: Optional[bool] = Field(default=None)
     chromatic_aberration: Optional[float] = Field(default=None, ge=0.0, le=0.1)
+    warp_strength: Optional[float] = Field(default=None, ge=0.0, le=3.0)
     seed: Optional[int] = Field(default=None)
 
 
@@ -138,6 +139,7 @@ async def render_get(
     dots: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     glass: Optional[bool] = Query(default=None),
     aberration: Optional[float] = Query(default=None, ge=0.0, le=0.1),
+    warp_strength: Optional[float] = Query(default=None, ge=0.0, le=3.0),
 ) -> Response:
     """Renders wallpaper directly as a streaming PNG image response."""
     w, h = _resolve_dimensions(device, width, height)
@@ -154,6 +156,7 @@ async def render_get(
         dots=dots,
         glass=glass,
         chromatic_aberration=aberration,
+        warp_strength=warp_strength,
         seed=active_seed,
     )
 
@@ -216,6 +219,7 @@ async def render_post(body: RenderRequest) -> Response:
         dots_mode=body.dots_mode,
         glass=body.glass,
         chromatic_aberration=body.chromatic_aberration,
+        warp_strength=body.warp_strength,
         seed=active_seed,
     )
 
