@@ -16,6 +16,7 @@ from engine.gradient import (
     FlowFieldGradient,
     FluidMeshGradient,
     MeshGradient,
+    RadialBasisGradient,
     SimplexMeshGradient,
 )
 from engine.presets import PresetEngine
@@ -92,6 +93,8 @@ class RenderConfiguration:
     glass: Optional[bool] = None
     chromatic_aberration: Optional[float] = None
     warp_strength: Optional[float] = None
+    ambient_weight: Optional[float] = None
+    dispersion: Optional[float] = None
     legacy_idw: bool = False
     seed: Optional[int] = None
     capture_base_image: bool = False
@@ -110,6 +113,8 @@ class RenderResult:
     noise: float
     chromatic_aberration: float = 0.0
     warp_strength: Optional[float] = None
+    ambient_weight: Optional[float] = None
+    dispersion: Optional[float] = None
     base_image: Optional[Image.Image] = None
 
 
@@ -200,6 +205,8 @@ class WallpaperPipeline:
             config.chromatic_aberration, "chromatic_aberration", lambda: 0.0
         )
         warp_strength = resolve_value(config.warp_strength, "warp_strength", lambda: 0.85)
+        ambient_weight = resolve_value(config.ambient_weight, "ambient_weight", lambda: 0.15)
+        dispersion = resolve_value(config.dispersion, "dispersion", lambda: 0.35)
         fluid_mode = resolve_value(config.fluid_mode, "fluid_mode", lambda: "random")
         vignette = resolve_value(config.vignette, "vignette", lambda: 0.0)
         engine_type = resolve_value(config.engine, "engine", lambda: "simplex")
@@ -264,6 +271,16 @@ class WallpaperPipeline:
                 warp_strength=warp_strength,
                 seed=active_seed,
             )
+        elif engine_type in ("rbf", "radial-basis"):
+            rbf_engine = RadialBasisGradient(width=config.width, height=config.height)
+            image = rbf_engine.generate(
+                final_colors,
+                complexity=complexity,
+                warp_strength=warp_strength,
+                ambient_weight=ambient_weight,
+                dispersion=dispersion,
+                seed=active_seed,
+            )
         else:
             simplex_engine = SimplexMeshGradient(width=config.width, height=config.height)
             image = simplex_engine.generate(
@@ -306,6 +323,8 @@ class WallpaperPipeline:
             noise=noise,
             chromatic_aberration=chromatic_aberration,
             warp_strength=warp_strength,
+            ambient_weight=ambient_weight,
+            dispersion=dispersion,
             base_image=base_image,
         )
 

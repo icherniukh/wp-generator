@@ -119,6 +119,24 @@ class TestWallpaperPipeline(unittest.TestCase):
         self.assertEqual(res.warp_strength, 1.2)
         self.assertEqual(res.image.size, (140, 90))
 
+    def test_rbf_engine_in_pipeline(self):
+        cfg = RenderConfiguration(
+            engine="rbf",
+            width=140,
+            height=90,
+            warp_strength=1.1,
+            ambient_weight=0.2,
+            dispersion=0.4,
+            colors=[(10, 10, 20), (220, 100, 150), (40, 180, 220)],
+            seed=42,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.engine, "rbf")
+        self.assertEqual(res.warp_strength, 1.1)
+        self.assertEqual(res.ambient_weight, 0.2)
+        self.assertEqual(res.dispersion, 0.4)
+        self.assertEqual(res.image.size, (140, 90))
+
 
 if __name__ == "__main__":
     unittest.main()

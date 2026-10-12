@@ -280,6 +280,113 @@ class DomainWarpGradient:
         return img_mod.resize((self.width, self.height), Image.LANCZOS)
 
 
+class RadialBasisGradient:
+    def __init__(self, width=5120, height=2880):
+        self.width = width
+        self.height = height
+
+    def _generate_noise_plane(self, h, w, scale=1.0, octaves=2, offset=(0.0, 0.0)):
+        if noise is None:
+            y = np.linspace(-1.0, 1.0, h, dtype=np.float32) * scale + offset[1]
+            x = np.linspace(-1.0, 1.0, w, dtype=np.float32) * scale + offset[0]
+            xv, yv = np.meshgrid(x, y)
+            return np.sin(xv * np.pi) * np.cos(yv * np.pi)
+
+        sample_h = max(8, h // 4)
+        sample_w = max(8, w // 4)
+        y = np.linspace(-1.0, 1.0, sample_h, dtype=np.float32) * scale + offset[1]
+        x = np.linspace(-1.0, 1.0, sample_w, dtype=np.float32) * scale + offset[0]
+        grid = np.zeros((sample_h, sample_w), dtype=np.float32)
+        for iy in range(sample_h):
+            for ix in range(sample_w):
+                grid[iy, ix] = noise.snoise2(x[ix], y[iy], octaves=octaves)
+        zoom_y = h / sample_h
+        zoom_x = w / sample_w
+        return scipy.ndimage.zoom(grid, (zoom_y, zoom_x), order=3)[:h, :w]
+
+    def generate(
+        self,
+        colors,
+        complexity=5,
+        warp_strength=1.0,
+        ambient_weight=0.15,
+        dispersion=0.35,
+        seed=None,
+    ):
+        """
+        Generates a continuous 2D color field using radial basis functions and coordinate domain warping.
+        Breaks the 1D monotonic scalar sequence limitation by treating colors as independent spatial
+        emitters placed across 2D space, blended directly in Oklab color space with partition of unity.
+        """
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
+        num_colors = len(colors)
+        if num_colors == 0:
+            raise ValueError("At least one color must be provided.")
+        if num_colors == 1:
+            c = tuple(int(v) for v in colors[0])
+            return Image.new("RGB", (self.width, self.height), c)
+
+        colors_oklab = _colors_to_oklab(colors)
+
+        scale_factor = 0.25
+        h = max(16, int(self.height * scale_factor))
+        w = max(16, int(self.width * scale_factor))
+
+        y = np.linspace(0.0, 1.0, h, dtype=np.float32)
+        x = np.linspace(0.0, 1.0, w, dtype=np.float32)
+        xv, yv = np.meshgrid(x, y)
+
+        effective_warp = max(0.0, float(warp_strength))
+        if effective_warp > 0.0:
+            base_freq = 0.6 + (max(1, complexity) * 0.08)
+            ox1, oy1 = random.uniform(0, 500), random.uniform(0, 500)
+            ox2, oy2 = random.uniform(500, 1000), random.uniform(500, 1000)
+            qx = self._generate_noise_plane(h, w, scale=base_freq, octaves=2, offset=(ox1, oy1))
+            qy = self._generate_noise_plane(h, w, scale=base_freq, octaves=2, offset=(ox2, oy2))
+            warp_amp = effective_warp * 0.35
+            xv = xv + warp_amp * qx
+            yv = yv + warp_amp * qy
+
+        weights = np.zeros((num_colors, h, w), dtype=np.float32)
+        weights[0] = max(0.01, float(ambient_weight))
+
+        num_emitters = max(num_colors - 1, max(1, complexity))
+        for i in range(num_emitters):
+            c_idx = 1 + (i % (num_colors - 1))
+            angle_pos = i * (2.0 * np.pi / num_emitters) + random.uniform(-0.35, 0.35)
+            dist_center = random.uniform(0.18, 0.44)
+            cx = float(np.clip(0.5 + dist_center * np.cos(angle_pos), 0.1, 0.9))
+            cy = float(np.clip(0.5 + dist_center * np.sin(angle_pos), 0.1, 0.9))
+            sigma = max(0.05, float(dispersion) * random.uniform(0.75, 1.25))
+            aspect = random.uniform(0.7, 1.4)
+            flow_angle = random.uniform(0.0, np.pi)
+
+            dx = xv - cx
+            dy = yv - cy
+            dx_rot = dx * np.cos(flow_angle) + dy * np.sin(flow_angle)
+            dy_rot = -dx * np.sin(flow_angle) + dy * np.cos(flow_angle)
+            dist = np.sqrt(dx_rot**2 + (dy_rot * aspect)**2)
+
+            w_norm = np.clip(1.0 - (dist / (sigma * 1.8)), 0.0, 1.0)
+            w_emit = (w_norm**2) * (3.0 - 2.0 * w_norm)
+            weights[c_idx] += w_emit
+
+        weight_sum = np.sum(weights, axis=0, keepdims=True)
+        weights /= np.maximum(weight_sum, 1e-6)
+
+        grid_oklab = np.einsum("nhw,nc->hwc", weights, colors_oklab)
+        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
+        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+
+        return img_mod.resize((self.width, self.height), Image.LANCZOS)
+
+
+RBFFieldGradient = RadialBasisGradient
+
+
 class FlowFieldGradient:
     def __init__(self, width=5120, height=2880):
         self.width = width

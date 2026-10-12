@@ -140,6 +140,8 @@ async def render_get(
     glass: Optional[bool] = Query(default=None),
     aberration: Optional[float] = Query(default=None, ge=0.0, le=0.1),
     warp_strength: Optional[float] = Query(default=None, ge=0.0, le=3.0),
+    ambient_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    dispersion: Optional[float] = Query(default=None, ge=0.05, le=2.0),
 ) -> Response:
     """Renders wallpaper directly as a streaming PNG image response."""
     w, h = _resolve_dimensions(device, width, height)
@@ -157,6 +159,8 @@ async def render_get(
         glass=glass,
         chromatic_aberration=aberration,
         warp_strength=warp_strength,
+        ambient_weight=ambient_weight,
+        dispersion=dispersion,
         seed=active_seed,
     )
 
