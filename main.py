@@ -49,6 +49,7 @@ def generate(args, nothing_style, seed):
         dots_mode=args.dots_mode,
         glass=args.glass,
         chromatic_aberration=args.chromatic_aberration,
+        warp_strength=args.warp_strength,
         legacy_idw=bool(getattr(args, "legacy_idw", False)),
         seed=seed,
         capture_base_image=bool(getattr(args, "preview_fx", False)),
@@ -144,7 +145,8 @@ def main():
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
     engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave", "domain-warp"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--warp-strength", type=float, default=None, help=adv_help("Domain warping displacement strength (0.0-3.0)."))
     engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
     engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
     engine_group.add_argument("--harmonize", choices=["theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer override."))
