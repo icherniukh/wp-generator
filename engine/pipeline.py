@@ -17,6 +17,7 @@ from engine.gradient import (
     DomainWarpGradient,
     FlowFieldGradient,
     FluidMeshGradient,
+    FractalFieldGradient,
     MeshGradient,
     RadialBasisGradient,
     SimplexMeshGradient,
@@ -102,6 +103,12 @@ class RenderConfiguration:
     warp_strength: Optional[float] = None
     ambient_weight: Optional[float] = None
     dispersion: Optional[float] = None
+    phase_offset: Optional[float] = None
+    frequency: Optional[float] = None
+    trap_weight: Optional[float] = None
+    channel_offset: Optional[float] = None
+    fractal_type: Optional[str] = None
+    fractal_zoom: Optional[float] = None
     legacy_idw: bool = False
     seed: Optional[int] = None
     capture_base_image: bool = False
@@ -124,6 +131,11 @@ class RenderResult:
     dispersion: Optional[float] = None
     contours: float = 0.0
     contour_levels: int = 0
+    phase_offset: Optional[float] = None
+    frequency: Optional[float] = None
+    trap_weight: Optional[float] = None
+    fractal_type: Optional[str] = None
+    fractal_zoom: Optional[float] = None
     base_image: Optional[Image.Image] = None
     palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
 
@@ -230,6 +242,13 @@ class WallpaperPipeline:
         contour_width = resolve_value(config.contour_width, "contour_width", lambda: 1.4)
         contour_mode = resolve_value(config.contour_mode, "contour_mode", lambda: "light")
 
+        fractal_type = resolve_value(config.fractal_type, "fractal_type", lambda: "julia")
+        fractal_zoom = resolve_value(config.fractal_zoom, "fractal_zoom", lambda: None)
+        phase_offset = resolve_value(config.phase_offset, "phase_offset", lambda: 0.0)
+        frequency = resolve_value(config.frequency, "frequency", lambda: 1.0)
+        trap_weight = resolve_value(config.trap_weight, "trap_weight", lambda: 0.35)
+        channel_offset = resolve_value(config.channel_offset, "channel_offset", lambda: 0.0)
+
         # Color generation
         if config.colors:
             base_colors = list(config.colors)
@@ -314,6 +333,19 @@ class WallpaperPipeline:
                 warp_strength=warp_strength,
                 seed=active_seed,
             )
+        elif engine_type == "fractal":
+            fractal_engine = FractalFieldGradient(width=config.width, height=config.height)
+            image = fractal_engine.generate(
+                final_colors,
+                complexity=complexity,
+                fractal_type=fractal_type,
+                zoom=fractal_zoom,
+                phase_offset=phase_offset,
+                frequency=frequency,
+                trap_weight=trap_weight,
+                channel_offset=channel_offset,
+                seed=active_seed,
+            )
         else:
             simplex_engine = SimplexMeshGradient(width=config.width, height=config.height)
             image = simplex_engine.generate(
@@ -369,6 +401,11 @@ class WallpaperPipeline:
             dispersion=dispersion,
             contours=contours,
             contour_levels=contour_levels,
+            phase_offset=phase_offset,
+            frequency=frequency,
+            trap_weight=trap_weight,
+            fractal_type=fractal_type,
+            fractal_zoom=fractal_zoom,
             base_image=base_image,
             palette_contrast=evaluate_palette_contrast(final_colors),
         )

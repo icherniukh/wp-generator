@@ -236,6 +236,39 @@ class TestWallpaperPipeline(unittest.TestCase):
         self.assertEqual(res.contours, 0.85)
         self.assertEqual(res.image.size, (120, 80))
 
+    def test_fractal_engine_in_pipeline(self):
+        cfg = RenderConfiguration(
+            engine="fractal",
+            width=140,
+            height=90,
+            fractal_type="julia",
+            fractal_zoom=2.0,
+            phase_offset=0.25,
+            frequency=1.5,
+            trap_weight=0.4,
+            colors=[(10, 15, 25), (200, 90, 140)],
+            seed=42,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.engine, "fractal")
+        self.assertEqual(res.fractal_type, "julia")
+        self.assertEqual(res.fractal_zoom, 2.0)
+        self.assertEqual(res.phase_offset, 0.25)
+        self.assertEqual(res.frequency, 1.5)
+        self.assertEqual(res.trap_weight, 0.4)
+        self.assertEqual(res.image.size, (140, 90))
+
+    def test_fractal_preset_loads_and_renders(self):
+        cfg = RenderConfiguration(
+            preset="fractal",
+            width=120,
+            height=80,
+            seed=42,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.engine, "fractal")
+        self.assertEqual(res.image.size, (120, 80))
+
 
 if __name__ == "__main__":
     unittest.main()

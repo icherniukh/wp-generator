@@ -67,6 +67,12 @@ class RenderRequest(BaseModel):
     warp_strength: Optional[float] = Field(default=None, ge=0.0, le=3.0)
     ambient_weight: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     dispersion: Optional[float] = Field(default=None, ge=0.05, le=2.0)
+    phase_offset: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    frequency: Optional[float] = Field(default=None, gt=0.0)
+    trap_weight: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    channel_offset: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    fractal_type: Optional[Literal["julia", "mandelbrot", "orbit_trap"]] = Field(default=None)
+    fractal_zoom: Optional[float] = Field(default=None, gt=0.0)
     seed: Optional[int] = Field(default=None)
 
 
@@ -153,6 +159,12 @@ async def render_get(
     warp_strength: Optional[float] = Query(default=None, ge=0.0, le=3.0),
     ambient_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     dispersion: Optional[float] = Query(default=None, ge=0.05, le=2.0),
+    phase_offset: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    frequency: Optional[float] = Query(default=None, gt=0.0),
+    trap_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    channel_offset: Optional[float] = Query(default=None, ge=-1.0, le=1.0),
+    fractal_type: Optional[Literal["julia", "mandelbrot", "orbit_trap"]] = Query(default=None),
+    fractal_zoom: Optional[float] = Query(default=None, gt=0.0),
 ) -> Response:
     """Renders wallpaper directly as a streaming PNG image response."""
     w, h = _resolve_dimensions(device, width, height)
@@ -177,6 +189,12 @@ async def render_get(
         warp_strength=warp_strength,
         ambient_weight=ambient_weight,
         dispersion=dispersion,
+        phase_offset=phase_offset,
+        frequency=frequency,
+        trap_weight=trap_weight,
+        channel_offset=channel_offset,
+        fractal_type=fractal_type,
+        fractal_zoom=fractal_zoom,
         seed=active_seed,
     )
 
@@ -250,6 +268,12 @@ async def render_post(body: RenderRequest) -> Response:
         warp_strength=body.warp_strength,
         ambient_weight=body.ambient_weight,
         dispersion=body.dispersion,
+        phase_offset=body.phase_offset,
+        frequency=body.frequency,
+        trap_weight=body.trap_weight,
+        channel_offset=body.channel_offset,
+        fractal_type=body.fractal_type,
+        fractal_zoom=body.fractal_zoom,
         seed=active_seed,
     )
 

@@ -150,6 +150,32 @@ class TestWebAPI(unittest.TestCase):
         self.assertEqual(post_res.headers["x-render-contours"], "0.8")
         self.assertEqual(post_res.headers["x-render-engine"], "topographic")
 
+    def test_render_fractal_preset_and_engine(self):
+        parameters = {
+            "preset": "fractal",
+            "width": 100,
+            "height": 80,
+            "seed": 42,
+            "phase_offset": 0.25,
+            "frequency": 1.5,
+            "trap_weight": 0.4,
+            "fractal_type": "julia",
+        }
+        get_res = self.client.get("/api/render", params=parameters)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertEqual(get_res.headers["x-render-engine"], "fractal")
+
+        post_res = self.client.post("/api/render", json=parameters)
+        self.assertEqual(post_res.status_code, 200)
+        self.assertEqual(post_res.headers["x-render-engine"], "fractal")
+
+    def test_invalid_fractal_parameters_rejected(self):
+        for param, val in [("phase_offset", 1.5), ("frequency", -1.0), ("trap_weight", 2.0)]:
+            res = self.client.post("/api/render", json={
+                "engine": "fractal", "width": 80, "height": 60, param: val,
+            })
+            self.assertEqual(res.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

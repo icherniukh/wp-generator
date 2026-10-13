@@ -61,6 +61,12 @@ def generate(args, nothing_style, seed):
         warp_strength=args.warp_strength,
         ambient_weight=args.ambient_weight,
         dispersion=args.dispersion,
+        phase_offset=args.phase_offset,
+        frequency=args.frequency,
+        trap_weight=args.trap_weight,
+        channel_offset=args.channel_offset,
+        fractal_type=args.fractal_type,
+        fractal_zoom=args.fractal_zoom,
         legacy_idw=bool(getattr(args, "legacy_idw", False)),
         seed=seed,
         capture_base_image=bool(getattr(args, "preview_fx", False)),
@@ -154,10 +160,16 @@ def main():
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
     engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave", "domain-warp", "rbf", "topographic"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave", "domain-warp", "rbf", "topographic", "fractal"], default=None, help=adv_help("Gradient engine to use."))
     engine_group.add_argument("--warp-strength", type=float, default=None, help=adv_help("Domain warping displacement strength (0.0-3.0)."))
     engine_group.add_argument("--ambient-weight", type=float, default=None, help=adv_help("RBF base color anchor weight (0.0-1.0)."))
     engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
+    engine_group.add_argument("--fractal-type", choices=["julia", "mandelbrot", "orbit_trap"], default=None, help=adv_help("Fractal formula: julia, mandelbrot, or orbit_trap."))
+    engine_group.add_argument("--fractal-zoom", type=float, default=None, help=adv_help("Fractal magnification zoom factor."))
+    engine_group.add_argument("--phase-offset", type=float, default=None, help=adv_help("Cyclic palette phase offset (0.0-1.0)."))
+    engine_group.add_argument("--frequency", type=float, default=None, help=adv_help("Fractal palette frequency cycle multiplier."))
+    engine_group.add_argument("--trap-weight", type=float, default=None, help=adv_help("Geometric orbit trap blending weight (0.0-1.0)."))
+    engine_group.add_argument("--channel-offset", type=float, default=None, help=adv_help("Decoupled Oklab lightness/chroma channel phase offset."))
     engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
     engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
     engine_group.add_argument("--harmonize", choices=["perceptual", "theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer: perceptual/theory preserve hues in OKLCH; nothing bounds muted anchors and vivid accents."))
@@ -214,6 +226,14 @@ def main():
         parser.error("--ambient-weight must be between 0.0 and 1.0")
     if args.dispersion is not None and args.dispersion <= 0:
         parser.error("--dispersion must be positive")
+    if args.phase_offset is not None and not 0.0 <= args.phase_offset <= 1.0:
+        parser.error("--phase-offset must be between 0.0 and 1.0")
+    if args.frequency is not None and args.frequency <= 0:
+        parser.error("--frequency must be positive")
+    if args.trap_weight is not None and not 0.0 <= args.trap_weight <= 1.0:
+        parser.error("--trap-weight must be between 0.0 and 1.0")
+    if args.fractal_zoom is not None and args.fractal_zoom <= 0:
+        parser.error("--fractal-zoom must be positive")
     if args.count < 1:
         parser.error("--count must be at least 1")
     if args.count > 1 and args.output:
