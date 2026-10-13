@@ -1,7 +1,7 @@
 import asyncio
 import os
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Query, Response, status
 from fastapi.concurrency import run_in_threadpool
@@ -52,7 +52,7 @@ class RenderRequest(BaseModel):
     complexity: Optional[int] = Field(default=None, ge=1, le=10)
     engine: Optional[str] = Field(default=None, description="simplex, fluid-wave, idw, etc.")
     fluid_mode: Optional[str] = Field(default=None)
-    harmonize: Optional[str] = Field(default=None)
+    harmonize: Optional[Literal["perceptual", "theory", "nothing", "none"]] = Field(default=None)
     noise: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     vignette: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     dots: Optional[float] = Field(default=None, ge=0.0, le=1.0)
@@ -136,6 +136,7 @@ async def render_get(
     seed: Optional[int] = Query(default=None),
     complexity: Optional[int] = Query(default=None, ge=1, le=10),
     engine: Optional[str] = Query(default=None),
+    harmonize: Optional[Literal["perceptual", "theory", "nothing", "none"]] = Query(default=None),
     noise: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     vignette: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     dots: Optional[float] = Query(default=None, ge=0.0, le=1.0),
@@ -155,6 +156,7 @@ async def render_get(
         preset=preset,
         complexity=complexity,
         engine=engine,
+        harmonize=harmonize,
         noise=noise,
         vignette=vignette,
         dots=dots,
@@ -187,6 +189,8 @@ async def render_get(
         "X-Render-Engine": result.engine,
         "X-Render-Width": str(result.width),
         "X-Render-Height": str(result.height),
+        "X-Render-Contrast-Ratios": ",".join(str(ratio) for ratio in result.palette_contrast.ratios),
+        "X-Render-Contrast-Pass": str(result.palette_contrast.passes).lower(),
     }
     if result.chromatic_aberration > 0.0:
         headers["X-Render-Aberration"] = str(result.chromatic_aberration)
@@ -252,6 +256,8 @@ async def render_post(body: RenderRequest) -> Response:
         "X-Render-Engine": result.engine,
         "X-Render-Width": str(result.width),
         "X-Render-Height": str(result.height),
+        "X-Render-Contrast-Ratios": ",".join(str(ratio) for ratio in result.palette_contrast.ratios),
+        "X-Render-Contrast-Pass": str(result.palette_contrast.passes).lower(),
     }
     if result.chromatic_aberration > 0.0:
         headers["X-Render-Aberration"] = str(result.chromatic_aberration)
