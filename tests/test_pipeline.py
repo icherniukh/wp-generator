@@ -194,6 +194,48 @@ class TestWallpaperPipeline(unittest.TestCase):
                 },
             ))
 
+    def test_topographic_engine_in_pipeline(self):
+        cfg = RenderConfiguration(
+            engine="topographic",
+            width=140,
+            height=90,
+            warp_strength=0.9,
+            colors=[(10, 15, 25), (200, 90, 140)],
+            seed=42,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.engine, "topographic")
+        self.assertEqual(res.image.size, (140, 90))
+
+    def test_contours_filter_in_pipeline(self):
+        cfg = RenderConfiguration(
+            engine="simplex",
+            width=120,
+            height=80,
+            contours=0.75,
+            contour_levels=16,
+            contour_width=1.2,
+            contour_mode="light",
+            colors=[(10, 10, 15), (220, 230, 240)],
+            seed=42,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.contours, 0.75)
+        self.assertEqual(res.contour_levels, 16)
+        self.assertEqual(res.image.size, (120, 80))
+
+    def test_tectonic_preset_loads_and_renders(self):
+        cfg = RenderConfiguration(
+            preset="tectonic",
+            width=120,
+            height=80,
+            seed=42,
+        )
+        res = self.pipeline.render(cfg)
+        self.assertEqual(res.engine, "topographic")
+        self.assertEqual(res.contours, 0.85)
+        self.assertEqual(res.image.size, (120, 80))
+
 
 if __name__ == "__main__":
     unittest.main()

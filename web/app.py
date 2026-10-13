@@ -58,6 +58,10 @@ class RenderRequest(BaseModel):
     dots: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     dots_spacing: Optional[int] = Field(default=None, ge=4, le=100)
     dots_mode: Optional[str] = Field(default=None)
+    contours: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    contour_levels: Optional[int] = Field(default=None, ge=1, le=100)
+    contour_width: Optional[float] = Field(default=None, ge=0.1, le=10.0)
+    contour_mode: Optional[Literal["light", "dark", "accent"]] = Field(default=None)
     glass: Optional[bool] = Field(default=None)
     chromatic_aberration: Optional[float] = Field(default=None, ge=0.0, le=0.1)
     warp_strength: Optional[float] = Field(default=None, ge=0.0, le=3.0)
@@ -140,6 +144,10 @@ async def render_get(
     noise: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     vignette: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     dots: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    contours: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    contour_levels: Optional[int] = Query(default=None, ge=1, le=100),
+    contour_width: Optional[float] = Query(default=None, ge=0.1, le=10.0),
+    contour_mode: Optional[Literal["light", "dark", "accent"]] = Query(default=None),
     glass: Optional[bool] = Query(default=None),
     aberration: Optional[float] = Query(default=None, ge=0.0, le=0.1),
     warp_strength: Optional[float] = Query(default=None, ge=0.0, le=3.0),
@@ -160,6 +168,10 @@ async def render_get(
         noise=noise,
         vignette=vignette,
         dots=dots,
+        contours=contours,
+        contour_levels=contour_levels,
+        contour_width=contour_width,
+        contour_mode=contour_mode,
         glass=glass,
         chromatic_aberration=aberration,
         warp_strength=warp_strength,
@@ -194,6 +206,8 @@ async def render_get(
     }
     if result.chromatic_aberration > 0.0:
         headers["X-Render-Aberration"] = str(result.chromatic_aberration)
+    if result.contours > 0.0:
+        headers["X-Render-Contours"] = str(result.contours)
 
     return Response(content=png_bytes, media_type="image/png", headers=headers)
 
@@ -227,6 +241,10 @@ async def render_post(body: RenderRequest) -> Response:
         dots=body.dots,
         dots_spacing=body.dots_spacing,
         dots_mode=body.dots_mode,
+        contours=body.contours,
+        contour_levels=body.contour_levels,
+        contour_width=body.contour_width,
+        contour_mode=body.contour_mode,
         glass=body.glass,
         chromatic_aberration=body.chromatic_aberration,
         warp_strength=body.warp_strength,
@@ -261,5 +279,7 @@ async def render_post(body: RenderRequest) -> Response:
     }
     if result.chromatic_aberration > 0.0:
         headers["X-Render-Aberration"] = str(result.chromatic_aberration)
+    if result.contours > 0.0:
+        headers["X-Render-Contours"] = str(result.contours)
 
     return Response(content=png_bytes, media_type="image/png", headers=headers)

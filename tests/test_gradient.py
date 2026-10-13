@@ -80,5 +80,37 @@ class TestRadialBasisGradient(unittest.TestCase):
         self.assertTrue(np.all(arr[:, :, 2] == 128))
 
 
+class TestTopographicGradient(unittest.TestCase):
+    def test_topographic_generates_correct_dimensions_and_mode(self):
+        from engine.gradient import TopographicGradient
+        engine = TopographicGradient(width=160, height=100)
+        colors = [(15, 20, 35), (230, 80, 140), (50, 180, 220)]
+        img = engine.generate(colors, complexity=4, warp_strength=0.9, seed=42)
+
+        self.assertEqual(img.size, (160, 100))
+        self.assertEqual(img.mode, "RGB")
+
+    def test_topographic_is_deterministic_with_seed(self):
+        from engine.gradient import TopographicGradient
+        engine = TopographicGradient(width=120, height=80)
+        colors = [(10, 15, 25), (220, 90, 130), (40, 160, 210)]
+
+        img1 = engine.generate(colors, complexity=5, warp_strength=1.1, seed=333)
+        img2 = engine.generate(colors, complexity=5, warp_strength=1.1, seed=333)
+
+        np.testing.assert_array_equal(np.asarray(img1), np.asarray(img2))
+
+    def test_topographic_handles_single_color(self):
+        from engine.gradient import TopographicGradient
+        engine = TopographicGradient(width=40, height=30)
+        img = engine.generate([(100, 150, 200)])
+        self.assertEqual(img.size, (40, 30))
+        arr = np.asarray(img)
+        self.assertTrue(np.all(arr[:, :, 0] == 100))
+        self.assertTrue(np.all(arr[:, :, 1] == 150))
+        self.assertTrue(np.all(arr[:, :, 2] == 200))
+
+
 if __name__ == "__main__":
     unittest.main()
+

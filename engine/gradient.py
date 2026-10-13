@@ -519,6 +519,111 @@ class MeshGradient:
         
         return Image.fromarray(res.astype(np.uint8))
 
+
+class TopographicGradient:
+    def __init__(self, width=5120, height=2880):
+        self.width = width
+        self.height = height
+
+    def _generate_noise_plane(self, h, w, scale=1.0, octaves=2, offset=(0.0, 0.0)):
+        if noise is None:
+            y = np.linspace(-1.0, 1.0, h, dtype=np.float32) * scale + offset[1]
+            x = np.linspace(-1.0, 1.0, w, dtype=np.float32) * scale + offset[0]
+            xv, yv = np.meshgrid(x, y)
+            return np.sin(xv * np.pi) * np.cos(yv * np.pi)
+
+        sample_h = max(8, h // 4)
+        sample_w = max(8, w // 4)
+        y = np.linspace(-1.0, 1.0, sample_h, dtype=np.float32) * scale + offset[1]
+        x = np.linspace(-1.0, 1.0, sample_w, dtype=np.float32) * scale + offset[0]
+        grid = np.zeros((sample_h, sample_w), dtype=np.float32)
+        for iy in range(sample_h):
+            for ix in range(sample_w):
+                grid[iy, ix] = noise.snoise2(x[ix], y[iy], octaves=octaves)
+        zoom_y = h / sample_h
+        zoom_x = w / sample_w
+        return scipy.ndimage.zoom(grid, (zoom_y, zoom_x), order=3)[:h, :w]
+
+    def generate(
+        self,
+        colors,
+        complexity=5,
+        warp_strength=0.85,
+        angle=None,
+        seed=None,
+    ):
+        """
+        Generates a continuous hypsometric elevation field using multi-harmonic
+        wave synthesis and domain-warped fractal terrain folds mapped through Oklab space.
+        """
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
+        num_colors = len(colors)
+        if num_colors == 0:
+            raise ValueError("At least one color must be provided.")
+        if num_colors == 1:
+            c = tuple(int(v) for v in colors[0])
+            return Image.new("RGB", (self.width, self.height), c)
+
+        colors_oklab = _colors_to_oklab(colors)
+
+        scale_factor = 0.25
+        h = max(16, int(self.height * scale_factor))
+        w = max(16, int(self.width * scale_factor))
+
+        aspect = w / h
+        y = np.linspace(-1.5, 1.5, h, dtype=np.float32)
+        x = np.linspace(-1.5 * aspect, 1.5 * aspect, w, dtype=np.float32)
+        xv, yv = np.meshgrid(x, y)
+
+        if angle is None:
+            angle = random.uniform(0, 2 * np.pi)
+
+        u = xv * np.cos(angle) + yv * np.sin(angle)
+        v = -xv * np.sin(angle) + yv * np.cos(angle)
+
+        base_freq = 0.7 + (complexity * 0.1)
+
+        h1 = np.sin(u * base_freq * 1.4) * np.cos(v * base_freq * 1.1)
+        h2 = np.sin((u + v) * base_freq * 2.1 + 1.1) * 0.5
+        h3 = np.cos(np.sqrt(u**2 + v**2) * base_freq * 2.8) * 0.25
+
+        raw_elevation = h1 + h2 + h3
+
+        effective_warp = max(0.0, float(warp_strength))
+        if effective_warp > 0.0:
+            ox = random.uniform(0, 500)
+            oy = random.uniform(500, 1000)
+            warp_plane = self._generate_noise_plane(h, w, scale=base_freq, octaves=2, offset=(ox, oy))
+            warped = raw_elevation + (effective_warp * 0.6) * warp_plane
+        else:
+            warped = raw_elevation
+
+        e_min, e_max = warped.min(), warped.max()
+        if e_max > e_min:
+            t_values = (warped - e_min) / (e_max - e_min)
+        else:
+            t_values = np.zeros_like(warped)
+
+        t_values = np.clip(t_values, 0.0, 1.0)
+
+        from scipy.interpolate import PchipInterpolator
+        nodes = np.linspace(0, 1, num_colors)
+        interpolator = PchipInterpolator(nodes, colors_oklab, axis=0)
+
+        flat_t = t_values.flatten()
+        flat_colors = interpolator(flat_t)
+        grid_oklab = flat_colors.reshape((h, w, 3))
+
+        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
+        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+
+        return img_mod.resize((self.width, self.height), Image.LANCZOS)
+
+
+
 if __name__ == "__main__":
     # Test
     engine = MeshGradient(width=1280, height=720)
