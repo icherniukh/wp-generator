@@ -52,6 +52,10 @@ def generate(args, nothing_style, seed):
         dots=dots,
         dots_spacing=args.dots_spacing,
         dots_mode=args.dots_mode,
+        contours=args.contours,
+        contour_levels=args.contour_levels,
+        contour_width=args.contour_width,
+        contour_mode=args.contour_mode,
         glass=args.glass,
         chromatic_aberration=args.chromatic_aberration,
         warp_strength=args.warp_strength,
@@ -150,7 +154,7 @@ def main():
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
     engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave", "domain-warp", "rbf"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave", "domain-warp", "rbf", "topographic"], default=None, help=adv_help("Gradient engine to use."))
     engine_group.add_argument("--warp-strength", type=float, default=None, help=adv_help("Domain warping displacement strength (0.0-3.0)."))
     engine_group.add_argument("--ambient-weight", type=float, default=None, help=adv_help("RBF base color anchor weight (0.0-1.0)."))
     engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
@@ -164,6 +168,10 @@ def main():
     filter_group.add_argument("--dots", type=float, default=None, help=adv_help("Dot matrix intensity (0.0-1.0)."))
     filter_group.add_argument("--dots-mode", choices=["size", "alpha"], default=None, help=adv_help("Vary dot 'size' or 'alpha'."))
     filter_group.add_argument("--dots-spacing", type=int, default=None, help=adv_help("Pixel spacing between dots."))
+    filter_group.add_argument("--contours", "--contour", type=float, default=None, dest="contours", help=adv_help("Topographic contour line intensity (0.0-1.0)."))
+    filter_group.add_argument("--contour-levels", type=int, default=None, help=adv_help("Number of elevation contour intervals."))
+    filter_group.add_argument("--contour-width", type=float, default=None, help=adv_help("Pixel line thickness of contour lines."))
+    filter_group.add_argument("--contour-mode", choices=["light", "dark", "accent"], default=None, help=adv_help("Contour line styling: 'light', 'dark', or 'accent'."))
     filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
     filter_group.add_argument("--vignette", type=float, default=None, help=adv_help("Subtle radial edge darkening (0.0-1.0)."))
     filter_group.add_argument("--glass", action="store_true", default=None, help=adv_help("Apply premium frosted glass texture overlay."))
@@ -190,6 +198,12 @@ def main():
         parser.error("--complexity must be positive")
     if args.dots is not None and not 0 <= args.dots <= 1:
         parser.error("--dots must be between 0.0 and 1.0")
+    if args.contours is not None and not 0 <= args.contours <= 1:
+        parser.error("--contours must be between 0.0 and 1.0")
+    if args.contour_levels is not None and args.contour_levels <= 0:
+        parser.error("--contour-levels must be positive")
+    if args.contour_width is not None and args.contour_width <= 0:
+        parser.error("--contour-width must be positive")
     if args.noise is not None and not 0 <= args.noise <= 1:
         parser.error("--noise must be between 0.0 and 1.0")
     if args.vignette is not None and not 0 <= args.vignette <= 1:

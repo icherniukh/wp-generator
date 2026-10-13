@@ -52,7 +52,7 @@ class WallpaperFilters:
             final_alpha = coverage * alpha
             overlay[..., 3] = np.where(final_alpha > 5, final_alpha, 0).astype(np.uint8)
         
-        overlay_img = Image.fromarray(overlay, mode="RGBA")
+        overlay_img = Image.fromarray(overlay)
         return Image.alpha_composite(image.convert("RGBA"), overlay_img)
 
     @staticmethod
@@ -225,6 +225,81 @@ class WallpaperFilters:
         res = img_arr.copy()
         res[..., :3] = res_rgb
         return Image.fromarray(np.clip(res * 255.0, 0, 255).astype(np.uint8))
+
+    @staticmethod
+    def apply_contour_lines(
+        image,
+        levels=24,
+        line_width=1.4,
+        intensity=0.8,
+        mode="light",
+        index_interval=5,
+        smoothing_radius=2.5,
+    ):
+        """
+        Applies vector-grade anti-aliased topographic elevation contour lines (isobars).
+        Derives an elevation field from smoothed perceptual luminance, evaluating
+        analytical screen-space distance fields with major index contour emphasis.
+        :param levels: Number of contour elevation intervals.
+        :param line_width: Thickness of minor contour lines in pixels.
+        :param intensity: Blending opacity of the contour overlay (0.0 to 1.0).
+        :param mode: 'light' (luminous isobars), 'dark' (ink isobars), or 'accent' (tinted from gradient).
+        :param index_interval: Interval for bold major/index contours (e.g. 5 = every 5th line).
+        :param smoothing_radius: Gaussian filter radius in pixels to prevent 8-bit quantization stepping.
+        """
+        if intensity <= 0.0 or levels <= 0:
+            return image.copy()
+
+        img_arr = np.asarray(image).astype(np.float32)
+        h, w = img_arr.shape[:2]
+        channels = img_arr.shape[2] if img_arr.ndim == 3 else 1
+
+        if channels < 3:
+            return image.copy()
+
+        lum = (0.2126 * img_arr[..., 0] + 0.7152 * img_arr[..., 1] + 0.0722 * img_arr[..., 2]) / 255.0
+
+        if smoothing_radius > 0.0:
+            lum_smooth = scipy.ndimage.gaussian_filter(lum, sigma=float(smoothing_radius))
+        else:
+            lum_smooth = lum
+
+        scaled = lum_smooth * float(levels)
+        nearest_level = np.round(scaled)
+        dist_level = np.abs(scaled - nearest_level)
+
+        grad_y, grad_x = np.gradient(scaled)
+        grad_mag = np.sqrt(grad_x**2 + grad_y**2) + 1e-5
+
+        dist_pixels = dist_level / grad_mag
+
+        if index_interval > 1:
+            is_index = (np.rint(nearest_level).astype(int) % int(index_interval) == 0)
+            effective_width = np.where(is_index, line_width * 1.8, line_width)
+            level_alpha_boost = np.where(is_index, 1.0, 0.7)
+        else:
+            effective_width = line_width
+            level_alpha_boost = 1.0
+
+        feather = 0.8
+        alpha_mask = np.clip(1.0 - (dist_pixels - effective_width + 0.5) / feather, 0.0, 1.0)
+        alpha_mask *= level_alpha_boost * float(np.clip(intensity, 0.0, 1.0))
+
+        if mode == "dark":
+            line_color = np.zeros_like(img_arr[..., :3])
+        elif mode == "accent":
+            max_c = np.maximum.reduce([img_arr[..., 0], img_arr[..., 1], img_arr[..., 2]])
+            boost = 255.0 / (max_c + 1e-3)
+            line_color = np.clip(img_arr[..., :3] * boost[..., None] * 0.95, 0, 255)
+        else:
+            line_color = np.full_like(img_arr[..., :3], 245.0)
+
+        out = img_arr.copy()
+        alpha_3d = alpha_mask[..., None]
+        out[..., :3] = img_arr[..., :3] * (1.0 - alpha_3d) + line_color * alpha_3d
+
+        return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
 
 
 # Backward-compatible alias for older imports.

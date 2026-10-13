@@ -57,6 +57,32 @@ class TestWallpaperDither(unittest.TestCase):
         no_grain = WallpaperFilters.apply_film_grain(image, amount=0.0)
         np.testing.assert_array_equal(np.asarray(no_grain), np.asarray(image))
 
+    def test_contour_lines_applies_isobars(self):
+        image = Image.new("RGB", (100, 100), (40, 60, 90))
+        # Add smooth gradient so contour levels can be found
+        arr = np.asarray(image).astype(np.float32)
+        arr += np.linspace(0, 100, 100, dtype=np.float32)[:, None, None]
+        image = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+        contoured = WallpaperFilters.apply_contour_lines(image, levels=10, intensity=0.8, line_width=1.5)
+        self.assertEqual(contoured.size, (100, 100))
+        self.assertEqual(contoured.mode, "RGB")
+        self.assertFalse(np.array_equal(np.asarray(contoured), np.asarray(image)))
+
+    def test_contour_lines_zero_intensity_or_levels_is_identity(self):
+        image = Image.new("RGB", (64, 64), (100, 120, 150))
+        no_contours = WallpaperFilters.apply_contour_lines(image, intensity=0.0)
+        np.testing.assert_array_equal(np.asarray(no_contours), np.asarray(image))
+
+        zero_levels = WallpaperFilters.apply_contour_lines(image, levels=0, intensity=0.8)
+        np.testing.assert_array_equal(np.asarray(zero_levels), np.asarray(image))
+
+    def test_contour_lines_modes(self):
+        image = Image.new("RGB", (80, 80), (120, 140, 160))
+        for mode in ("light", "dark", "accent"):
+            res = WallpaperFilters.apply_contour_lines(image, levels=8, mode=mode, intensity=0.7)
+            self.assertEqual(res.size, (80, 80))
+
 
 if __name__ == "__main__":
     unittest.main()

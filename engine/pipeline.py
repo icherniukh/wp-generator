@@ -20,6 +20,7 @@ from engine.gradient import (
     MeshGradient,
     RadialBasisGradient,
     SimplexMeshGradient,
+    TopographicGradient,
 )
 from engine.presets import PresetEngine
 from engine.spline_gradient import SplineWaveGradient
@@ -92,6 +93,10 @@ class RenderConfiguration:
     dots: Optional[float] = None
     dots_spacing: Optional[int] = None
     dots_mode: Optional[str] = None
+    contours: Optional[float] = None
+    contour_levels: Optional[int] = None
+    contour_width: Optional[float] = None
+    contour_mode: Optional[str] = None
     glass: Optional[bool] = None
     chromatic_aberration: Optional[float] = None
     warp_strength: Optional[float] = None
@@ -117,6 +122,8 @@ class RenderResult:
     warp_strength: Optional[float] = None
     ambient_weight: Optional[float] = None
     dispersion: Optional[float] = None
+    contours: float = 0.0
+    contour_levels: int = 0
     base_image: Optional[Image.Image] = None
     palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
 
@@ -218,6 +225,11 @@ class WallpaperPipeline:
         dots_spacing = resolve_value(config.dots_spacing, "dots_spacing", lambda: random.randint(8, 60))
         dots_mode = resolve_value(config.dots_mode, "dots_mode", lambda: random.choice(["size", "alpha"]))
 
+        contours = resolve_value(config.contours, "contours", lambda: 0.0)
+        contour_levels = resolve_value(config.contour_levels, "contour_levels", lambda: 24)
+        contour_width = resolve_value(config.contour_width, "contour_width", lambda: 1.4)
+        contour_mode = resolve_value(config.contour_mode, "contour_mode", lambda: "light")
+
         # Color generation
         if config.colors:
             base_colors = list(config.colors)
@@ -294,6 +306,14 @@ class WallpaperPipeline:
                 dispersion=dispersion,
                 seed=active_seed,
             )
+        elif engine_type == "topographic":
+            topo_engine = TopographicGradient(width=config.width, height=config.height)
+            image = topo_engine.generate(
+                final_colors,
+                complexity=complexity,
+                warp_strength=warp_strength,
+                seed=active_seed,
+            )
         else:
             simplex_engine = SimplexMeshGradient(width=config.width, height=config.height)
             image = simplex_engine.generate(
@@ -306,6 +326,15 @@ class WallpaperPipeline:
         if dots > 0.0:
             image = WallpaperFilters.apply_dot_matrix(
                 image, spacing=dots_spacing, intensity=dots, mode=dots_mode
+            )
+
+        if contours > 0.0:
+            image = WallpaperFilters.apply_contour_lines(
+                image,
+                levels=contour_levels,
+                line_width=contour_width,
+                intensity=contours,
+                mode=contour_mode,
             )
 
         if glass_param:
@@ -338,6 +367,8 @@ class WallpaperPipeline:
             warp_strength=warp_strength,
             ambient_weight=ambient_weight,
             dispersion=dispersion,
+            contours=contours,
+            contour_levels=contour_levels,
             base_image=base_image,
             palette_contrast=evaluate_palette_contrast(final_colors),
         )

@@ -5,8 +5,8 @@ A procedural wallpaper generator driven by a statistical preset engine. Each pre
 ## Key Features
 
 - **Statistical Preset Engine:** Presets encode color aesthetics as HLS distributions. The engine samples them at generation time — no two outputs are identical, but all stay within the preset's aesthetic envelope.
-- **Fluid Mesh Gradient:** Bicubic mesh interpolation for smooth, high-quality gradients.
-- **Style Filters:** Optional dot-matrix overlays and film grain, configurable per preset or via CLI overrides.
+- **Fluid Mesh Gradient:** Bicubic mesh interpolation, Simplex, Domain Warp, RBF, and Topographic procedural engines.
+- **Style Filters:** Anti-aliased vector topographic contour isobars, dot-matrix overlays, film grain, frosted glass, and chromatic aberration.
 - **Color Harmonizers:** Hue-preserving OKLCH lightness/chroma adjustment, with a Nothing-inspired profile for muted anchors and vivid accents.
 - **Device Presets:** Common resolutions built-in — MacBook, 4K, ultrawide, mobile.
 - **Screen Sampler:** Grab colors directly from the screen at the mouse cursor (macOS).
@@ -65,6 +65,7 @@ python main.py --preset nothing --seed 42
 | `afterglow` | Vivid reference-derived violet, cyan, coral, orange, and magenta fields |
 | `sleek` | Luminous neon accents on dark anchor with frosted glass texture |
 | `nocturne` | Deep richly-tinted grounding anchors paired with luminous twilight and ember accents |
+| `tectonic` | Deep volcanic obsidian and basalt trenches paired with luminous cyan/ember peaks and vector contour isobars |
 
 ### Device Presets (`--device`)
 
@@ -84,7 +85,7 @@ python main.py --preset nothing --seed 42
 
 ### Advanced Overrides
 
-Run `--help-all` for advanced flags including `--complexity`, `--noise`, `--dots`, `--dots-spacing`, `--fluid-mode`, `--harmonize`, `--res`, and `--seed`.
+Run `--help-all` for advanced flags including `--complexity`, `--engine` (`simplex`, `domain-warp`, `rbf`, `topographic`, etc.), `--contours`, `--contour-levels`, `--contour-mode`, `--noise`, `--dots`, `--dots-spacing`, `--fluid-mode`, `--harmonize`, `--res`, and `--seed`.
 
 ```bash
 python main.py --help-all

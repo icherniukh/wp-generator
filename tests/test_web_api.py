@@ -131,6 +131,25 @@ class TestWebAPI(unittest.TestCase):
         self.assertEqual(self.client.get("/api/render", params=parameters).status_code, 422)
         self.assertEqual(self.client.post("/api/render", json=parameters).status_code, 422)
 
+    def test_render_with_contours_header(self):
+        parameters = {
+            "preset": "tectonic",
+            "width": 100,
+            "height": 80,
+            "seed": 42,
+            "contours": 0.8,
+            "contour_levels": 20,
+        }
+        get_res = self.client.get("/api/render", params=parameters)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertEqual(get_res.headers["x-render-contours"], "0.8")
+        self.assertEqual(get_res.headers["x-render-engine"], "topographic")
+
+        post_res = self.client.post("/api/render", json=parameters)
+        self.assertEqual(post_res.status_code, 200)
+        self.assertEqual(post_res.headers["x-render-contours"], "0.8")
+        self.assertEqual(post_res.headers["x-render-engine"], "topographic")
+
 
 if __name__ == "__main__":
     unittest.main()
