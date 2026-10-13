@@ -111,6 +111,61 @@ class TestTopographicGradient(unittest.TestCase):
         self.assertTrue(np.all(arr[:, :, 2] == 200))
 
 
+class TestFractalFieldGradient(unittest.TestCase):
+    def test_fractal_generates_correct_dimensions_and_mode(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=160, height=100)
+        colors = [(15, 20, 35), (230, 80, 140), (50, 180, 220)]
+        img = engine.generate(colors, complexity=3, fractal_type="julia", seed=42)
+
+        self.assertEqual(img.size, (160, 100))
+        self.assertEqual(img.mode, "RGB")
+
+    def test_fractal_is_deterministic_with_seed(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=120, height=80)
+        colors = [(10, 15, 25), (220, 90, 130), (40, 160, 210)]
+
+        img1 = engine.generate(colors, complexity=4, fractal_type="julia", seed=101)
+        img2 = engine.generate(colors, complexity=4, fractal_type="julia", seed=101)
+
+        np.testing.assert_array_equal(np.asarray(img1), np.asarray(img2))
+
+    def test_fractal_handles_single_color(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=40, height=30)
+        img = engine.generate([(70, 120, 180)])
+        self.assertEqual(img.size, (40, 30))
+        arr = np.asarray(img)
+        self.assertTrue(np.all(arr[:, :, 0] == 70))
+        self.assertTrue(np.all(arr[:, :, 1] == 120))
+        self.assertTrue(np.all(arr[:, :, 2] == 180))
+
+    def test_fractal_types_julia_and_mandelbrot(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=80, height=60)
+        colors = [(10, 15, 25), (220, 90, 130), (40, 160, 210)]
+
+        img_julia = engine.generate(colors, fractal_type="julia", seed=42)
+        img_mandel = engine.generate(colors, fractal_type="mandelbrot", seed=42)
+
+        self.assertEqual(img_julia.size, (80, 60))
+        self.assertEqual(img_mandel.size, (80, 60))
+        self.assertFalse(np.array_equal(np.asarray(img_julia), np.asarray(img_mandel)))
+
+    def test_fractal_phase_and_channel_offsets_alter_output(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=80, height=60)
+        colors = [(10, 15, 25), (220, 90, 130), (40, 160, 210)]
+
+        img_base = engine.generate(colors, phase_offset=0.0, channel_offset=0.0, seed=42)
+        img_phase = engine.generate(colors, phase_offset=0.5, channel_offset=0.0, seed=42)
+        img_chan = engine.generate(colors, phase_offset=0.0, channel_offset=0.2, seed=42)
+
+        self.assertFalse(np.array_equal(np.asarray(img_base), np.asarray(img_phase)))
+        self.assertFalse(np.array_equal(np.asarray(img_base), np.asarray(img_chan)))
+
+
 if __name__ == "__main__":
     unittest.main()
 

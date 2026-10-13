@@ -623,6 +623,152 @@ class TopographicGradient:
         return img_mod.resize((self.width, self.height), Image.LANCZOS)
 
 
+class FractalFieldGradient:
+    def __init__(self, width=5120, height=2880):
+        self.width = width
+        self.height = height
+
+    def generate(
+        self,
+        colors,
+        complexity=5,
+        fractal_type="julia",
+        zoom=None,
+        center=None,
+        angle=None,
+        phase_offset=0.0,
+        frequency=1.0,
+        trap_weight=0.35,
+        channel_offset=0.0,
+        seed=None,
+    ):
+        """
+        Generates a continuous complex fractal field using normalized escape time
+        potential, geometric orbit traps, and cyclic Oklab palette phase offsets.
+        """
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
+        num_colors = len(colors)
+        if num_colors == 0:
+            raise ValueError("At least one color must be provided.")
+        if num_colors == 1:
+            c = tuple(int(v) for v in colors[0])
+            return Image.new("RGB", (self.width, self.height), c)
+
+        colors_oklab = _colors_to_oklab(colors)
+
+        scale_factor = 0.25
+        h = max(16, int(self.height * scale_factor))
+        w = max(16, int(self.width * scale_factor))
+        aspect = w / h
+
+        eff_zoom = float(zoom) if zoom is not None else random.uniform(1.2, 4.0)
+        eff_angle = float(angle) if angle is not None else random.uniform(0.0, 2.0 * np.pi)
+
+        if center is not None:
+            cx, cy = float(center[0]), float(center[1])
+        else:
+            if fractal_type == "mandelbrot":
+                mandel_points = [
+                    (-0.7436438870371587, 0.1318259042053119),
+                    (-0.1011, 0.9563),
+                    (-0.75, 0.1),
+                    (-0.748, 0.065),
+                    (-1.25, 0.0),
+                    (0.275, 0.0),
+                ]
+                cx, cy = random.choice(mandel_points)
+                if zoom is None:
+                    eff_zoom = random.uniform(8.0, 35.0)
+            else:
+                cx = random.uniform(-0.15, 0.15)
+                cy = random.uniform(-0.15, 0.15)
+
+        y = np.linspace(-1.2 / eff_zoom, 1.2 / eff_zoom, h, dtype=np.float32)
+        x = np.linspace(-1.2 * aspect / eff_zoom, 1.2 * aspect / eff_zoom, w, dtype=np.float32)
+        xv, yv = np.meshgrid(x, y)
+
+        rot_x = xv * np.cos(eff_angle) - yv * np.sin(eff_angle) + cx
+        rot_y = xv * np.sin(eff_angle) + yv * np.cos(eff_angle) + cy
+        z_grid = rot_x + 1j * rot_y
+
+        safe_complexity = max(1, int(complexity))
+        max_iter = max(20, 20 + safe_complexity * 5)
+
+        escape_radius = 16.0
+        ln_r = np.log(escape_radius)
+
+        smooth_pot = np.zeros(z_grid.shape, dtype=np.float32)
+        trap = np.full(z_grid.shape, 1e6, dtype=np.float32)
+        mask = np.ones(z_grid.shape, dtype=bool)
+
+        if fractal_type == "mandelbrot":
+            z = np.zeros_like(z_grid)
+            c = z_grid
+        else:
+            theta = random.uniform(0.0, 2.0 * np.pi)
+            if random.random() < 0.3:
+                c_bound = -1.0 + 0.25 * np.exp(1j * theta)
+            else:
+                c_bound = 0.5 * np.exp(1j * theta) - 0.25 * np.exp(2j * theta)
+            eps = random.uniform(0.005, 0.035) * np.exp(1j * random.uniform(0.0, 2.0 * np.pi))
+            c = c_bound + eps
+            z = z_grid.copy()
+
+        for i in range(max_iter):
+            z[mask] = z[mask] ** 2 + (c[mask] if isinstance(c, np.ndarray) else c)
+            abs_z = np.abs(z)
+
+            curr_trap = np.minimum(np.abs(z.real), np.abs(z.imag)) + 0.1 * abs_z
+            trap[mask] = np.minimum(trap[mask], curr_trap[mask])
+
+            escaped = abs_z > escape_radius
+            newly_escaped = escaped & mask
+            if np.any(newly_escaped):
+                smooth_pot[newly_escaped] = (
+                    i + 1.0 - (np.log(np.log(abs_z[newly_escaped])) - np.log(ln_r)) / np.log(2.0)
+                )
+            mask = mask & (~escaped)
+            if not np.any(mask):
+                break
+
+        smooth_pot[mask] = max_iter + np.clip(1.0 - np.abs(z[mask]) / escape_radius, 0.0, 1.0)
+
+        p_min, p_max = smooth_pot.min(), smooth_pot.max()
+        norm_pot = (smooth_pot - p_min) / max(1e-5, (p_max - p_min))
+
+        trap_p90 = np.percentile(trap, 90)
+        norm_trap = np.clip(trap / max(1e-5, trap_p90), 0.0, 1.0)
+
+        eff_freq = max(0.1, float(frequency))
+        eff_phase = float(phase_offset) % 1.0
+        eff_trap_weight = np.clip(float(trap_weight), 0.0, 1.0)
+
+        u = (norm_pot * eff_freq + eff_phase + eff_trap_weight * (1.0 - norm_trap)) % 1.0
+
+        eff_chan_offset = float(channel_offset)
+        u_L = (u + eff_chan_offset) % 1.0
+        u_ab = u
+
+        from scipy.interpolate import PchipInterpolator
+
+        wrapped_colors = np.vstack([colors_oklab, colors_oklab[0:1]])
+        nodes = np.linspace(0.0, 1.0, len(wrapped_colors))
+        interp_L = PchipInterpolator(nodes, wrapped_colors[:, 0])
+        interp_ab = PchipInterpolator(nodes, wrapped_colors[:, 1:3], axis=0)
+
+        flat_L = interp_L(u_L.flatten())
+        flat_ab = interp_ab(u_ab.flatten())
+        grid_oklab = np.column_stack([flat_L, flat_ab]).reshape((h, w, 3))
+
+        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
+        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+
+        return img_mod.resize((self.width, self.height), Image.LANCZOS)
+
+
 
 if __name__ == "__main__":
     # Test
