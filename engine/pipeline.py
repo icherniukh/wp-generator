@@ -242,7 +242,7 @@ class WallpaperPipeline:
         contour_width = resolve_value(config.contour_width, "contour_width", lambda: 1.4)
         contour_mode = resolve_value(config.contour_mode, "contour_mode", lambda: "light")
 
-        fractal_type = resolve_value(config.fractal_type, "fractal_type", lambda: "julia")
+        fractal_type = resolve_value(config.fractal_type, "fractal_type", lambda: "fluid")
         fractal_zoom = resolve_value(config.fractal_zoom, "fractal_zoom", lambda: None)
         phase_offset = resolve_value(config.phase_offset, "phase_offset", lambda: 0.0)
         frequency = resolve_value(config.frequency, "frequency", lambda: 1.0)

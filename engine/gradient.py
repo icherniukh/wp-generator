@@ -632,7 +632,7 @@ class FractalFieldGradient:
         self,
         colors,
         complexity=5,
-        fractal_type="julia",
+        fractal_type="fluid",
         zoom=None,
         center=None,
         angle=None,
@@ -686,16 +686,73 @@ class FractalFieldGradient:
                 cx = random.uniform(-0.15, 0.15)
                 cy = random.uniform(-0.15, 0.15)
 
-        y = np.linspace(-1.2 / eff_zoom, 1.2 / eff_zoom, h, dtype=np.float32)
-        x = np.linspace(-1.2 * aspect / eff_zoom, 1.2 * aspect / eff_zoom, w, dtype=np.float32)
+        y = np.linspace(-1.3 / eff_zoom, 1.3 / eff_zoom, h, dtype=np.float32)
+        x = np.linspace(-1.3 * aspect / eff_zoom, 1.3 * aspect / eff_zoom, w, dtype=np.float32)
         xv, yv = np.meshgrid(x, y)
 
-        rot_x = xv * np.cos(eff_angle) - yv * np.sin(eff_angle) + cx
-        rot_y = xv * np.sin(eff_angle) + yv * np.cos(eff_angle) + cy
+        warp_amp = 0.18
+        qx = np.sin(yv * 2.6 + 1.2) * np.cos(xv * 2.0)
+        qy = np.cos(xv * 2.6 + 0.8) * np.sin(yv * 2.0)
+        xv_warped = xv + warp_amp * qx
+        yv_warped = yv + warp_amp * qy
+
+        rot_x = xv_warped * np.cos(eff_angle) - yv_warped * np.sin(eff_angle) + cx
+        rot_y = xv_warped * np.sin(eff_angle) + yv_warped * np.cos(eff_angle) + cy
         z_grid = rot_x + 1j * rot_y
 
         safe_complexity = max(1, int(complexity))
-        max_iter = max(20, 20 + safe_complexity * 5)
+
+        eff_freq = max(0.1, float(frequency))
+        eff_phase = float(phase_offset) % 1.0
+        eff_trap_weight = np.clip(float(trap_weight), 0.0, 1.0)
+        eff_chan_offset = float(channel_offset)
+
+        if fractal_type == "fluid":
+            def fbm_field(x_grid, y_grid, octaves=3, lacunarity=1.8, gain=0.45):
+                val = np.zeros_like(x_grid)
+                freq = 0.8
+                amp = 1.0
+                for _ in range(octaves):
+                    theta = random.uniform(0, np.pi)
+                    rx = x_grid * np.cos(theta) - y_grid * np.sin(theta)
+                    ry = x_grid * np.sin(theta) + y_grid * np.cos(theta)
+                    phase = random.uniform(0, 2 * np.pi)
+                    val += amp * (np.sin(rx * freq + phase) * np.cos(ry * freq + phase * 0.7))
+                    freq *= lacunarity
+                    amp *= gain
+                return val
+
+            q_x = fbm_field(xv, yv, octaves=2)
+            q_y = fbm_field(xv + 4.2, yv + 1.3, octaves=2)
+
+            r_x = fbm_field(xv + 2.0 * q_x + 1.5, yv + 2.0 * q_y + 3.2, octaves=2)
+            r_y = fbm_field(xv + 2.0 * q_x + 5.1, yv + 2.0 * q_y + 1.8, octaves=2)
+
+            ambient_sweep = 0.5 * xv + 0.4 * yv
+            fluid_folds = fbm_field(xv + 2.5 * r_x, yv + 2.5 * r_y, octaves=max(2, min(5, safe_complexity)))
+
+            field = 0.45 * ambient_sweep + 0.55 * fluid_folds
+            f_min, f_max = field.min(), field.max()
+            u_base = (field - f_min) / max(1e-5, (f_max - f_min))
+
+            u = 0.5 - 0.5 * np.cos(np.pi * (u_base * eff_freq + eff_phase))
+            u_L = 0.5 - 0.5 * np.cos(np.pi * (u_base * eff_freq + eff_phase + eff_chan_offset))
+
+            from scipy.interpolate import PchipInterpolator
+
+            nodes = np.linspace(0.0, 1.0, num_colors)
+            interp_L = PchipInterpolator(nodes, colors_oklab[:, 0])
+            interp_ab = PchipInterpolator(nodes, colors_oklab[:, 1:3], axis=0)
+
+            flat_L = interp_L(u_L.flatten())
+            flat_ab = interp_ab(u.flatten())
+            grid_oklab = np.column_stack([flat_L, flat_ab]).reshape((h, w, 3))
+
+            srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
+            img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+            return img_mod.resize((self.width, self.height), Image.LANCZOS)
+
+        max_iter = max(16, 16 + safe_complexity * 3)
 
         escape_radius = 16.0
         ln_r = np.log(escape_radius)
@@ -713,7 +770,7 @@ class FractalFieldGradient:
                 c_bound = -1.0 + 0.25 * np.exp(1j * theta)
             else:
                 c_bound = 0.5 * np.exp(1j * theta) - 0.25 * np.exp(2j * theta)
-            eps = random.uniform(0.005, 0.035) * np.exp(1j * random.uniform(0.0, 2.0 * np.pi))
+            eps = random.uniform(0.015, 0.04) * np.exp(1j * random.uniform(0.0, 2.0 * np.pi))
             c = c_bound + eps
             z = z_grid.copy()
 
@@ -721,7 +778,7 @@ class FractalFieldGradient:
             z[mask] = z[mask] ** 2 + (c[mask] if isinstance(c, np.ndarray) else c)
             abs_z = np.abs(z)
 
-            curr_trap = np.minimum(np.abs(z.real), np.abs(z.imag)) + 0.1 * abs_z
+            curr_trap = np.minimum(np.abs(z.real), np.abs(z.imag)) + 0.15 * abs_z
             trap[mask] = np.minimum(trap[mask], curr_trap[mask])
 
             escaped = abs_z > escape_radius
@@ -734,30 +791,44 @@ class FractalFieldGradient:
             if not np.any(mask):
                 break
 
-        smooth_pot[mask] = max_iter + np.clip(1.0 - np.abs(z[mask]) / escape_radius, 0.0, 1.0)
+        if np.any(mask):
+            final_abs = np.clip(np.abs(z[mask]), 0.0, escape_radius)
+            smooth_pot[mask] = max_iter - np.log1p(escape_radius - final_abs)
+
+        smooth_pot = scipy.ndimage.gaussian_filter(smooth_pot, sigma=1.8)
+        trap = scipy.ndimage.gaussian_filter(trap, sigma=1.5)
 
         p_min, p_max = smooth_pot.min(), smooth_pot.max()
-        norm_pot = (smooth_pot - p_min) / max(1e-5, (p_max - p_min))
+        pot_norm = (smooth_pot - p_min) / max(1e-5, (p_max - p_min))
+
+        pot_smooth = 1.0 / (1.0 + np.exp(-4.0 * (pot_norm - 0.5)))
+        pot_smooth = (pot_smooth - pot_smooth.min()) / max(1e-5, (pot_smooth.max() - pot_smooth.min()))
 
         trap_p90 = np.percentile(trap, 90)
-        norm_trap = np.clip(trap / max(1e-5, trap_p90), 0.0, 1.0)
+        trap_norm = np.clip(trap / max(1e-5, trap_p90), 0.0, 1.0)
+        trap_smooth = 1.0 - np.exp(-2.2 * trap_norm)
+
+        ambient_carrier = 0.5 + 0.5 * (np.sin(rot_x * 0.5) * np.cos(rot_y * 0.5))
 
         eff_freq = max(0.1, float(frequency))
         eff_phase = float(phase_offset) % 1.0
         eff_trap_weight = np.clip(float(trap_weight), 0.0, 1.0)
 
-        u = (norm_pot * eff_freq + eff_phase + eff_trap_weight * (1.0 - norm_trap)) % 1.0
+        u_field = (
+            (1.0 - eff_trap_weight * 0.5) * (0.45 * ambient_carrier + 0.55 * pot_smooth)
+            + eff_trap_weight * 0.5 * trap_smooth
+        )
 
         eff_chan_offset = float(channel_offset)
-        u_L = (u + eff_chan_offset) % 1.0
+        u = 0.5 - 0.5 * np.cos(np.pi * (u_field * eff_freq + eff_phase))
+        u_L = 0.5 - 0.5 * np.cos(np.pi * (u_field * eff_freq + eff_phase + eff_chan_offset))
         u_ab = u
 
         from scipy.interpolate import PchipInterpolator
 
-        wrapped_colors = np.vstack([colors_oklab, colors_oklab[0:1]])
-        nodes = np.linspace(0.0, 1.0, len(wrapped_colors))
-        interp_L = PchipInterpolator(nodes, wrapped_colors[:, 0])
-        interp_ab = PchipInterpolator(nodes, wrapped_colors[:, 1:3], axis=0)
+        nodes = np.linspace(0.0, 1.0, num_colors)
+        interp_L = PchipInterpolator(nodes, colors_oklab[:, 0])
+        interp_ab = PchipInterpolator(nodes, colors_oklab[:, 1:3], axis=0)
 
         flat_L = interp_L(u_L.flatten())
         flat_ab = interp_ab(u_ab.flatten())

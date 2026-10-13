@@ -159,7 +159,7 @@ class TestWebAPI(unittest.TestCase):
             "phase_offset": 0.25,
             "frequency": 1.5,
             "trap_weight": 0.4,
-            "fractal_type": "julia",
+            "fractal_type": "fluid",
         }
         get_res = self.client.get("/api/render", params=parameters)
         self.assertEqual(get_res.status_code, 200)

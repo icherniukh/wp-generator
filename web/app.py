@@ -71,7 +71,7 @@ class RenderRequest(BaseModel):
     frequency: Optional[float] = Field(default=None, gt=0.0)
     trap_weight: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     channel_offset: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
-    fractal_type: Optional[Literal["julia", "mandelbrot", "orbit_trap"]] = Field(default=None)
+    fractal_type: Optional[Literal["fluid", "julia", "mandelbrot", "orbit_trap"]] = Field(default=None)
     fractal_zoom: Optional[float] = Field(default=None, gt=0.0)
     seed: Optional[int] = Field(default=None)
 
@@ -163,7 +163,7 @@ async def render_get(
     frequency: Optional[float] = Query(default=None, gt=0.0),
     trap_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     channel_offset: Optional[float] = Query(default=None, ge=-1.0, le=1.0),
-    fractal_type: Optional[Literal["julia", "mandelbrot", "orbit_trap"]] = Query(default=None),
+    fractal_type: Optional[Literal["fluid", "julia", "mandelbrot", "orbit_trap"]] = Query(default=None),
     fractal_zoom: Optional[float] = Query(default=None, gt=0.0),
 ) -> Response:
     """Renders wallpaper directly as a streaming PNG image response."""

@@ -165,6 +165,18 @@ class TestFractalFieldGradient(unittest.TestCase):
         self.assertFalse(np.array_equal(np.asarray(img_base), np.asarray(img_phase)))
         self.assertFalse(np.array_equal(np.asarray(img_base), np.asarray(img_chan)))
 
+    def test_fractal_fluid_mode_deterministic_and_unique(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=80, height=60)
+        colors = [(10, 15, 25), (220, 90, 130), (40, 160, 210)]
+
+        img1 = engine.generate(colors, fractal_type="fluid", seed=99)
+        img2 = engine.generate(colors, fractal_type="fluid", seed=99)
+        img_julia = engine.generate(colors, fractal_type="julia", seed=99)
+
+        np.testing.assert_array_equal(np.asarray(img1), np.asarray(img2))
+        self.assertFalse(np.array_equal(np.asarray(img1), np.asarray(img_julia)))
+
 
 if __name__ == "__main__":
     unittest.main()

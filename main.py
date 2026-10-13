@@ -164,7 +164,7 @@ def main():
     engine_group.add_argument("--warp-strength", type=float, default=None, help=adv_help("Domain warping displacement strength (0.0-3.0)."))
     engine_group.add_argument("--ambient-weight", type=float, default=None, help=adv_help("RBF base color anchor weight (0.0-1.0)."))
     engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
-    engine_group.add_argument("--fractal-type", choices=["julia", "mandelbrot", "orbit_trap"], default=None, help=adv_help("Fractal formula: julia, mandelbrot, or orbit_trap."))
+    engine_group.add_argument("--fractal-type", choices=["fluid", "julia", "mandelbrot", "orbit_trap"], default=None, help=adv_help("Fractal formula: fluid, julia, mandelbrot, or orbit_trap."))
     engine_group.add_argument("--fractal-zoom", type=float, default=None, help=adv_help("Fractal magnification zoom factor."))
     engine_group.add_argument("--phase-offset", type=float, default=None, help=adv_help("Cyclic palette phase offset (0.0-1.0)."))
     engine_group.add_argument("--frequency", type=float, default=None, help=adv_help("Fractal palette frequency cycle multiplier."))

@@ -1,7 +1,7 @@
 {
   "preset_id": "fractal",
   "name": "Fractal",
-  "description": "Continuous dynamical Julia filaments and architectural orbit traps mapped with cyclic phase offsets in Oklab color space.",
+  "description": "Volumetric dynamical Julia sets and fluid domain-warped folds unified with ambient lighting and cyclic phase offsets.",
   "color_space": "oklch",
   "color_count": { "type": "uniform_int", "min": 3, "max": 4 },
   "palette_structure": [
@@ -20,10 +20,10 @@
   ],
   "overrides": {
     "engine": "fractal",
-    "fractal_type": "julia",
-    "complexity": 5,
-    "frequency": 1.8,
-    "trap_weight": 0.35,
+    "fractal_type": "fluid",
+    "complexity": 4,
+    "frequency": 1.0,
+    "trap_weight": 0.25,
     "phase_offset": 0.0,
     "noise": 0.03,
     "vignette": 0.22,
