@@ -81,6 +81,27 @@ class TestWebAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["x-render-aberration"], "0.02")
 
+    def test_rbf_controls_match_between_get_and_post(self):
+        parameters = {
+            "preset": "nocturne", "engine": "rbf", "width": 160,
+            "height": 100, "seed": 42, "warp_strength": 1.2,
+            "ambient_weight": 0.5, "dispersion": 0.8,
+        }
+        get_response = self.client.get("/api/render", params=parameters)
+        post_response = self.client.post("/api/render", json=parameters)
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(post_response.status_code, 200)
+        self.assertEqual(post_response.content, get_response.content)
+
+    def test_post_rejects_invalid_rbf_controls(self):
+        for parameter, value in (("ambient_weight", -0.1), ("dispersion", 0.0)):
+            with self.subTest(parameter=parameter):
+                response = self.client.post("/api/render", json={
+                    "engine": "rbf", "width": 160, "height": 100,
+                    parameter: value,
+                })
+                self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -49,6 +49,9 @@ def generate(args, nothing_style, seed):
         dots_mode=args.dots_mode,
         glass=args.glass,
         chromatic_aberration=args.chromatic_aberration,
+        warp_strength=args.warp_strength,
+        ambient_weight=args.ambient_weight,
+        dispersion=args.dispersion,
         legacy_idw=bool(getattr(args, "legacy_idw", False)),
         seed=seed,
         capture_base_image=bool(getattr(args, "preview_fx", False)),
@@ -144,7 +147,10 @@ def main():
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
     engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave", "domain-warp", "rbf"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--warp-strength", type=float, default=None, help=adv_help("Domain warping displacement strength (0.0-3.0)."))
+    engine_group.add_argument("--ambient-weight", type=float, default=None, help=adv_help("RBF base color anchor weight (0.0-1.0)."))
+    engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
     engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
     engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
     engine_group.add_argument("--harmonize", choices=["theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer override."))
@@ -187,6 +193,10 @@ def main():
         parser.error("--vignette must be between 0.0 and 1.0")
     if args.chromatic_aberration is not None and not 0 <= args.chromatic_aberration <= 0.1:
         parser.error("--aberration must be between 0.0 and 0.1")
+    if args.ambient_weight is not None and not 0.0 <= args.ambient_weight <= 1.0:
+        parser.error("--ambient-weight must be between 0.0 and 1.0")
+    if args.dispersion is not None and args.dispersion <= 0:
+        parser.error("--dispersion must be positive")
     if args.count < 1:
         parser.error("--count must be at least 1")
     if args.count > 1 and args.output:
