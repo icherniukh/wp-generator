@@ -12,22 +12,22 @@ _M1 = np.array([
     [0.4122214708, 0.5363325363, 0.0514459929],
     [0.2119034982, 0.6806995451, 0.1073969566],
     [0.0883024619, 0.2817188376, 0.6299787005],
-])
+], dtype=np.float32)
 _M1_INV = np.array([
     [ 4.0767416621, -3.3077115913,  0.2309699292],
     [-1.2684380046,  2.6097574011, -0.3413193965],
     [-0.0041960863, -0.7034186147,  1.7076147010],
-])
+], dtype=np.float32)
 _M2 = np.array([
     [0.2104542553, 0.7936177850, -0.0040720468],
     [1.9779984951, -2.4285922050,  0.4505937099],
     [0.0259040371,  0.7827717662, -0.8086757660],
-])
+], dtype=np.float32)
 _M2_INV = np.array([
     [1.0000000000,  0.3963377774,  0.2158037573],
     [1.0000000000, -0.1055613458, -0.0638541728],
     [1.0000000000, -0.0894841775, -1.2914855480],
-])
+], dtype=np.float32)
 
 
 def _srgb_to_linear(c: np.ndarray) -> np.ndarray:
@@ -35,8 +35,32 @@ def _srgb_to_linear(c: np.ndarray) -> np.ndarray:
 
 
 def _linear_to_srgb(c: np.ndarray) -> np.ndarray:
-    c = np.clip(c, 0.0, 1.0)
-    return np.where(c <= 0.0031308, 12.92 * c, 1.055 * (c ** (1.0 / 2.4)) - 0.055)
+    c = np.asarray(c)
+    result = np.empty_like(c, dtype=np.result_type(c, np.float32))
+    linear_mask = c <= 0.0031308
+    result[linear_mask] = 12.92 * c[linear_mask]
+    result[~linear_mask] = 1.055 * np.power(c[~linear_mask], 1.0 / 2.4) - 0.055
+    return result
+
+
+def rgb_to_oklab(rgb) -> np.ndarray:
+    """Convert one or more sRGB colors to Oklab, preserving the leading shape."""
+    orig_dtype = getattr(rgb, "dtype", type(rgb[0]) if isinstance(rgb, (list, tuple)) and len(rgb) > 0 else float)
+    rgb = np.asarray(rgb, dtype=np.float32)
+    is_int = np.issubdtype(orig_dtype, np.integer) if hasattr(np, 'issubdtype') else isinstance(orig_dtype, int)
+    if is_int or (rgb.size and rgb.max() > 1.0):
+        rgb = rgb / 255.0
+    linear = _srgb_to_linear(rgb)
+    lms = linear @ _M1.T
+    return np.cbrt(lms) @ _M2.T
+
+
+def oklab_to_rgb(oklab) -> np.ndarray:
+    """Convert one or more Oklab colors to unclipped sRGB in nominal [0, 1]."""
+    oklab = np.asarray(oklab, dtype=np.float32)
+    lms_root = oklab @ _M2_INV.T
+    linear = (lms_root ** 3) @ _M1_INV.T
+    return _linear_to_srgb(linear)
 
 
 def rgb_to_oklch(rgb) -> np.ndarray:
@@ -44,10 +68,7 @@ def rgb_to_oklch(rgb) -> np.ndarray:
     rgb = np.asarray(rgb, dtype=np.float64)
     if rgb.max() > 1.0:
         rgb = rgb / 255.0
-    linear = _srgb_to_linear(rgb)
-    lms = _M1 @ linear
-    lms_ = np.cbrt(np.maximum(lms, 0.0))
-    lab = _M2 @ lms_
+    lab = rgb_to_oklab(rgb)
     L, a, b = lab
     C = np.hypot(a, b)
     H = np.degrees(np.arctan2(b, a)) % 360.0
@@ -59,10 +80,7 @@ def oklch_to_rgb(lch) -> np.ndarray:
     L, C, H = lch
     h_rad = np.radians(H)
     oklab = np.array([L, C * np.cos(h_rad), C * np.sin(h_rad)])
-    lms_ = _M2_INV @ oklab          # OKLab → LMS'
-    lms = lms_ ** 3                  # LMS' → LMS (undo cube-root)
-    linear = _M1_INV @ lms           # LMS → linear sRGB
-    return _linear_to_srgb(linear)
+    return oklab_to_rgb(oklab)
 
 
 def oklch_to_rgb_clamped(lch) -> tuple:

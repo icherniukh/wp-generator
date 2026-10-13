@@ -1,0 +1,12 @@
+# Repository MCP scope for the procedural Python image pipeline.
+# Plugin servers need a placeholder transport for a valid disabled override.
+[mcp_servers.cua_repl]
+command = "/usr/bin/true"
+enabled = false
+
+[mcp_servers.node_repl]
+command = "/usr/bin/true"
+enabled = false
+
+[mcp_servers.tinyfish]
+enabled = false

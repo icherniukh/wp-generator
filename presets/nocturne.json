@@ -1,0 +1,30 @@
+{
+  "preset_id": "nocturne",
+  "name": "Nocturne",
+  "description": "Deep, richly-tinted grounding anchors paired with luminous twilight and neon accents, organic film grain, and radial prism aberration.",
+  "color_space": "oklch",
+  "color_count": { "type": "uniform_int", "min": 3, "max": 4 },
+  "palette_structure": [
+    {
+      "role": "grounding_anchor",
+      "hue": { "type": "uniform", "min": 0.0, "max": 1.0 },
+      "lightness": { "type": "gaussian", "mu": 0.18, "sigma": 0.06, "clip": [0.08, 0.32] },
+      "chroma": { "type": "gaussian", "mu": 0.32, "sigma": 0.08, "clip": [0.15, 0.55] }
+    },
+    {
+      "role": "accent_core",
+      "hue": { "type": "relative", "target": "grounding_anchor", "mu_offset": 150, "sigma": 50 },
+      "lightness": { "type": "gaussian", "mu": 0.70, "sigma": 0.10, "clip": [0.52, 0.90] },
+      "chroma": { "type": "gaussian", "mu": 0.75, "sigma": 0.12, "clip": [0.55, 0.98] }
+    }
+  ],
+  "overrides": {
+    "engine": "fluid-wave",
+    "complexity": 5,
+    "noise": 0.065,
+    "chromatic_aberration": 0.014,
+    "vignette": 0.18,
+    "dots": 0.0,
+    "glass": false
+  }
+}

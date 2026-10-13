@@ -9,15 +9,15 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="wp-generator"
 
-echo "Installing Python dependencies..."
-pip install -r "$REPO_DIR/requirements.txt" --quiet
+echo "Installing locked Python dependencies..."
+uv sync --project "$REPO_DIR" --quiet
 
 mkdir -p "$INSTALL_DIR"
 
 echo "Installing $BINARY_NAME to $INSTALL_DIR..."
 cat > "$INSTALL_DIR/$BINARY_NAME" <<EOF
 #!/bin/bash
-exec python3 "$REPO_DIR/main.py" "\$@"
+exec uv run --project "$REPO_DIR" python "$REPO_DIR/main.py" "\$@"
 EOF
 chmod +x "$INSTALL_DIR/$BINARY_NAME"
 

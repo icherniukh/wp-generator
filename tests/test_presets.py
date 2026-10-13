@@ -67,5 +67,44 @@ class TestPresetEngine(unittest.TestCase):
         self.assertGreaterEqual(len(colors), 2)
         self.assertLessEqual(len(colors), 5)
 
+    def test_afterglow_preset_has_reference_derived_defaults(self):
+        data = self.engine.load_preset("afterglow")
+
+        self.assertEqual(data["color_space"], "oklch")
+        self.assertGreaterEqual(len(data["palette_families"]), 4)
+        self.assertEqual(data["overrides"]["engine"], "idw")
+        self.assertEqual(data["overrides"]["harmonize"], "none")
+        self.assertGreaterEqual(data["overrides"]["noise"], 0.015)
+        self.assertGreater(data["overrides"]["vignette"], 0.0)
+        self.assertEqual(len(data["palette_families"]), 10)
+        self.assertTrue(all(len(family) == 3 for family in data["palette_families"]))
+
+    def test_curated_palette_family_is_preserved(self):
+        preset = {
+            "palette_families": [
+                ["#652ec1", "#52d0bf", "#cd6519"],
+            ]
+        }
+
+        colors = self.engine.generate_palette(preset)
+
+        self.assertEqual(colors, [(101, 46, 193), (82, 208, 191), (205, 101, 25)])
+
+    def test_curated_palette_families_can_be_cycled(self):
+        preset = {"palette_families": [["#000000"], ["#ffffff"]]}
+
+        self.assertEqual(self.engine.generate_palette(preset, family_index=0), [(0, 0, 0)])
+        self.assertEqual(self.engine.generate_palette(preset, family_index=1), [(255, 255, 255)])
+        self.assertEqual(self.engine.generate_palette(preset, family_index=2), [(0, 0, 0)])
+
+    def test_nocturne_preset_has_tuned_defaults(self):
+        data = self.engine.load_preset("nocturne")
+        self.assertEqual(data["color_space"], "oklch")
+        self.assertEqual(data["overrides"]["engine"], "fluid-wave")
+        self.assertEqual(data["overrides"]["dots"], 0.0)
+        self.assertEqual(data["overrides"]["glass"], False)
+        colors = self.engine.generate_palette(data, count=3)
+        self.assertEqual(len(colors), 3)
+
 if __name__ == '__main__':
     unittest.main()
