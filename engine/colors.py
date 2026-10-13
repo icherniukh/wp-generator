@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 
 
@@ -45,9 +47,9 @@ def _linear_to_srgb(c: np.ndarray) -> np.ndarray:
 
 def rgb_to_oklab(rgb) -> np.ndarray:
     """Convert one or more sRGB colors to Oklab, preserving the leading shape."""
-    orig_dtype = getattr(rgb, "dtype", type(rgb[0]) if isinstance(rgb, (list, tuple)) and len(rgb) > 0 else float)
-    rgb = np.asarray(rgb, dtype=np.float32)
-    is_int = np.issubdtype(orig_dtype, np.integer) if hasattr(np, 'issubdtype') else isinstance(orig_dtype, int)
+    rgb = np.asarray(rgb)
+    is_int = np.issubdtype(rgb.dtype, np.integer)
+    rgb = rgb.astype(np.float32)
     if is_int or (rgb.size and rgb.max() > 1.0):
         rgb = rgb / 255.0
     linear = _srgb_to_linear(rgb)
@@ -65,9 +67,6 @@ def oklab_to_rgb(oklab) -> np.ndarray:
 
 def rgb_to_oklch(rgb) -> np.ndarray:
     """Convert sRGB (0-255 int or 0-1 float) → OKLCH [L, C, H°]."""
-    rgb = np.asarray(rgb, dtype=np.float64)
-    if rgb.max() > 1.0:
-        rgb = rgb / 255.0
     lab = rgb_to_oklab(rgb)
     L, a, b = lab
     C = np.hypot(a, b)
@@ -83,12 +82,31 @@ def oklch_to_rgb(lch) -> np.ndarray:
     return oklab_to_rgb(oklab)
 
 
+def clamp_oklch(lch, *, lightness_bounds=(0.0, 1.0), chroma_bounds=(0.0, 0.37)) -> np.ndarray:
+    """Clamp lightness and chroma in OKLCH, retaining the circular hue."""
+    values = np.asarray(lch, dtype=np.float64)
+    if values.shape != (3,) or not np.all(np.isfinite(values)):
+        raise ValueError("OKLCH must contain three finite values.")
+    l_min, l_max = lightness_bounds
+    c_min, c_max = chroma_bounds
+    if not (0.0 <= l_min <= l_max <= 1.0):
+        raise ValueError("Lightness bounds must satisfy 0 <= min <= max <= 1.")
+    if not (0.0 <= c_min <= c_max and np.isfinite(c_max)):
+        raise ValueError("Chroma bounds must be finite, nonnegative, and ordered.")
+    return np.array([
+        np.clip(values[0], l_min, l_max),
+        np.clip(values[1], c_min, c_max),
+        values[2] % 360.0,
+    ])
+
+
 def oklch_to_rgb_clamped(lch) -> tuple:
     """Convert OKLCH → sRGB (0-255 int tuple), clamping chroma to stay in gamut.
 
-    Preserves hue and lightness; reduces C via binary search until all channels ∈ [0, 1].
+    Bounds L to [0, 1] and C to [0, 0.37], then reduces C until sRGB is in gamut.
+    Preserves hue and the bounded lightness before 8-bit rounding.
     """
-    L, C, H = float(lch[0]), float(lch[1]), float(lch[2])
+    L, C, H = clamp_oklch(lch)
     rgb = oklch_to_rgb([L, C, H])
     if np.all((rgb >= 0.0) & (rgb <= 1.0)):
         return tuple(int(round(v * 255)) for v in rgb)
@@ -105,6 +123,39 @@ def oklch_to_rgb_clamped(lch) -> tuple:
 
     rgb = np.clip(oklch_to_rgb([L, lo, H]), 0.0, 1.0)
     return tuple(int(round(v * 255)) for v in rgb)
+
+
+def relative_luminance(rgb) -> float:
+    """WCAG sRGB relative luminance for an RGB color on the 0-255 scale."""
+    channels = np.asarray(rgb, dtype=np.float64)
+    if channels.shape != (3,) or not np.all(np.isfinite(channels)) or np.any((channels < 0) | (channels > 255)):
+        raise ValueError("RGB must contain three finite channels between 0 and 255.")
+    return float(_srgb_to_linear(channels / 255.0) @ [0.2126, 0.7152, 0.0722])
+
+
+def contrast_ratio(first, second) -> float:
+    """Return the WCAG luminance contrast ratio of two RGB colors."""
+    light, dark = sorted((relative_luminance(first), relative_luminance(second)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+@dataclass(frozen=True)
+class PaletteContrast:
+    """Contrast of each accent against the first (anchor) palette color."""
+    ratios: tuple[float, ...]
+    threshold: float = 4.5
+
+    @property
+    def passes(self) -> bool:
+        return bool(self.ratios) and all(ratio >= self.threshold for ratio in self.ratios)
+
+
+def evaluate_palette_contrast(colors, threshold=4.5) -> PaletteContrast:
+    """Evaluate final palette pairs without changing the colors or rounding ratios."""
+    if not 1.0 <= threshold <= 21.0:
+        raise ValueError("Contrast threshold must be between 1 and 21.")
+    ratios = tuple(contrast_ratio(colors[0], color) for color in colors[1:]) if len(colors) > 1 else ()
+    return PaletteContrast(ratios, threshold)
 
 
 class StyleHarmonizer:
@@ -138,47 +189,16 @@ class StyleHarmonizer:
 
     @staticmethod
     def adjust_for_nothing(colors):
-        """
-        Adjusts colors to fit the 'Nothing' aesthetic.
-        Rules: 
-        1. Preserve user intent (Hue) but map Lightness and Chroma.
-        2. High-chroma colors get contrast-boosted (very bright or deep dark).
-        3. Background/low-chroma colors are pushed to strict monochrome extremes.
-        """
+        """Preserve hue while bounding vivid accents and muted grounding tones in OKLCH."""
         adjusted = []
-        for c in colors:
-            rgb = np.array(c) / 255.0
-            lab = rgb_to_lab(rgb)
-            
-            # Convert to LCH for easier adjustment
-            lch = lab_to_lch(lab)
-            L, C, H = lch
-            
-            if C > 30: # Vibrant color
-                # Push lightness to extremes to make it 'punchy' but soften them
-                if L < 60:
-                    L = max(20, L * 0.9) # Deep, rich tone, not pure black
-                else:
-                    L = min(85, L * 1.0) # Bright tone, not blinding white
-                
-                # Keep the user's hue, desaturate more significantly to look elegant
-                C = C * 0.7
-                
-            else: # Muted or background color
-                # Push towards dark gray or off-white
-                if L < 50:
-                    L = max(12, L * 0.7) # Make it very dark but not pitch black
-                    C = C * 0.1 # Kill saturation
-                else:
-                    L = min(88, max(75, L * 1.1)) # Make it light, but not pure white
-                    C = C * 0.15 # Allow a tiny bit of warmth/coolness
-            
-            # Reconstruct color
-            lch_new = np.array([L, C, H])
-            lab_new = lch_to_lab(lch_new)
-            rgb_new = lab_to_rgb(lab_new)
-            adjusted.append(tuple(int(v) for v in (np.clip(rgb_new, 0, 1) * 255).astype(int)))
-        
+        for color in colors:
+            lch = rgb_to_oklch(color)
+            if lch[1] > 0.1:
+                bounds = {"lightness_bounds": (0.2, 0.85), "chroma_bounds": (0.0, 0.22)}
+            else:
+                lightness = (0.12, 0.35) if lch[0] < 0.5 else (0.75, 0.88)
+                bounds = {"lightness_bounds": lightness, "chroma_bounds": (0.0, 0.015)}
+            adjusted.append(oklch_to_rgb_clamped(clamp_oklch(lch, **bounds)))
         return adjusted
 
 
@@ -261,7 +281,7 @@ def lch_to_lab(lch):
 
 
 class ColorTheoryHarmonizer:
-    """Applies classical color harmony rules (hue rotation in LCH space)."""
+    """Preserve hues by default; retain explicitly selected classical LCH harmony modes."""
 
     MODES = ["complementary", "analogous", "triadic", "split_complementary", "tetradic"]
 
@@ -274,10 +294,15 @@ class ColorTheoryHarmonizer:
     }
 
     @classmethod
-    def harmonize(cls, colors, mode=None):
-        import random as _rnd
-        if mode is None:
-            mode = _rnd.choice(cls.MODES)
+    def harmonize(cls, colors, mode=None, *, lightness_bounds=(0.12, 0.90), chroma_bounds=(0.0, 0.25)):
+        if mode is None or mode == "perceptual":
+            return [
+                oklch_to_rgb_clamped(clamp_oklch(
+                    rgb_to_oklch(color), lightness_bounds=lightness_bounds,
+                    chroma_bounds=chroma_bounds,
+                ))
+                for color in colors
+            ]
 
         offsets = cls._HUE_OFFSETS[mode]
 

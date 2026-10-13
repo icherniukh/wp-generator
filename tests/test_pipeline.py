@@ -3,6 +3,8 @@ import io
 import numpy as np
 from PIL import Image
 
+from engine.colors import contrast_ratio, rgb_to_oklch
+
 from engine.pipeline import (
     DEVICE_RESOLUTIONS,
     PipelineConfigurationError,
@@ -136,6 +138,61 @@ class TestWallpaperPipeline(unittest.TestCase):
         self.assertEqual(res.ambient_weight, 0.2)
         self.assertEqual(res.dispersion, 0.4)
         self.assertEqual(res.image.size, (140, 90))
+
+    def test_perceptual_harmonization_preserves_input_palette_order_and_hues(self):
+        colors = [(0, 0, 255), (255, 0, 0), (0, 255, 0)]
+        result = self.pipeline.render(RenderConfiguration(
+            colors=colors, harmonize="perceptual", width=80, height=60, seed=42,
+        ))
+        for original, adjusted in zip(colors, result.colors):
+            before, after = rgb_to_oklch(original), rgb_to_oklch(adjusted)
+            self.assertLess(abs((after[2] - before[2] + 180) % 360 - 180), 2.0)
+
+    def test_contrast_is_evaluated_after_harmonization(self):
+        result = self.pipeline.render(RenderConfiguration(
+            colors=[(0, 0, 0), (255, 255, 255)], harmonize="nothing",
+            width=80, height=60, seed=42,
+        ))
+        self.assertAlmostEqual(result.palette_contrast.ratios[0],
+                               contrast_ratio(*result.colors))
+        self.assertNotEqual(result.palette_contrast.ratios[0], 21.0)
+
+    def test_failing_contrast_does_not_recolor_explicit_palette(self):
+        colors = [(255, 255, 255), (119, 119, 119)]
+        result = self.pipeline.render(RenderConfiguration(
+            colors=colors, harmonize="none", width=80, height=60, seed=42,
+        ))
+        self.assertEqual(result.colors, colors)
+        self.assertFalse(result.palette_contrast.passes)
+
+    def test_invalid_harmonizer_is_rejected(self):
+        with self.assertRaises(PipelineConfigurationError):
+            self.pipeline.render(RenderConfiguration(harmonize="unknown", width=80, height=60))
+
+    def test_preset_can_define_perceptual_aesthetic_bounds(self):
+        result = self.pipeline.render(RenderConfiguration(
+            colors=[(255, 0, 0), (0, 255, 0)], width=80, height=60, seed=42,
+            preset_data={
+                "overrides": {"harmonize": "perceptual"},
+                "harmonization": {
+                    "lightness_bounds": [0.4, 0.5], "chroma_bounds": [0.0, 0.08],
+                },
+            },
+        ))
+        for color in result.colors:
+            lightness, chroma, _ = rgb_to_oklch(color)
+            self.assertTrue(0.399 <= lightness <= 0.501)
+            self.assertLessEqual(chroma, 0.081)
+
+    def test_invalid_preset_bounds_are_configuration_errors(self):
+        with self.assertRaises(PipelineConfigurationError):
+            self.pipeline.render(RenderConfiguration(
+                width=80, height=60,
+                preset_data={
+                    "overrides": {"harmonize": "perceptual"},
+                    "harmonization": {"lightness_bounds": [0.8, 0.2]},
+                },
+            ))
 
 
 if __name__ == "__main__":

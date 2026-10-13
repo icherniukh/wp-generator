@@ -102,6 +102,35 @@ class TestWebAPI(unittest.TestCase):
                 })
                 self.assertEqual(response.status_code, 422)
 
+    def test_post_reports_unrounded_palette_contrast(self):
+        response = self.client.post("/api/render", json={
+            "colors": ["#ffffff", "#777777"], "harmonize": "none",
+            "width": 80, "height": 60, "seed": 42,
+        })
+        self.assertEqual(response.status_code, 200)
+        ratio = float(response.headers["x-render-contrast-ratios"])
+        self.assertLess(ratio, 4.5)
+        self.assertEqual(response.headers["x-render-contrast-pass"], "false")
+        self.assertEqual(response.headers["x-render-colors"], "#ffffff,#777777")
+
+    def test_perceptual_harmonization_matches_between_get_and_post(self):
+        parameters = {
+            "preset": "nocturne", "harmonize": "perceptual",
+            "width": 80, "height": 60, "seed": 42,
+        }
+        get_response = self.client.get("/api/render", params=parameters)
+        post_response = self.client.post("/api/render", json=parameters)
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(post_response.status_code, 200)
+        self.assertEqual(get_response.content, post_response.content)
+        self.assertEqual(get_response.headers["x-render-contrast-ratios"],
+                         post_response.headers["x-render-contrast-ratios"])
+
+    def test_invalid_harmonizer_returns_422_for_both_methods(self):
+        parameters = {"harmonize": "unknown", "width": 80, "height": 60}
+        self.assertEqual(self.client.get("/api/render", params=parameters).status_code, 422)
+        self.assertEqual(self.client.post("/api/render", json=parameters).status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

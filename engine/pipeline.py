@@ -9,7 +9,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
-from engine.colors import ColorTheoryHarmonizer, StyleHarmonizer
+from engine.colors import (
+    ColorTheoryHarmonizer, PaletteContrast, StyleHarmonizer, evaluate_palette_contrast,
+)
 from engine.filters import WallpaperFilters
 from engine.gradient import (
     DomainWarpGradient,
@@ -116,6 +118,7 @@ class RenderResult:
     ambient_weight: Optional[float] = None
     dispersion: Optional[float] = None
     base_image: Optional[Image.Image] = None
+    palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
 
 
 class WallpaperPipeline:
@@ -234,14 +237,24 @@ class WallpaperPipeline:
 
         # Harmonization precedence: explicit config > preset override > theory fallback
         harmonize = resolve_value(config.harmonize, "harmonize", lambda: None)
+        if harmonize not in (None, "none", "nothing", "theory", "perceptual"):
+            raise PipelineConfigurationError(f"Unknown harmonizer '{harmonize}'.")
         colors_were_specified = bool(config.colors or config.preset)
 
         if harmonize == "none":
             final_colors = base_colors
         elif harmonize == "nothing":
             final_colors = StyleHarmonizer.adjust_for_nothing(base_colors)
-        elif harmonize == "theory":
-            final_colors = ColorTheoryHarmonizer.harmonize(base_colors)
+        elif harmonize in ("theory", "perceptual"):
+            bounds = preset_data.get("harmonization", {})
+            try:
+                final_colors = ColorTheoryHarmonizer.harmonize(
+                    base_colors,
+                    lightness_bounds=bounds.get("lightness_bounds", (0.12, 0.90)),
+                    chroma_bounds=bounds.get("chroma_bounds", (0.0, 0.25)),
+                )
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise PipelineConfigurationError(f"Invalid harmonization bounds: {exc}") from exc
         elif harmonize is None and not colors_were_specified:
             if random.random() < 2 / 3:
                 final_colors = ColorTheoryHarmonizer.harmonize(base_colors)
@@ -326,6 +339,7 @@ class WallpaperPipeline:
             ambient_weight=ambient_weight,
             dispersion=dispersion,
             base_image=base_image,
+            palette_contrast=evaluate_palette_contrast(final_colors),
         )
 
     def render_png_bytes(self, config: RenderConfiguration) -> Tuple[bytes, RenderResult]:

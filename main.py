@@ -78,6 +78,9 @@ def generate(args, nothing_style, seed):
     if len(result.color_hexes) > 3:
         color_hex += f" (+{len(result.color_hexes)-3} more)"
     print(f"  seed={seed}  complexity={result.complexity}  noise={result.noise}  colors={color_hex}")
+    contrast = result.palette_contrast
+    ratios = ", ".join(f"{ratio:.2f}:1" for ratio in contrast.ratios)
+    print(f"  anchor contrast={ratios}  target={contrast.threshold}:1  all_pass={contrast.passes}")
 
     output_dir = os.path.dirname(output_path)
     if output_dir:
@@ -153,7 +156,7 @@ def main():
     engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
     engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
     engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
-    engine_group.add_argument("--harmonize", choices=["theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer override."))
+    engine_group.add_argument("--harmonize", choices=["perceptual", "theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer: perceptual/theory preserve hues in OKLCH; nothing bounds muted anchors and vivid accents."))
 
     # --- Filters Overrides ---
     filter_title = "Advanced Filter Overrides" if show_all else "Advanced Filter Overrides (hidden, use --help-all)"
