@@ -1,7 +1,11 @@
 import argparse
-import random
-import os
+import concurrent.futures
 from datetime import datetime
+import os
+import random
+import sys
+import time
+from typing import List, Optional, Tuple
 
 from engine.pipeline import (
     DEVICE_RESOLUTIONS,
@@ -15,13 +19,14 @@ SCREEN_PRESETS = DEVICE_RESOLUTIONS
 hex_to_rgb = parse_hex_color
 
 
-def default_output_path(preset_name, seed, directory="."):
+def default_output_path(preset_name: str, seed: int, directory: str = ".") -> str:
+    """Generates an output filename stamped with datetime and seed."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     return os.path.join(directory, f"wp_{preset_name}_{timestamp}_{seed}.png")
 
 
-def generate(args, nothing_style, seed):
-    # Resolve resolution from --res or --device
+def build_render_configuration(args: argparse.Namespace, nothing_style: bool, seed: int) -> RenderConfiguration:
+    """Translates parsed CLI arguments into a pipeline RenderConfiguration."""
     if args.res:
         width, height = args.res
     else:
@@ -29,7 +34,6 @@ def generate(args, nothing_style, seed):
 
     parsed_colors = [parse_hex_color(h) for h in args.colors] if args.colors else None
 
-    # Harmonize override resolution
     harmonize = args.harmonize
     if harmonize is None and nothing_style:
         harmonize = "nothing"
@@ -38,7 +42,7 @@ def generate(args, nothing_style, seed):
     if dots is None and nothing_style:
         dots = 0.8
 
-    config = RenderConfiguration(
+    return RenderConfiguration(
         width=width,
         height=height,
         preset=args.preset,
@@ -74,10 +78,30 @@ def generate(args, nothing_style, seed):
         capture_base_image=bool(getattr(args, "preview_fx", False)),
     )
 
+
+def save_preview_image(result, output_path: str) -> None:
+    """Generates side-by-side comparison between base mesh and filtered wallpaper."""
+    if not result.base_image:
+        return
+    from PIL import Image, ImageDraw
+
+    preview_img = Image.new("RGB", (result.width * 2, result.height))
+    preview_img.paste(result.base_image, (0, 0))
+    preview_img.paste(result.image, (result.width, 0))
+    draw = ImageDraw.Draw(preview_img)
+    draw.text((10, 10), "BASE MESH", fill=(255, 255, 255))
+    draw.text((result.width + 10, 10), "FX APPLIED", fill=(255, 255, 255))
+    preview_path = output_path.replace(".png", "_preview.png")
+    preview_img.save(preview_path, "PNG")
+    print(f"  -> Preview saved to {preview_path}")
+
+
+def generate(args: argparse.Namespace, nothing_style: bool, seed: int) -> str:
+    """Renders a single wallpaper instance and writes it to disk."""
+    config = build_render_configuration(args, nothing_style, seed)
     pipeline = WallpaperPipeline()
     result = pipeline.render(config)
 
-    # Build output path
     if args.output is not None:
         output_path = args.output
     else:
@@ -98,41 +122,28 @@ def generate(args, nothing_style, seed):
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    if getattr(args, "preview_fx", False) and result.base_image:
-        from PIL import Image, ImageDraw
-        preview_img = Image.new("RGB", (result.width * 2, result.height))
-        preview_img.paste(result.base_image, (0, 0))
-        preview_img.paste(result.image, (result.width, 0))
-        draw = ImageDraw.Draw(preview_img)
-        draw.text((10, 10), "BASE MESH", fill=(255, 255, 255))
-        draw.text((result.width + 10, 10), "FX APPLIED", fill=(255, 255, 255))
-        preview_path = output_path.replace(".png", "_preview.png")
-        preview_img.save(preview_path, "PNG")
-        print(f"  -> Preview saved to {preview_path}")
+    if getattr(args, "preview_fx", False):
+        save_preview_image(result, output_path)
 
     result.image.save(output_path, "PNG")
     return output_path
 
 
-def main():
-    import sys
-    show_all = "--help-all" in sys.argv
-
+def build_argument_parser(show_all: bool = False) -> argparse.ArgumentParser:
+    """Builds the CLI argument parser with compact default view and extended help."""
     parser = argparse.ArgumentParser(
         description="Wallpaper Generator for macOS\nRun with --help-all to see advanced engine and filter overrides.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        add_help=False
+        add_help=False,
     )
-    
-    # --- Help Options ---
-    help_group = parser.add_argument_group("Help")
-    help_group.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="Show this compact help message and exit.")
-    help_group.add_argument("--help-all", action="help", default=argparse.SUPPRESS, help="Show full help message including advanced overrides and exit.")
 
-    def adv_help(text):
+    help_group = parser.add_argument_group("Help")
+    help_group.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="Show compact help and exit.")
+    help_group.add_argument("--help-all", action="help", default=argparse.SUPPRESS, help="Show all options including advanced overrides.")
+
+    def adv_help(text: str) -> str:
         return text if show_all else argparse.SUPPRESS
 
-    # --- Core Group ---
     core_group = parser.add_argument_group("Core Settings")
     core_group.add_argument("--device", choices=list(SCREEN_PRESETS.keys()), default="mbp14", help="Standard screen resolution device.")
     core_group.add_argument("--count", type=int, default=1, help="Number of wallpapers to generate.")
@@ -140,15 +151,12 @@ def main():
     core_group.add_argument("--out-dir", default=None, help="Directory to save generated wallpapers.")
     core_group.add_argument("--workers", type=int, default=None, help="Worker count for parallel generation.")
 
-    # --- Color Group ---
     color_group = parser.add_argument_group("Color Palettes")
     color_source = color_group.add_mutually_exclusive_group()
-    
-    import os
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    presets_dir = os.path.join(base_dir, "presets")
     try:
-        # Resolve the directory where main.py lives, so it works globally
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        presets_dir = os.path.join(base_dir, "presets")
         available_presets = [f.replace(".json", "") for f in os.listdir(presets_dir) if f.endswith(".json")]
     except FileNotFoundError:
         available_presets = []
@@ -156,8 +164,7 @@ def main():
     color_source.add_argument("--preset", choices=available_presets, help="Pre-defined aesthetic preset.")
     color_source.add_argument("--colors", nargs="+", metavar="HEX", help="Custom hex colors.")
     color_source.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
-    
-    # --- Engine Overrides ---
+
     engine_title = "Advanced Engine Overrides" if show_all else "Advanced Engine Overrides (hidden, use --help-all)"
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
@@ -176,9 +183,8 @@ def main():
     engine_group.add_argument("--channel-offset", type=float, default=None, help=adv_help("Decoupled Oklab lightness/chroma channel phase offset."))
     engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
     engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
-    engine_group.add_argument("--harmonize", choices=["perceptual", "theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer: perceptual/theory preserve hues in OKLCH; nothing bounds muted anchors and vivid accents."))
+    engine_group.add_argument("--harmonize", choices=["perceptual", "theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer algorithm."))
 
-    # --- Filters Overrides ---
     filter_title = "Advanced Filter Overrides" if show_all else "Advanced Filter Overrides (hidden, use --help-all)"
     filter_group = parser.add_argument_group(filter_title)
     filter_group.add_argument("--dots", type=float, default=None, help=adv_help("Dot matrix intensity (0.0-1.0)."))
@@ -190,22 +196,23 @@ def main():
     filter_group.add_argument("--contour-mode", choices=["light", "dark", "accent"], default=None, help=adv_help("Contour line styling: 'light', 'dark', or 'accent'."))
     filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
     filter_group.add_argument("--vignette", type=float, default=None, help=adv_help("Subtle radial edge darkening (0.0-1.0)."))
-    filter_group.add_argument("--glass", action="store_true", default=None, help=adv_help("Apply premium frosted glass texture overlay."))
-    filter_group.add_argument("--aberration", "--chromatic-aberration", type=float, default=None, dest="chromatic_aberration", help=adv_help("Radial chromatic aberration strength (0.0-0.1)."))
-    filter_group.add_argument("--preview-fx", action="store_true", default=None, help=adv_help("Preview FX rendering layers for development."))
+    filter_group.add_argument("--glass", action="store_true", default=None, help=adv_help("Apply frosted glass texture overlay."))
+    filter_group.add_argument("--aberration", "--chromatic-aberration", type=float, default=None, dest="chromatic_aberration", help=adv_help("Chromatic aberration strength (0.0-0.1)."))
+    filter_group.add_argument("--preview-fx", action="store_true", default=None, help=adv_help("Preview FX rendering layers."))
 
-    # --- Misc & Legacy ---
     misc_group = parser.add_argument_group("Miscellaneous" if show_all else "Miscellaneous (hidden, use --help-all)")
     misc_group.add_argument("--seed", type=int, default=None, help=adv_help("Base seed for reproducibility."))
-    
+
     parser.add_argument("--style", choices=["generic", "nothing"], default=None, help=argparse.SUPPRESS)
     parser.add_argument("--nothing", action="store_true", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--no-adjust", action="store_true", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--no-nothing", action="store_true", default=None, help=argparse.SUPPRESS)
 
-    args = parser.parse_args()
+    return parser
 
-    # --- Validate fixed params ---
+
+def validate_cli_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Validates parameter ranges and conflicts."""
     if args.res and (args.res[0] <= 0 or args.res[1] <= 0):
         parser.error("--res values must be positive")
     if args.dots_spacing is not None and args.dots_spacing <= 0:
@@ -243,44 +250,19 @@ def main():
     if args.count > 1 and args.output:
         parser.error("--output cannot be used with --count > 1 (files are auto-named)")
 
-    nothing_style = args.nothing or args.style == "nothing"
-    if getattr(args, 'no_nothing', False):
-        nothing_style = False
-
-    # --- Screen sampling (once, before the loop) ---
-    if args.sample:
-        from tools.sampler import ScreenSampler
-        sampler = ScreenSampler()
-        print("Sampling screen color in 3 seconds... move your mouse!")
-        import time
-        time.sleep(3)
-        color = sampler.sample_pixel()
-        print(f"Sampled color: {color} ({sampler.to_hex(color)})")
-        if not args.colors:
-            args.colors = [sampler.to_hex(color)]
-
-    # --- Validate colors early if provided ---
     if args.colors:
         try:
-            [hex_to_rgb(h) for h in args.colors]
-        except ValueError as e:
-            parser.error(str(e))
+            [parse_hex_color(h) for h in args.colors]
+        except ValueError as exc:
+            parser.error(str(exc))
 
-    # --- Pick base seed ---
-    base_seed = args.seed
-    if base_seed is None:
-        import time
-        base_seed = int(time.time())
-        print(f"Base seed: {base_seed}  (pass --seed {base_seed} to reproduce)")
 
-    # --- Generate ---
+def execute_batch(args: argparse.Namespace, nothing_style: bool, base_seed: int) -> None:
+    """Executes single or multi-worker batch generation loop."""
     total = args.count
-    workers = args.workers
-    if workers is None:
-        workers = min(total, os.cpu_count() or 1)
+    workers = args.workers or min(total, os.cpu_count() or 1)
 
     if total > 1 and workers > 1:
-        import concurrent.futures
         print(f"Generating {total} wallpapers in parallel using {workers} workers...")
         with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
             futures = {
@@ -299,6 +281,34 @@ def main():
                 print(f"[{i+1}/{total}]", end=" ")
             path = generate(args, nothing_style, seed)
             print(f"  -> {path}")
+
+
+def main() -> None:
+    show_all = "--help-all" in sys.argv
+    parser = build_argument_parser(show_all=show_all)
+    args = parser.parse_args()
+    validate_cli_arguments(parser, args)
+
+    nothing_style = args.nothing or args.style == "nothing"
+    if getattr(args, "no_nothing", False):
+        nothing_style = False
+
+    if args.sample:
+        from tools.sampler import ScreenSampler
+        sampler = ScreenSampler()
+        print("Sampling screen color in 3 seconds... move your mouse!")
+        time.sleep(3)
+        color = sampler.sample_pixel()
+        print(f"Sampled color: {color} ({sampler.to_hex(color)})")
+        if not args.colors:
+            args.colors = [sampler.to_hex(color)]
+
+    base_seed = args.seed if args.seed is not None else int(time.time())
+    if args.seed is None:
+        print(f"Base seed: {base_seed}  (pass --seed {base_seed} to reproduce)")
+
+    execute_batch(args, nothing_style, base_seed)
+
 
 if __name__ == "__main__":
     main()

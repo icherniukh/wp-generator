@@ -13,7 +13,7 @@ from engine.colors import (
     ColorTheoryHarmonizer, PaletteContrast, StyleHarmonizer, evaluate_palette_contrast,
 )
 from engine.filters import WallpaperFilters
-from engine.gradient import (
+from engine.gradients import (
     DomainWarpGradient,
     FlowFieldGradient,
     FluidMeshGradient,
@@ -21,10 +21,11 @@ from engine.gradient import (
     MeshGradient,
     RadialBasisGradient,
     SimplexMeshGradient,
+    SplineWaveGradient,
     TopographicGradient,
+    render_gradient,
 )
 from engine.presets import PresetEngine
-from engine.spline_gradient import SplineWaveGradient
 
 DEVICE_RESOLUTIONS: Dict[str, Tuple[int, int]] = {
     # Apple MacBooks (14:9 aspect ratios)
@@ -193,6 +194,101 @@ class WallpaperPipeline:
             palette.append((int(r * 255), int(g * 255), int(b * 255)))
         return palette
 
+    def _resolve_palette(
+        self,
+        config: RenderConfiguration,
+        preset_data: Dict[str, Any],
+        complexity: int,
+        active_seed: int,
+    ) -> List[Tuple[int, int, int]]:
+        """Resolves the initial un-harmonized palette from config, preset, or random sampling."""
+        if config.colors:
+            colors = list(config.colors)
+        elif config.preset in THEME_FALLBACK_PALETTES:
+            colors = list(THEME_FALLBACK_PALETTES[config.preset])
+        elif preset_data:
+            count = None if preset_data.get("palette_families") else (complexity // 2 if config.complexity else None)
+            colors = self.preset_engine.generate_palette(
+                preset_data, count=count, family_index=active_seed
+            )
+        else:
+            num_colors = max(2, min(5, complexity // 2))
+            colors = self._sample_dynamic_palette(num_colors)
+
+        while len(colors) < 2:
+            colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        return colors
+
+    def _harmonize_palette(
+        self,
+        base_colors: List[Tuple[int, int, int]],
+        harmonize_mode: Optional[str],
+        preset_data: Dict[str, Any],
+        colors_were_specified: bool,
+    ) -> List[Tuple[int, int, int]]:
+        """Applies OKLCH perceptual, color theory, or Nothing-style harmonization."""
+        if harmonize_mode == "none":
+            return base_colors
+        if harmonize_mode == "nothing":
+            return StyleHarmonizer.adjust_for_nothing(base_colors)
+        if harmonize_mode in ("theory", "perceptual"):
+            bounds = preset_data.get("harmonization", {})
+            harmony_mode = bounds.get("mode", "analogous") if harmonize_mode == "theory" else "perceptual"
+            try:
+                return ColorTheoryHarmonizer.harmonize(
+                    base_colors,
+                    mode=harmony_mode,
+                    lightness_bounds=bounds.get("lightness_bounds", (0.12, 0.90)),
+                    chroma_bounds=bounds.get("chroma_bounds", (0.0, 0.25)),
+                )
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise PipelineConfigurationError(f"Invalid harmonization bounds: {exc}") from exc
+        if harmonize_mode is None and not colors_were_specified:
+            if random.random() < 2 / 3:
+                return ColorTheoryHarmonizer.harmonize(base_colors)
+        return base_colors
+
+    def _apply_filters(
+        self,
+        image: Image.Image,
+        *,
+        dots: float,
+        dots_spacing: int,
+        dots_mode: str,
+        contours: float,
+        contour_levels: int,
+        contour_width: float,
+        contour_mode: str,
+        glass: bool,
+        chromatic_aberration: float,
+        noise: float,
+        vignette: float,
+    ) -> Image.Image:
+        """Applies configured post-processing filter overlays sequentially."""
+        if dots > 0.0:
+            image = WallpaperFilters.apply_dot_matrix(
+                image, spacing=dots_spacing, intensity=dots, mode=dots_mode
+            )
+        if contours > 0.0:
+            image = WallpaperFilters.apply_contour_lines(
+                image,
+                levels=contour_levels,
+                line_width=contour_width,
+                intensity=contours,
+                mode=contour_mode,
+            )
+        if glass:
+            image = WallpaperFilters.apply_frosted_glass(image, blur_radius=60, noise_amount=0.15)
+        if chromatic_aberration > 0.0:
+            image = WallpaperFilters.apply_chromatic_aberration(
+                image, strength=chromatic_aberration
+            )
+        if noise > 0.0:
+            image = WallpaperFilters.apply_film_grain(image, amount=noise)
+        if vignette > 0.0:
+            image = WallpaperFilters.apply_vignette(image, strength=vignette)
+        return image
+
     def render(self, config: RenderConfiguration) -> RenderResult:
         """Executes the complete generation pipeline and returns an in-memory RenderResult."""
         if config.width <= 0 or config.height <= 0:
@@ -255,143 +351,54 @@ class WallpaperPipeline:
         trap_weight = resolve_value(config.trap_weight, "trap_weight", lambda: 0.35)
         channel_offset = resolve_value(config.channel_offset, "channel_offset", lambda: 0.0)
 
-        # Color generation
-        if config.colors:
-            base_colors = list(config.colors)
-        elif config.preset in THEME_FALLBACK_PALETTES:
-            base_colors = list(THEME_FALLBACK_PALETTES[config.preset])
-        elif preset_data:
-            count = None if preset_data.get("palette_families") else (complexity // 2 if config.complexity else None)
-            base_colors = self.preset_engine.generate_palette(
-                preset_data, count=count, family_index=active_seed
-            )
-        else:
-            num_colors = max(2, min(5, complexity // 2))
-            base_colors = self._sample_dynamic_palette(num_colors)
-
-        while len(base_colors) < 2:
-            base_colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
-
-        # Harmonization precedence: explicit config > preset override > theory fallback
+        # Resolve and harmonize palette
+        base_colors = self._resolve_palette(config, preset_data, complexity, active_seed)
         harmonize = resolve_value(config.harmonize, "harmonize", lambda: None)
         if harmonize not in (None, "none", "nothing", "theory", "perceptual"):
             raise PipelineConfigurationError(f"Unknown harmonizer '{harmonize}'.")
         colors_were_specified = bool(config.colors or config.preset)
+        final_colors = self._harmonize_palette(base_colors, harmonize, preset_data, colors_were_specified)
 
-        if harmonize == "none":
-            final_colors = base_colors
-        elif harmonize == "nothing":
-            final_colors = StyleHarmonizer.adjust_for_nothing(base_colors)
-        elif harmonize in ("theory", "perceptual"):
-            bounds = preset_data.get("harmonization", {})
-            harmony_mode = bounds.get("mode", "analogous") if harmonize == "theory" else "perceptual"
-            try:
-                final_colors = ColorTheoryHarmonizer.harmonize(
-                    base_colors,
-                    mode=harmony_mode,
-                    lightness_bounds=bounds.get("lightness_bounds", (0.12, 0.90)),
-                    chroma_bounds=bounds.get("chroma_bounds", (0.0, 0.25)),
-                )
-            except (TypeError, ValueError, AttributeError) as exc:
-                raise PipelineConfigurationError(f"Invalid harmonization bounds: {exc}") from exc
-        elif harmonize is None and not colors_were_specified:
-            if random.random() < 2 / 3:
-                final_colors = ColorTheoryHarmonizer.harmonize(base_colors)
-            else:
-                final_colors = base_colors
-        else:
-            final_colors = base_colors
-
-        # Gradient generation
-        if config.legacy_idw or engine_type == "idw":
-            gradient_engine = MeshGradient(width=config.width, height=config.height)
-            image = gradient_engine.generate(final_colors, p=2.5)
-        elif engine_type == "flow-field":
-            flow_engine = FlowFieldGradient(width=config.width, height=config.height)
-            image = flow_engine.generate(final_colors, complexity=complexity, seed=active_seed)
-        elif engine_type == "fluid-wave":
-            fluid_engine = FluidMeshGradient(width=config.width, height=config.height)
-            image = fluid_engine.generate(final_colors, complexity=complexity, fluid_mode=fluid_mode)
-        elif engine_type == "spline-wave":
-            spline_engine = SplineWaveGradient(width=config.width, height=config.height)
-            image = spline_engine.generate(final_colors, complexity=complexity, seed=active_seed)
-        elif engine_type == "domain-warp":
-            warp_engine = DomainWarpGradient(width=config.width, height=config.height)
-            image = warp_engine.generate(
-                final_colors,
-                complexity=complexity,
-                warp_strength=warp_strength,
-                seed=active_seed,
-            )
-        elif engine_type in ("rbf", "radial-basis"):
-            rbf_engine = RadialBasisGradient(width=config.width, height=config.height)
-            image = rbf_engine.generate(
-                final_colors,
-                complexity=complexity,
-                warp_strength=warp_strength,
-                ambient_weight=ambient_weight,
-                dispersion=dispersion,
-                seed=active_seed,
-            )
-        elif engine_type == "topographic":
-            topo_engine = TopographicGradient(width=config.width, height=config.height)
-            image = topo_engine.generate(
-                final_colors,
-                complexity=complexity,
-                warp_strength=warp_strength,
-                seed=active_seed,
-            )
-        elif engine_type == "fractal":
-            fractal_engine = FractalFieldGradient(width=config.width, height=config.height)
-            image = fractal_engine.generate(
-                final_colors,
-                complexity=complexity,
-                fractal_type=fractal_type,
-                zoom=fractal_zoom,
-                center=fractal_center,
-                angle=fractal_angle,
-                phase_offset=phase_offset,
-                frequency=frequency,
-                trap_weight=trap_weight,
-                channel_offset=channel_offset,
-                seed=active_seed,
-            )
-        else:
-            simplex_engine = SimplexMeshGradient(width=config.width, height=config.height)
-            image = simplex_engine.generate(
-                final_colors, complexity=complexity, fluid_mode=fluid_mode, seed=active_seed
-            )
+        # Gradient synthesis
+        image = render_gradient(
+            engine_type,
+            width=config.width,
+            height=config.height,
+            colors=final_colors,
+            complexity=complexity,
+            fluid_mode=fluid_mode,
+            warp_strength=warp_strength,
+            ambient_weight=ambient_weight,
+            dispersion=dispersion,
+            fractal_type=fractal_type,
+            fractal_zoom=fractal_zoom,
+            fractal_center=fractal_center,
+            fractal_angle=fractal_angle,
+            phase_offset=phase_offset,
+            frequency=frequency,
+            trap_weight=trap_weight,
+            channel_offset=channel_offset,
+            seed=active_seed,
+            legacy_idw=config.legacy_idw,
+        )
 
         base_image = image.copy() if config.capture_base_image else None
 
-        # Filter pass
-        if dots > 0.0:
-            image = WallpaperFilters.apply_dot_matrix(
-                image, spacing=dots_spacing, intensity=dots, mode=dots_mode
-            )
-
-        if contours > 0.0:
-            image = WallpaperFilters.apply_contour_lines(
-                image,
-                levels=contour_levels,
-                line_width=contour_width,
-                intensity=contours,
-                mode=contour_mode,
-            )
-
-        if glass_param:
-            image = WallpaperFilters.apply_frosted_glass(image, blur_radius=60, noise_amount=0.15)
-
-        if chromatic_aberration > 0.0:
-            image = WallpaperFilters.apply_chromatic_aberration(
-                image, strength=chromatic_aberration
-            )
-
-        if noise > 0.0:
-            image = WallpaperFilters.apply_film_grain(image, amount=noise)
-
-        if vignette > 0.0:
-            image = WallpaperFilters.apply_vignette(image, strength=vignette)
+        # Filter post-processing
+        image = self._apply_filters(
+            image,
+            dots=dots,
+            dots_spacing=dots_spacing,
+            dots_mode=dots_mode,
+            contours=contours,
+            contour_levels=contour_levels,
+            contour_width=contour_width,
+            contour_mode=contour_mode,
+            glass=glass_param,
+            chromatic_aberration=chromatic_aberration,
+            noise=noise,
+            vignette=vignette,
+        )
 
         color_hexes = [f"#{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors]
 
