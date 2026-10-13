@@ -1,0 +1,28 @@
+{
+    "name": "Sleek",
+    "description": "Luminous, ultra-premium generative palettes. Dark anchors with screaming bright neon accents and a frosted glass finish.",
+    "color_space": "oklch",
+    "color_count": { "type": "uniform_int", "min": 3, "max": 4 },
+    "palette_structure": [
+        {
+            "role": "grounding_anchor",
+            "hue": {"type": "uniform", "min": 0.0, "max": 1.0},
+            "lightness": {"type": "gaussian", "mu": 0.15, "sigma": 0.05, "clip": [0.05, 0.25]},
+            "chroma": {"type": "gaussian", "mu": 0.4, "sigma": 0.1, "clip": [0.2, 0.6]}
+        },
+        {
+            "role": "accent_core",
+            "hue": {"type": "uniform", "min": 0.0, "max": 1.0},
+            "lightness": {"type": "gaussian", "mu": 0.65, "sigma": 0.08, "clip": [0.55, 0.85]},
+            "chroma": {"type": "gaussian", "mu": 0.85, "sigma": 0.1, "clip": [0.7, 1.0]}
+        }
+    ],
+    "overrides": {
+        "engine": "fluid-wave",
+        "complexity": 5,
+        "noise": 0.04,
+        "vignette": 0.25,
+        "dots": 0.0,
+        "glass": true
+    }
+}

@@ -1,6 +1,6 @@
 # Wallpaper Generator
 
-A procedural wallpaper generator driven by a statistical preset engine. Each preset defines color palettes as probability distributions (Gaussian, Beta, Bimodal) in HLS color space — every run is statistically unique but aesthetically coherent. Outputs fluid mesh-gradient wallpapers at any resolution.
+A procedural wallpaper generator driven by a statistical preset engine. Each preset defines color palettes as probability distributions in HLS or perceptual OKLCH color space—every run is statistically unique but aesthetically coherent.
 
 ## Key Features
 
@@ -14,7 +14,7 @@ A procedural wallpaper generator driven by a statistical preset engine. Each pre
 ## Installation
 
 1. Ensure Python 3.12+ is installed.
-2. Clone this repository and navigate to the folder.
+2. Install `uv`, clone this repository, and navigate to the folder.
 
 ### Option 1: Global Install (Recommended)
 
@@ -27,8 +27,8 @@ Installs dependencies and creates a global `wp-generator` command. Requires sudo
 ### Option 2: Manual
 
 ```bash
-pip install -r requirements.txt
-python main.py --preset cupertino
+uv sync
+uv run python main.py --preset cupertino
 ```
 
 ## Usage
@@ -40,7 +40,7 @@ python main.py --preset cupertino
 python main.py --preset cupertino
 
 # Target a specific display
-python main.py --preset cyberpunk --device 4k
+uv run python main.py --preset cyberpunk --res 4k
 
 # Custom hex colors
 python main.py --colors "#FF5000" "#1A1A2E"
@@ -62,6 +62,9 @@ python main.py --preset nothing --seed 42
 | `ink` | Monochromatic near-black, minimal chroma |
 | `nothing` | Industrial dark with high-contrast accent and dot-matrix overlay |
 | `pastel` | Light anchors, desaturated accents |
+| `afterglow` | Vivid reference-derived violet, cyan, coral, orange, and magenta fields |
+| `sleek` | Luminous neon accents on dark anchor with frosted glass texture |
+| `nocturne` | Deep richly-tinted grounding anchors paired with luminous twilight and ember accents |
 
 ### Device Presets (`--device`)
 

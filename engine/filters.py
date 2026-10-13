@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.ndimage
 from PIL import Image, ImageFilter
 
 class WallpaperFilters:
@@ -55,43 +56,175 @@ class WallpaperFilters:
         return Image.alpha_composite(image.convert("RGBA"), overlay_img)
 
     @staticmethod
-    def apply_noise(image, amount=0.05):
+    def apply_dither(image, amount=0.05):
         """
-        Adds monochromatic grain to the image to prevent banding and add texture.
+        Adds bounded monochromatic dither before final PNG quantization.
+        Scales amplitude in deep shadows/highlights to prevent clipping artifacts (black dots).
         """
         img_arr = np.array(image).astype(np.float32)
         channels = img_arr.shape[2]
+
+        amplitude = min(15.0, 255.0 * max(0.0, amount))
+        dither = np.random.uniform(-amplitude, amplitude, img_arr.shape[:2])
         
-        # Create noise for the RGB channels only, ignore Alpha.
-        # Scale down amount significantly so 1.0 isn't pure white noise,
-        # making it a subtle film grain even at higher settings.
-        noise = np.random.normal(0, 255 * amount * 0.2, img_arr.shape[:2])
-        noise_stack = [noise] * 3
+        lum = np.mean(img_arr[..., :3], axis=2) / 255.0
+        # Smooth roll-off near 0 and 1 to avoid clipping dots
+        mask = 4.0 * lum * (1.0 - lum)
+        mask = np.clip(mask, 0.2, 1.0)
+        
+        dither_masked = dither * mask
+        dither_stack = [dither_masked] * 3
         if channels == 4:
-            noise_stack.append(np.zeros(img_arr.shape[:2])) # No noise on alpha
-        
-        noise = np.stack(noise_stack, axis=-1)
-        
-        res = img_arr + noise
+            dither_stack.append(np.zeros(img_arr.shape[:2]))
+
+        res = img_arr + np.stack(dither_stack, axis=-1)
         res = np.clip(res, 0, 255).astype(np.uint8)
-        
         return Image.fromarray(res)
 
     @staticmethod
-    def apply_frosted_glass(image, blur_radius=50, noise_amount=0.02):
+    def apply_film_grain(image, amount=0.08):
         """
-        Simulates the 'Glass' look by blurring and adding subtle noise.
-        Uses downsampling for performance on large images.
+        Applies multi-scale photographic film grain with luminance roll-off.
+        Combines fine high-frequency noise with organic clumpiness visible on high-DPI displays.
+        :param amount: Grain intensity (0.0 to 1.0).
         """
-        # Downsample for speed
+        if amount <= 0.0:
+            return image.copy()
+
+        img_arr = np.asarray(image).astype(np.float32)
+        h, w = img_arr.shape[:2]
+        channels = img_arr.shape[2] if img_arr.ndim == 3 else 1
+
+        sigma = 255.0 * amount
+        fine_grain = np.random.normal(0.0, sigma * 0.7, (h, w)).astype(np.float32)
+
+        down_factor = 2
+        down_h, down_w = max(1, h // down_factor), max(1, w // down_factor)
+        coarse_small = np.random.normal(0.0, sigma * 0.6, (down_h, down_w)).astype(np.float32)
+        coarse_grain = scipy.ndimage.zoom(
+            coarse_small, (h / down_h, w / down_w), order=1
+        )[:h, :w]
+
+        combined_grain = fine_grain + coarse_grain
+
+        rgb = img_arr[..., :3] if channels >= 3 else img_arr
+        lum = np.mean(rgb, axis=2 if channels >= 3 else -1) / 255.0
+        # Preserve midtone grain while softening extreme shadows and specular highlights
+        lum_weight = 4.0 * lum * (1.0 - lum)
+        lum_weight = np.clip(lum_weight, 0.35, 1.0)
+
+        modulated_grain = combined_grain * lum_weight
+
+        out = img_arr.copy()
+        if channels >= 3:
+            for c in range(3):
+                out[..., c] += modulated_grain
+        else:
+            out += modulated_grain
+
+        return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
+    apply_noise = apply_film_grain
+
+    @staticmethod
+    def apply_chromatic_aberration(image, strength=0.012, mode="radial"):
+        """
+        Applies optical chromatic aberration (color fringing).
+        Displaces Red and Blue channels radially or directionally while Green remains fixed.
+        :param strength: Magnitude of channel displacement (0.0 to 0.05).
+        :param mode: 'radial' (lens falloff from optical center) or 'directional'.
+        """
+        if strength <= 0.0:
+            return image.copy()
+
+        img_arr = np.asarray(image).astype(np.float32)
+        h, w = img_arr.shape[:2]
+        channels = img_arr.shape[2] if img_arr.ndim == 3 else 1
+
+        if channels < 3:
+            return image.copy()
+
+        y_coords, x_coords = np.mgrid[0:h, 0:w].astype(np.float32)
+
+        if mode == "directional":
+            shift_px = strength * min(w, h)
+            rx = x_coords + shift_px
+            ry = y_coords
+            bx = x_coords - shift_px
+            by = y_coords
+        else:
+            cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+            norm_x = (x_coords - cx) / cx
+            norm_y = (y_coords - cy) / cy
+            r_sq = norm_x**2 + norm_y**2
+            disp = strength * r_sq
+
+            rx = x_coords + norm_x * cx * disp
+            ry = y_coords + norm_y * cy * disp
+            bx = x_coords - norm_x * cx * disp
+            by = y_coords - norm_y * cy * disp
+
+        red_coords = np.array([ry, rx])
+        blue_coords = np.array([by, bx])
+
+        r_channel = scipy.ndimage.map_coordinates(
+            img_arr[..., 0], red_coords, order=1, mode="nearest"
+        )
+        b_channel = scipy.ndimage.map_coordinates(
+            img_arr[..., 2], blue_coords, order=1, mode="nearest"
+        )
+
+        out = img_arr.copy()
+        out[..., 0] = r_channel
+        out[..., 2] = b_channel
+
+        return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
+    @staticmethod
+    def apply_vignette(image, strength=0.08):
+        """Apply a restrained radial edge falloff while preserving image mode."""
+        if strength <= 0:
+            return image.copy()
+
+        img_arr = np.asarray(image).astype(np.float32)
+        height, width = img_arr.shape[:2]
+        y = np.linspace(-1.0, 1.0, height, dtype=np.float32)[:, None]
+        x = np.linspace(-1.0, 1.0, width, dtype=np.float32)[None, :]
+        distance_sq = (x * x + y * y) / 2.0
+        falloff = 1.0 - np.clip(strength, 0.0, 1.0) * distance_sq
+        img_arr[..., :3] *= falloff[..., None]
+        return Image.fromarray(np.clip(img_arr, 0, 255).astype(np.uint8))
+
+    @staticmethod
+    def apply_frosted_glass(image, blur_radius=30, noise_amount=0.15):
+        """
+        Simulates a premium frosted glass texture across the entire image.
+        Uses a diffusion blur followed by a specular frost noise overlay.
+        """
         width, height = image.size
-        small_width = max(1, width // 4)
-        small_height = max(1, height // 4)
-        small = image.resize((small_width, small_height), Image.NEAREST)
-        blurred = small.filter(ImageFilter.GaussianBlur(radius=blur_radius // 4))
-        # Upscale back to original resolution
+        # Diffusion blur (downsample for performance and softer blur)
+        small_width = max(1, width // 2)
+        small_height = max(1, height // 2)
+        small = image.resize((small_width, small_height), Image.BILINEAR)
+        blurred = small.filter(ImageFilter.GaussianBlur(radius=blur_radius // 2))
         final = blurred.resize((width, height), Image.LANCZOS)
-        return WallpaperFilters.apply_noise(final, amount=noise_amount)
+
+        img_arr = np.array(final).astype(np.float32) / 255.0
+
+        # Specular frost noise
+        frost_noise = np.random.normal(0.6, noise_amount * 0.2, img_arr.shape[:2])
+        frost_noise = np.clip(frost_noise, 0.0, 1.0)
+
+        # Screen blend mode for the frost (makes it luminous and translucent)
+        frost_stack = np.stack([frost_noise] * 3, axis=-1)
+
+        # Blend factor for the frost
+        blend = 0.15 * noise_amount / 0.15
+        res_rgb = 1.0 - (1.0 - img_arr[..., :3]) * (1.0 - frost_stack * blend)
+
+        res = img_arr.copy()
+        res[..., :3] = res_rgb
+        return Image.fromarray(np.clip(res * 255.0, 0, 255).astype(np.uint8))
 
 
 # Backward-compatible alias for older imports.

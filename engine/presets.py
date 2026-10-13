@@ -88,8 +88,23 @@ class PresetEngine:
             
         return val
 
-    def generate_palette(self, preset: Dict[str, Any], count: int = None) -> List[tuple]:
+    def generate_palette(self, preset: Dict[str, Any], count: int = None, family_index: int = None) -> List[tuple]:
         """Generates a color palette based on preset distribution rules."""
+        palette_families = preset.get("palette_families", [])
+        if palette_families:
+            family = (
+                palette_families[family_index % len(palette_families)]
+                if family_index is not None
+                else random.choice(palette_families)
+            )
+            colors = [
+                tuple(int(color.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+                for color in family
+            ]
+            if count is None:
+                return colors
+            return [colors[index % len(colors)] for index in range(count)]
+
         if count is None:
             count_conf = preset.get("color_count", {"min": 2, "max": 5})
             count = random.randint(count_conf.get("min", 2), count_conf.get("max", 5))
