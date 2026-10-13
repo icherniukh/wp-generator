@@ -255,7 +255,7 @@ class WallpaperPipeline:
         elif config.preset in THEME_FALLBACK_PALETTES:
             base_colors = list(THEME_FALLBACK_PALETTES[config.preset])
         elif preset_data:
-            count = complexity // 2 if config.complexity else None
+            count = None if preset_data.get("palette_families") else (complexity // 2 if config.complexity else None)
             base_colors = self.preset_engine.generate_palette(
                 preset_data, count=count, family_index=active_seed
             )
@@ -278,9 +278,11 @@ class WallpaperPipeline:
             final_colors = StyleHarmonizer.adjust_for_nothing(base_colors)
         elif harmonize in ("theory", "perceptual"):
             bounds = preset_data.get("harmonization", {})
+            harmony_mode = bounds.get("mode", "analogous") if harmonize == "theory" else "perceptual"
             try:
                 final_colors = ColorTheoryHarmonizer.harmonize(
                     base_colors,
+                    mode=harmony_mode,
                     lightness_bounds=bounds.get("lightness_bounds", (0.12, 0.90)),
                     chroma_bounds=bounds.get("chroma_bounds", (0.0, 0.25)),
                 )

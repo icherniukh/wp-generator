@@ -106,5 +106,23 @@ class TestPresetEngine(unittest.TestCase):
         colors = self.engine.generate_palette(data, count=3)
         self.assertEqual(len(colors), 3)
 
+    def test_fractal_preset_has_curated_harmonic_families(self):
+        from engine.colors import evaluate_palette_contrast
+        data = self.engine.load_preset("fractal")
+        self.assertEqual(data["color_space"], "oklch")
+        self.assertIn("palette_families", data)
+        self.assertEqual(len(data["palette_families"]), 12)
+        for family in data["palette_families"]:
+            self.assertEqual(len(family), 4)
+            rgb = [tuple(int(c.lstrip("#")[j:j+2], 16) for j in (0, 2, 4)) for c in family]
+            contrast = evaluate_palette_contrast(rgb)
+            self.assertTrue(contrast.passes, f"Family {family} failed contrast with {contrast.ratios}")
+
+    def test_procedural_harmonic_progression_with_relative_accents(self):
+        colors = self.engine.generate_palette(self.mock_preset, count=4)
+        self.assertEqual(len(colors), 4)
+        self.assertTrue(all(isinstance(c, tuple) and len(c) == 3 for c in colors))
+
+
 if __name__ == '__main__':
     unittest.main()

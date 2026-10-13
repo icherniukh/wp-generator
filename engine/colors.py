@@ -306,32 +306,30 @@ class ColorTheoryHarmonizer:
 
         offsets = cls._HUE_OFFSETS[mode]
 
+        # Convert input colors to OKLCH
+        oklchs = [rgb_to_oklch(c) for c in colors]
         # Find seed hue from the most chromatic input color
-        lchs = [lab_to_lch(rgb_to_lab(c)) for c in colors]
-        seed_hue = max(lchs, key=lambda lch: lch[1])[2]
+        seed_hue = max(oklchs, key=lambda lch: lch[1])[2]
 
         # Sort inputs by lightness so output preserves dark/light character
-        sorted_lchs = sorted(lchs, key=lambda lch: lch[0])
+        sorted_oklchs = sorted(oklchs, key=lambda lch: lch[0])
 
         result = []
-        for i, lch in enumerate(sorted_lchs):
+        for i, lch in enumerate(sorted_oklchs):
             L, C, _ = lch
-            # Determine offset based on i
-            # If there are more colors than offsets, we vary Lightness and Chroma to create tonal variations
             base_offset = offsets[i % len(offsets)]
-            new_H = (seed_hue + base_offset) % 360
-            
+            new_H = (seed_hue + base_offset) % 360.0
+
             # Tonal variation for N > len(offsets)
             cycle = i // len(offsets)
             if cycle > 0:
-                L = max(10, min(90, L + (cycle * 10 * (1 if cycle % 2 == 0 else -1))))
-                new_C = max(C * (0.8 ** cycle), 10.0)
+                L = np.clip(L + (cycle * 0.08 * (1 if cycle % 2 == 0 else -1)), lightness_bounds[0], lightness_bounds[1])
+                new_C = np.clip(C * (0.85 ** cycle), chroma_bounds[0], chroma_bounds[1])
             else:
-                new_C = max(C, 10.0)
-                
-            lab_new = lch_to_lab(np.array([L, new_C, new_H]))
-            rgb_new = lab_to_rgb(lab_new)
-            result.append(tuple(int(v) for v in (np.clip(rgb_new, 0, 1) * 255).astype(int)))
+                L = np.clip(L, lightness_bounds[0], lightness_bounds[1])
+                new_C = np.clip(max(C, 0.08), chroma_bounds[0], chroma_bounds[1])
+
+            result.append(oklch_to_rgb_clamped([L, new_C, new_H]))
 
         return result
 

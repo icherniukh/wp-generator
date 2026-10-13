@@ -128,10 +128,24 @@ class PresetEngine:
 
         # 2. Generate Accents
         accent_rule = next((r for r in structure if r.get("role") == "accent_core"), structure[-1])
-        for _ in range(count - 1):
-            hue_conf = accent_rule.get("hue", {})
-            if hue_conf.get("type") == "relative" and hue_conf.get("target") == "grounding_anchor":
-                offset_deg = random.gauss(hue_conf.get("mu_offset", 0), hue_conf.get("sigma", 15))
+        n_accents = count - 1
+        hue_conf = accent_rule.get("hue", {})
+        is_relative = hue_conf.get("type") == "relative" and hue_conf.get("target") == "grounding_anchor"
+
+        if is_relative and n_accents > 1:
+            base_offset = random.gauss(hue_conf.get("mu_offset", 0), max(5.0, hue_conf.get("sigma", 15) * 0.4))
+            step = random.choice([24.0, 30.0, 36.0, -24.0, -30.0, -36.0])
+        else:
+            base_offset = hue_conf.get("mu_offset", 0)
+            step = 0.0
+
+        for idx in range(n_accents):
+            if is_relative:
+                if n_accents > 1:
+                    offset_deg = base_offset + idx * step
+                else:
+                    offset_deg = random.gauss(hue_conf.get("mu_offset", 0), hue_conf.get("sigma", 15))
+
                 if use_oklch:
                     h = anchor_hue
                     h_offset = offset_deg
@@ -144,6 +158,11 @@ class PresetEngine:
 
             l = self._sample_distribution(accent_rule.get("lightness", {}))
             c = self._sample_distribution(accent_rule.get("chroma", {}))
+            if n_accents > 1:
+                t = (idx + 1) / n_accents
+                l = max(0.0, min(1.0, l * (0.88 + 0.24 * t)))
+                c = max(0.0, min(1.0, c * (0.82 + 0.28 * t)))
+
             if use_oklch:
                 colors.append(oklch_from_preset(h, l, c, h_deg_offset=h_offset))
             else:
