@@ -177,7 +177,56 @@ class TestFractalFieldGradient(unittest.TestCase):
         np.testing.assert_array_equal(np.asarray(img1), np.asarray(img2))
         self.assertFalse(np.array_equal(np.asarray(img1), np.asarray(img_julia)))
 
+    def test_fractal_focal_center_and_angle_alter_output(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=80, height=60)
+        colors = [(10, 15, 25), (220, 90, 130), (40, 160, 210)]
+
+        img_center_a = engine.generate(colors, fractal_type="fluid", center=(0.0, 0.0), angle=0.0, seed=42)
+        img_center_b = engine.generate(colors, fractal_type="fluid", center=(2.5, -1.8), angle=0.0, seed=42)
+        img_angle_c = engine.generate(colors, fractal_type="fluid", center=(0.0, 0.0), angle=1.57, seed=42)
+
+        self.assertFalse(np.array_equal(np.asarray(img_center_a), np.asarray(img_center_b)))
+        self.assertFalse(np.array_equal(np.asarray(img_center_a), np.asarray(img_angle_c)))
+
+    def test_fractal_macro_zoom_and_offscreen_focal_point(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=100, height=60)
+        colors = [(15, 20, 35), (230, 110, 80), (60, 180, 210)]
+
+        # Off-screen center and macro radius zoom
+        img = engine.generate(
+            colors,
+            fractal_type="fluid",
+            zoom=0.45,
+            center=(3.0, -2.5),
+            angle=0.785,
+            seed=123,
+        )
+        self.assertEqual(img.size, (100, 60))
+        arr = np.asarray(img)
+        self.assertEqual(arr.shape, (60, 100, 3))
+        self.assertFalse(np.isnan(arr).any())
+        self.assertGreater(arr.std(), 5.0)
+
+    def test_fractal_random_archetypes_generate_valid_variety(self):
+        from engine.gradient import FractalFieldGradient
+        engine = FractalFieldGradient(width=64, height=48)
+        colors = [(20, 30, 45), (210, 80, 120), (50, 190, 170)]
+
+        images = []
+        for s in range(5):
+            img = engine.generate(colors, fractal_type="fluid", seed=1000 + s)
+            images.append(np.asarray(img))
+            self.assertEqual(img.size, (64, 48))
+
+        # Ensure all distinct seeds produce distinct outputs
+        for i in range(len(images)):
+            for j in range(i + 1, len(images)):
+                self.assertFalse(np.array_equal(images[i], images[j]))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

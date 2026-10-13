@@ -664,7 +664,20 @@ class FractalFieldGradient:
         w = max(16, int(self.width * scale_factor))
         aspect = w / h
 
-        eff_zoom = float(zoom) if zoom is not None else random.uniform(1.2, 4.0)
+        if zoom is not None:
+            eff_zoom = float(zoom)
+        else:
+            if fractal_type == "mandelbrot":
+                eff_zoom = random.uniform(8.0, 35.0)
+            else:
+                radius_tier = random.choices(["macro", "medium", "detail"], weights=[0.45, 0.40, 0.15])[0]
+                if radius_tier == "macro":
+                    eff_zoom = random.uniform(0.40, 0.85)
+                elif radius_tier == "medium":
+                    eff_zoom = random.uniform(0.85, 1.75)
+                else:
+                    eff_zoom = random.uniform(1.75, 3.20)
+
         eff_angle = float(angle) if angle is not None else random.uniform(0.0, 2.0 * np.pi)
 
         if center is not None:
@@ -680,15 +693,29 @@ class FractalFieldGradient:
                     (0.275, 0.0),
                 ]
                 cx, cy = random.choice(mandel_points)
-                if zoom is None:
-                    eff_zoom = random.uniform(8.0, 35.0)
             else:
-                cx = random.uniform(-0.15, 0.15)
-                cy = random.uniform(-0.15, 0.15)
+                focal_archetype = random.choices(["offscreen", "corner", "centered"], weights=[0.45, 0.35, 0.20])[0]
+                if focal_archetype == "offscreen":
+                    theta_off = random.uniform(0.0, 2.0 * np.pi)
+                    dist_off = random.uniform(1.4, 2.8) / eff_zoom
+                    cx = dist_off * aspect * np.cos(theta_off)
+                    cy = dist_off * np.sin(theta_off)
+                elif focal_archetype == "corner":
+                    sign_x = random.choice([-1.0, 1.0])
+                    sign_y = random.choice([-1.0, 1.0])
+                    cx = sign_x * random.uniform(0.40, 0.95) * aspect / eff_zoom
+                    cy = sign_y * random.uniform(0.35, 0.90) / eff_zoom
+                else:
+                    cx = random.uniform(-0.35, 0.35) * aspect / eff_zoom
+                    cy = random.uniform(-0.35, 0.35) / eff_zoom
 
         y = np.linspace(-1.3 / eff_zoom, 1.3 / eff_zoom, h, dtype=np.float32)
         x = np.linspace(-1.3 * aspect / eff_zoom, 1.3 * aspect / eff_zoom, w, dtype=np.float32)
         xv, yv = np.meshgrid(x, y)
+
+        dx = xv - cx
+        dy = yv - cy
+        rf = np.sqrt(dx**2 + dy**2)
 
         warp_amp = 0.18
         qx = np.sin(yv * 2.6 + 1.2) * np.cos(xv * 2.0)
@@ -696,8 +723,8 @@ class FractalFieldGradient:
         xv_warped = xv + warp_amp * qx
         yv_warped = yv + warp_amp * qy
 
-        rot_x = xv_warped * np.cos(eff_angle) - yv_warped * np.sin(eff_angle) + cx
-        rot_y = xv_warped * np.sin(eff_angle) + yv_warped * np.cos(eff_angle) + cy
+        rot_x = (xv_warped - cx) * np.cos(eff_angle) - (yv_warped - cy) * np.sin(eff_angle)
+        rot_y = (xv_warped - cx) * np.sin(eff_angle) + (yv_warped - cy) * np.cos(eff_angle)
         z_grid = rot_x + 1j * rot_y
 
         safe_complexity = max(1, int(complexity))
@@ -710,7 +737,7 @@ class FractalFieldGradient:
         if fractal_type == "fluid":
             def fbm_field(x_grid, y_grid, octaves=3, lacunarity=1.8, gain=0.45):
                 val = np.zeros_like(x_grid)
-                freq = 0.8
+                freq = 0.65
                 amp = 1.0
                 for _ in range(octaves):
                     theta = random.uniform(0, np.pi)
@@ -722,16 +749,21 @@ class FractalFieldGradient:
                     amp *= gain
                 return val
 
-            q_x = fbm_field(xv, yv, octaves=2)
-            q_y = fbm_field(xv + 4.2, yv + 1.3, octaves=2)
+            q_x = fbm_field(rot_x, rot_y, octaves=2)
+            q_y = fbm_field(rot_x + 3.8, rot_y + 1.5, octaves=2)
 
-            r_x = fbm_field(xv + 2.0 * q_x + 1.5, yv + 2.0 * q_y + 3.2, octaves=2)
-            r_y = fbm_field(xv + 2.0 * q_x + 5.1, yv + 2.0 * q_y + 1.8, octaves=2)
+            r_x = fbm_field(rot_x + 1.8 * q_x + 1.4, rot_y + 1.8 * q_y + 2.8, octaves=2)
+            r_y = fbm_field(rot_x + 1.8 * q_x + 4.5, rot_y + 1.8 * q_y + 1.6, octaves=2)
 
-            ambient_sweep = 0.5 * xv + 0.4 * yv
-            fluid_folds = fbm_field(xv + 2.5 * r_x, yv + 2.5 * r_y, octaves=max(2, min(5, safe_complexity)))
+            radial_freq = random.uniform(0.35, 0.80)
+            radial_carrier = 0.5 + 0.5 * np.cos(rf * radial_freq)
 
-            field = 0.45 * ambient_sweep + 0.55 * fluid_folds
+            sweep_angle = eff_angle + random.uniform(-0.5, 0.5)
+            ambient_sweep = 0.5 * (np.cos(sweep_angle) * (xv / aspect) + np.sin(sweep_angle) * yv)
+
+            fluid_folds = fbm_field(rot_x + 2.2 * r_x, rot_y + 2.2 * r_y, octaves=max(2, min(5, safe_complexity)))
+
+            field = 0.30 * radial_carrier + 0.25 * ambient_sweep + 0.45 * fluid_folds
             f_min, f_max = field.min(), field.max()
             u_base = (field - f_min) / max(1e-5, (f_max - f_min))
 
