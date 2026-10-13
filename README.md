@@ -7,7 +7,7 @@ A procedural wallpaper generator driven by a statistical preset engine. Each pre
 - **Statistical Preset Engine:** Presets encode color aesthetics as HLS distributions. The engine samples them at generation time — no two outputs are identical, but all stay within the preset's aesthetic envelope.
 - **Fluid Mesh Gradient:** Bicubic mesh interpolation for smooth, high-quality gradients.
 - **Style Filters:** Optional dot-matrix overlays and film grain, configurable per preset or via CLI overrides.
-- **Color Harmonizers:** CIELAB-based Nothing-inspired mapping or color-theory harmonization.
+- **Color Harmonizers:** Hue-preserving OKLCH lightness/chroma adjustment, with a Nothing-inspired profile for muted anchors and vivid accents.
 - **Device Presets:** Common resolutions built-in — MacBook, 4K, ultrawide, mobile.
 - **Screen Sampler:** Grab colors directly from the screen at the mouse cursor (macOS).
 
@@ -89,6 +89,37 @@ Run `--help-all` for advanced flags including `--complexity`, `--noise`, `--dots
 ```bash
 python main.py --help-all
 ```
+
+Use `--harmonize perceptual` to preserve each input hue and palette order while
+bounding OKLCH lightness to 0.12–0.90 and chroma to 0–0.25. `--harmonize theory`
+uses the same behavior for compatibility. `nothing` applies its muted/vivid
+profile; `none` keeps the input palette. Explicit classical modes such as
+`ColorTheoryHarmonizer.harmonize(colors, mode="triadic")` remain available in Python.
+Gamut mapping can reduce chroma further; 8-bit RGB conversion introduces small
+rounding differences.
+
+Presets can set their own bounds when selecting perceptual harmonization:
+
+```json
+{
+  "harmonization": {
+    "lightness_bounds": [0.2, 0.8],
+    "chroma_bounds": [0.0, 0.16]
+  },
+  "overrides": { "harmonize": "perceptual" }
+}
+```
+
+Chroma bounds use actual OKLCH units; palette distribution `chroma` values retain
+their existing normalized 0–1 scale.
+
+Each render reports the contrast of every accent against the first palette color
+(the anchor). CLI output shows the ratios and whether every pair meets the 4.5:1
+target. Web GET/POST responses expose `X-Render-Contrast-Ratios` and
+`X-Render-Contrast-Pass`, and accept `harmonize=perceptual` or the corresponding
+JSON field. The calculation follows [WCAG sRGB relative luminance](https://www.w3.org/TR/WCAG22/#dfn-relative-luminance)
+and compares unrounded ratios. It checks solid palette colors; the blended,
+filtered wallpaper needs separate evaluation for any text placed over it.
 
 ### Preview Mechanism (FX Testing)
 
