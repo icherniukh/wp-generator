@@ -208,20 +208,20 @@ class WallpaperFilters:
         small = image.resize((small_width, small_height), Image.BILINEAR)
         blurred = small.filter(ImageFilter.GaussianBlur(radius=blur_radius // 2))
         final = blurred.resize((width, height), Image.LANCZOS)
-        
+
         img_arr = np.array(final).astype(np.float32) / 255.0
-        
+
         # Specular frost noise
         frost_noise = np.random.normal(0.6, noise_amount * 0.2, img_arr.shape[:2])
         frost_noise = np.clip(frost_noise, 0.0, 1.0)
-        
+
         # Screen blend mode for the frost (makes it luminous and translucent)
         frost_stack = np.stack([frost_noise] * 3, axis=-1)
-        
+
         # Blend factor for the frost
         blend = 0.15 * noise_amount / 0.15
         res_rgb = 1.0 - (1.0 - img_arr[..., :3]) * (1.0 - frost_stack * blend)
-        
+
         res = img_arr.copy()
         res[..., :3] = res_rgb
         return Image.fromarray(np.clip(res * 255.0, 0, 255).astype(np.uint8))

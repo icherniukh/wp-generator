@@ -15,6 +15,11 @@ SCREEN_PRESETS = DEVICE_RESOLUTIONS
 hex_to_rgb = parse_hex_color
 
 
+def default_output_path(preset_name, seed, directory="."):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return os.path.join(directory, f"wp_{preset_name}_{timestamp}_{seed}.png")
+
+
 def generate(args, nothing_style, seed):
     # Resolve resolution from --res or --device
     if args.res:
@@ -64,15 +69,10 @@ def generate(args, nothing_style, seed):
     if args.output is not None:
         output_path = args.output
     else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         preset_name = args.preset if getattr(args, "preset", None) else "custom"
-        out_dir = getattr(args, "out_dir", None)
-        filename = (
-            f"wp_{preset_name}_{timestamp}_{seed}.png"
-            if getattr(args, "count", 1) > 1
-            else f"wp_{preset_name}_{timestamp}.png"
+        output_path = default_output_path(
+            preset_name, seed, directory=getattr(args, "out_dir", None) or "."
         )
-        output_path = os.path.join(out_dir, filename) if out_dir else filename
 
     color_hex = " ".join(result.color_hexes[:3])
     if len(result.color_hexes) > 3:
@@ -80,8 +80,8 @@ def generate(args, nothing_style, seed):
     print(f"  seed={seed}  complexity={result.complexity}  noise={result.noise}  colors={color_hex}")
 
     output_dir = os.path.dirname(output_path)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
     if getattr(args, "preview_fx", False) and result.base_image:
         from PIL import Image, ImageDraw
