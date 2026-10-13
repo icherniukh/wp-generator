@@ -67,6 +67,8 @@ def generate(args, nothing_style, seed):
         channel_offset=args.channel_offset,
         fractal_type=args.fractal_type,
         fractal_zoom=args.fractal_zoom,
+        fractal_center=tuple(args.fractal_center) if getattr(args, "fractal_center", None) is not None else None,
+        fractal_angle=getattr(args, "fractal_angle", None),
         legacy_idw=bool(getattr(args, "legacy_idw", False)),
         seed=seed,
         capture_base_image=bool(getattr(args, "preview_fx", False)),
@@ -166,6 +168,8 @@ def main():
     engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
     engine_group.add_argument("--fractal-type", choices=["fluid", "julia", "mandelbrot", "orbit_trap"], default=None, help=adv_help("Fractal formula: fluid, julia, mandelbrot, or orbit_trap."))
     engine_group.add_argument("--fractal-zoom", type=float, default=None, help=adv_help("Fractal magnification zoom factor."))
+    engine_group.add_argument("--fractal-center", nargs=2, type=float, default=None, metavar=("CX", "CY"), help=adv_help("Fractal focal center coordinates (cx, cy)."))
+    engine_group.add_argument("--fractal-angle", type=float, default=None, help=adv_help("Fractal field rotation angle in radians."))
     engine_group.add_argument("--phase-offset", type=float, default=None, help=adv_help("Cyclic palette phase offset (0.0-1.0)."))
     engine_group.add_argument("--frequency", type=float, default=None, help=adv_help("Fractal palette frequency cycle multiplier."))
     engine_group.add_argument("--trap-weight", type=float, default=None, help=adv_help("Geometric orbit trap blending weight (0.0-1.0)."))

@@ -177,5 +177,36 @@ class TestWebAPI(unittest.TestCase):
             self.assertEqual(res.status_code, 422)
 
 
+    def test_render_fractal_center_and_angle_via_get_and_post(self):
+        parameters = {
+            "preset": "fractal",
+            "width": 100,
+            "height": 80,
+            "seed": 42,
+            "fractal_type": "fluid",
+            "fractal_zoom": 0.6,
+            "fractal_center_x": 1.5,
+            "fractal_center_y": -2.0,
+            "fractal_angle": 0.785,
+        }
+        get_res = self.client.get("/api/render", params=parameters)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertEqual(get_res.headers["x-render-engine"], "fractal")
+
+        post_payload = {
+            "preset": "fractal",
+            "width": 100,
+            "height": 80,
+            "seed": 42,
+            "fractal_type": "fluid",
+            "fractal_zoom": 0.6,
+            "fractal_center": [1.5, -2.0],
+            "fractal_angle": 0.785,
+        }
+        post_res = self.client.post("/api/render", json=post_payload)
+        self.assertEqual(post_res.status_code, 200)
+        self.assertEqual(post_res.headers["x-render-engine"], "fractal")
+
+
 if __name__ == "__main__":
     unittest.main()

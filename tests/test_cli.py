@@ -53,5 +53,21 @@ class TestPresetAndOutputResolution(unittest.TestCase):
                     image.verify()
 
 
+    def test_cli_fractal_center_and_angle_flags(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_file = Path(directory) / "test_fractal.png"
+            result = subprocess.run([
+                sys.executable, str(Path(__file__).resolve().parents[1] / "main.py"),
+                "--preset", "fractal", "--fractal-type", "fluid",
+                "--res", "64", "48", "--fractal-zoom", "0.7",
+                "--fractal-center", "1.5", "-2.0", "--fractal-angle", "0.785",
+                "--seed", "42", "--output", str(out_file),
+            ], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(out_file.exists())
+            with Image.open(out_file) as img:
+                self.assertEqual(img.size, (64, 48))
+
+
 if __name__ == "__main__":
     unittest.main()

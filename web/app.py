@@ -73,6 +73,8 @@ class RenderRequest(BaseModel):
     channel_offset: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
     fractal_type: Optional[Literal["fluid", "julia", "mandelbrot", "orbit_trap"]] = Field(default=None)
     fractal_zoom: Optional[float] = Field(default=None, gt=0.0)
+    fractal_center: Optional[Tuple[float, float]] = Field(default=None)
+    fractal_angle: Optional[float] = Field(default=None)
     seed: Optional[int] = Field(default=None)
 
 
@@ -165,10 +167,18 @@ async def render_get(
     channel_offset: Optional[float] = Query(default=None, ge=-1.0, le=1.0),
     fractal_type: Optional[Literal["fluid", "julia", "mandelbrot", "orbit_trap"]] = Query(default=None),
     fractal_zoom: Optional[float] = Query(default=None, gt=0.0),
+    fractal_center_x: Optional[float] = Query(default=None),
+    fractal_center_y: Optional[float] = Query(default=None),
+    fractal_angle: Optional[float] = Query(default=None),
 ) -> Response:
     """Renders wallpaper directly as a streaming PNG image response."""
     w, h = _resolve_dimensions(device, width, height)
     active_seed = seed if seed is not None else random.randint(0, 2_147_483_647)
+    fractal_center = (
+        (fractal_center_x, fractal_center_y)
+        if fractal_center_x is not None and fractal_center_y is not None
+        else None
+    )
 
     config = RenderConfiguration(
         width=w,
@@ -195,6 +205,8 @@ async def render_get(
         channel_offset=channel_offset,
         fractal_type=fractal_type,
         fractal_zoom=fractal_zoom,
+        fractal_center=fractal_center,
+        fractal_angle=fractal_angle,
         seed=active_seed,
     )
 
@@ -274,6 +286,8 @@ async def render_post(body: RenderRequest) -> Response:
         channel_offset=body.channel_offset,
         fractal_type=body.fractal_type,
         fractal_zoom=body.fractal_zoom,
+        fractal_center=body.fractal_center,
+        fractal_angle=body.fractal_angle,
         seed=active_seed,
     )
 

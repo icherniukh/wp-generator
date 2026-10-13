@@ -109,6 +109,8 @@ class RenderConfiguration:
     channel_offset: Optional[float] = None
     fractal_type: Optional[str] = None
     fractal_zoom: Optional[float] = None
+    fractal_center: Optional[Tuple[float, float]] = None
+    fractal_angle: Optional[float] = None
     legacy_idw: bool = False
     seed: Optional[int] = None
     capture_base_image: bool = False
@@ -136,6 +138,8 @@ class RenderResult:
     trap_weight: Optional[float] = None
     fractal_type: Optional[str] = None
     fractal_zoom: Optional[float] = None
+    fractal_center: Optional[Tuple[float, float]] = None
+    fractal_angle: Optional[float] = None
     base_image: Optional[Image.Image] = None
     palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
 
@@ -244,6 +248,8 @@ class WallpaperPipeline:
 
         fractal_type = resolve_value(config.fractal_type, "fractal_type", lambda: "fluid")
         fractal_zoom = resolve_value(config.fractal_zoom, "fractal_zoom", lambda: None)
+        fractal_center = resolve_value(config.fractal_center, "fractal_center", lambda: None)
+        fractal_angle = resolve_value(config.fractal_angle, "fractal_angle", lambda: None)
         phase_offset = resolve_value(config.phase_offset, "phase_offset", lambda: 0.0)
         frequency = resolve_value(config.frequency, "frequency", lambda: 1.0)
         trap_weight = resolve_value(config.trap_weight, "trap_weight", lambda: 0.35)
@@ -342,6 +348,8 @@ class WallpaperPipeline:
                 complexity=complexity,
                 fractal_type=fractal_type,
                 zoom=fractal_zoom,
+                center=fractal_center,
+                angle=fractal_angle,
                 phase_offset=phase_offset,
                 frequency=frequency,
                 trap_weight=trap_weight,
@@ -408,6 +416,8 @@ class WallpaperPipeline:
             trap_weight=trap_weight,
             fractal_type=fractal_type,
             fractal_zoom=fractal_zoom,
+            fractal_center=fractal_center,
+            fractal_angle=fractal_angle,
             base_image=base_image,
             palette_contrast=evaluate_palette_contrast(final_colors),
         )
