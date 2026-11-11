@@ -80,7 +80,7 @@ python main.py --preset cupertino
 uv run python main.py --preset cyberpunk --res 4k
 
 # Custom hex colors
-python main.py --colors "#FF5000" "#1A1A2E"
+python main.py --colors "#FF5000" --colors "#1A1A2E"
 
 # Batch — generate 10 variations of the same preset
 python main.py --preset pastel --count 10

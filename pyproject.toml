@@ -5,6 +5,7 @@ description = "Statistical procedural wallpaper generator"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "click>=8.0",
   "noise>=1.2.2",
   "numpy>=2.0",
   "pillow>=11.0",

@@ -1,9 +1,12 @@
-import argparse
 import concurrent.futures
+import dataclasses
 from datetime import datetime
 import os
 import sys
 import time
+from types import SimpleNamespace
+
+import click
 
 from engine import __version__
 from engine.gradients import GRADIENT_REGISTRY
@@ -22,7 +25,7 @@ def default_output_path(preset_name: str, seed: int, directory: str = ".") -> st
     return os.path.join(directory, f"wp_{preset_name}_{timestamp}_{seed}.png")
 
 
-def build_render_configuration(args: argparse.Namespace, seed: int) -> RenderConfiguration:
+def build_render_configuration(args: SimpleNamespace, seed: int) -> RenderConfiguration:
     """Translates parsed CLI arguments into a pipeline RenderConfiguration."""
     if args.res:
         width, height = args.res
@@ -31,41 +34,24 @@ def build_render_configuration(args: argparse.Namespace, seed: int) -> RenderCon
 
     parsed_colors = [parse_hex_color(h) for h in args.colors] if args.colors else None
 
-    return RenderConfiguration(
+    # CLI flag names match RenderConfiguration fields 1:1, so pass through
+    # everything the config declares and let anything else stay CLI-only.
+    # Bespoke conversions below are the only hand-maintained mapping.
+    kwargs = {
+        field.name: getattr(args, field.name)
+        for field in dataclasses.fields(RenderConfiguration)
+        if hasattr(args, field.name)
+    }
+    kwargs.update(
         width=width,
         height=height,
-        preset=args.preset,
         colors=parsed_colors,
-        complexity=args.complexity,
-        engine=args.engine,
-        fluid_mode=args.fluid_mode,
-        harmonize=args.harmonize,
-        noise=args.noise,
-        vignette=args.vignette,
-        dots=args.dots,
-        dots_spacing=args.dots_spacing,
-        dots_mode=args.dots_mode,
-        contours=args.contours,
-        contour_levels=args.contour_levels,
-        contour_width=args.contour_width,
-        contour_mode=args.contour_mode,
-        glass=args.glass,
-        chromatic_aberration=args.chromatic_aberration,
-        warp_strength=args.warp_strength,
-        ambient_weight=args.ambient_weight,
-        dispersion=args.dispersion,
-        phase_offset=args.phase_offset,
-        frequency=args.frequency,
-        trap_weight=args.trap_weight,
-        channel_offset=args.channel_offset,
-        fractal_type=args.fractal_type,
-        fractal_zoom=args.fractal_zoom,
         fractal_center=tuple(args.fractal_center) if args.fractal_center is not None else None,
-        fractal_angle=args.fractal_angle,
         legacy_idw=bool(args.legacy_idw),
         seed=seed,
         capture_base_image=bool(args.preview_fx),
     )
+    return RenderConfiguration(**kwargs)
 
 
 def save_preview_image(result, output_path: str) -> None:
@@ -85,7 +71,7 @@ def save_preview_image(result, output_path: str) -> None:
     print(f"  -> Preview saved to {preview_path}")
 
 
-def generate(args: argparse.Namespace, seed: int) -> str:
+def generate(args: SimpleNamespace, seed: int) -> str:
     """Renders a single wallpaper instance and writes it to disk."""
     config = build_render_configuration(args, seed)
     result = WallpaperPipeline().render(config)
@@ -115,130 +101,177 @@ def generate(args: argparse.Namespace, seed: int) -> str:
     return output_path
 
 
-def build_argument_parser(show_all: bool = False) -> argparse.ArgumentParser:
-    """Builds the CLI argument parser with compact default view and extended help."""
-    parser = argparse.ArgumentParser(
-        description="Wallpaper Generator for macOS\nRun with --help-all to see advanced engine and filter overrides.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        add_help=False,
-    )
+def _show_full_help(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    """Eager --help-all callback: reveal hidden advanced options, print help, exit."""
+    if not value or ctx.resilient_parsing:
+        return
+    for opt in ctx.command.params:
+        if isinstance(opt, click.Option):
+            opt.hidden = False
+    click.echo(ctx.command.get_help(ctx))
+    ctx.exit()
 
-    help_group = parser.add_argument_group("Help")
-    help_group.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="Show compact help and exit.")
-    help_group.add_argument("--help-all", action="help", default=argparse.SUPPRESS, help="Show all options including advanced overrides.")
-    help_group.add_argument("-v", "--version", action="version", version=f"wp-generator {__version__}", help="Show generator engine version and exit.")
 
-    def adv_help(text: str) -> str:
-        return text if show_all else argparse.SUPPRESS
-
-    core_group = parser.add_argument_group("Core Settings")
-    core_group.add_argument("--device", choices=list(DEVICE_RESOLUTIONS.keys()), default="mbp14", help="Standard screen resolution device.")
-    core_group.add_argument("--count", type=int, default=1, help="Number of wallpapers to generate.")
-    core_group.add_argument("--output", default=None, help="Output path (single image). Auto-named if omitted.")
-    core_group.add_argument("--out-dir", default=None, help="Directory to save generated wallpapers.")
-    core_group.add_argument("--workers", type=int, default=None, help="Worker count for parallel generation.")
-    core_group.add_argument("--metadata", "--inspect", dest="inspect_image", default=None, metavar="PATH", help="Extract and display engine metadata from an image.")
-    core_group.add_argument("--json", action="store_true", dest="json_output", help="Format extracted metadata as JSON.")
-
-    color_group = parser.add_argument_group("Color Palettes")
-    color_source = color_group.add_mutually_exclusive_group()
-
+def _available_presets() -> list:
     presets_dir = resolve_preset_directory()
-    available_presets = sorted(p.stem for p in presets_dir.glob("*.json")) if presets_dir.exists() else []
-
-    color_source.add_argument("--preset", choices=available_presets, help="Pre-defined aesthetic preset.")
-    color_source.add_argument("--colors", nargs="+", metavar="HEX", help="Custom hex colors.")
-    color_source.add_argument("--sample", action="store_true", help="Grab a color from the screen at mouse cursor.")
-
-    engine_title = "Advanced Engine Overrides" if show_all else "Advanced Engine Overrides (hidden, use --help-all)"
-    engine_group = parser.add_argument_group(engine_title)
-    engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
-    engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--engine", choices=list(GRADIENT_REGISTRY.keys()), default=None, help=adv_help("Gradient engine to use."))
-    engine_group.add_argument("--warp-strength", type=float, default=None, help=adv_help("Domain warping displacement strength (0.0-3.0)."))
-    engine_group.add_argument("--ambient-weight", type=float, default=None, help=adv_help("RBF base color anchor weight (0.0-1.0)."))
-    engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
-    engine_group.add_argument("--fractal-type", choices=["fluid", "julia", "mandelbrot", "orbit_trap"], default=None, help=adv_help("Fractal formula: fluid, julia, mandelbrot, or orbit_trap."))
-    engine_group.add_argument("--fractal-zoom", type=float, default=None, help=adv_help("Fractal magnification zoom factor."))
-    engine_group.add_argument("--fractal-center", nargs=2, type=float, default=None, metavar=("CX", "CY"), help=adv_help("Fractal focal center coordinates (cx, cy)."))
-    engine_group.add_argument("--fractal-angle", type=float, default=None, help=adv_help("Fractal field rotation angle in radians."))
-    engine_group.add_argument("--phase-offset", type=float, default=None, help=adv_help("Cyclic palette phase offset (0.0-1.0)."))
-    engine_group.add_argument("--frequency", type=float, default=None, help=adv_help("Fractal palette frequency cycle multiplier."))
-    engine_group.add_argument("--trap-weight", type=float, default=None, help=adv_help("Geometric orbit trap blending weight (0.0-1.0)."))
-    engine_group.add_argument("--channel-offset", type=float, default=None, help=adv_help("Decoupled Oklab lightness/chroma channel phase offset."))
-    engine_group.add_argument("--fluid-mode", choices=["random", "spatial"], default=None, help=adv_help("Fluid mesh generation logic."))
-    engine_group.add_argument("--legacy-idw", action="store_true", default=None, help=adv_help("Use legacy IDW gradient engine instead of fluid mesh."))
-    engine_group.add_argument("--harmonize", choices=["perceptual", "theory", "nothing", "none"], default=None, help=adv_help("Color harmonizer algorithm."))
-
-    filter_title = "Advanced Filter Overrides" if show_all else "Advanced Filter Overrides (hidden, use --help-all)"
-    filter_group = parser.add_argument_group(filter_title)
-    filter_group.add_argument("--dots", type=float, default=None, help=adv_help("Dot matrix intensity (0.0-1.0)."))
-    filter_group.add_argument("--dots-mode", choices=["size", "alpha"], default=None, help=adv_help("Vary dot 'size' or 'alpha'."))
-    filter_group.add_argument("--dots-spacing", type=int, default=None, help=adv_help("Pixel spacing between dots."))
-    filter_group.add_argument("--contours", "--contour", type=float, default=None, dest="contours", help=adv_help("Topographic contour line intensity (0.0-1.0)."))
-    filter_group.add_argument("--contour-levels", type=int, default=None, help=adv_help("Number of elevation contour intervals."))
-    filter_group.add_argument("--contour-width", type=float, default=None, help=adv_help("Pixel line thickness of contour lines."))
-    filter_group.add_argument("--contour-mode", choices=["light", "dark", "accent"], default=None, help=adv_help("Contour line styling: 'light', 'dark', or 'accent'."))
-    filter_group.add_argument("--noise", type=float, default=None, help=adv_help("Grain/noise amount (0.0-1.0)."))
-    filter_group.add_argument("--vignette", type=float, default=None, help=adv_help("Subtle radial edge darkening (0.0-1.0)."))
-    filter_group.add_argument("--glass", action="store_true", default=None, help=adv_help("Apply frosted glass texture overlay."))
-    filter_group.add_argument("--aberration", "--chromatic-aberration", type=float, default=None, dest="chromatic_aberration", help=adv_help("Chromatic aberration strength (0.0-0.1)."))
-    filter_group.add_argument("--preview-fx", action="store_true", default=None, help=adv_help("Preview FX rendering layers."))
-
-    misc_group = parser.add_argument_group("Miscellaneous" if show_all else "Miscellaneous (hidden, use --help-all)")
-    misc_group.add_argument("--seed", type=int, default=None, help=adv_help("Base seed for reproducibility."))
-
-    return parser
+    if not presets_dir.exists():
+        return []
+    return sorted(p.stem for p in presets_dir.glob("*.json"))
 
 
-def validate_cli_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    """Validates parameter ranges and conflicts."""
-    if getattr(args, "inspect_image", None):
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--help-all", is_flag=True, is_eager=True, expose_value=False, callback=_show_full_help, help="Show all options including advanced overrides.")
+@click.version_option(__version__, "-v", "--version", prog_name="wp-generator", message="%(prog)s %(version)s", help="Show generator engine version and exit.")
+@click.option("--device", type=click.Choice(list(DEVICE_RESOLUTIONS.keys())), default="mbp14", show_default=True, help="Standard screen resolution device.")
+@click.option("--count", type=int, default=1, show_default=True, help="Number of wallpapers to generate.")
+@click.option("--output", default=None, help="Output path (single image). Auto-named if omitted.")
+@click.option("--out-dir", default=None, help="Directory to save generated wallpapers.")
+@click.option("--workers", type=int, default=None, help="Worker count for parallel generation.")
+@click.option("--metadata", "--inspect", "inspect_image", default=None, metavar="PATH", help="Extract and display engine metadata from an image.")
+@click.option("--json", "json_output", is_flag=True, default=False, help="Format extracted metadata as JSON.")
+@click.option("--preset", type=click.Choice(_available_presets()), default=None, help="Pre-defined aesthetic preset.")
+@click.option("--colors", multiple=True, metavar="HEX", default=None, help="Custom hex colors. Repeat the flag for each color.")
+@click.option("--sample", is_flag=True, default=False, help="Grab a color from the screen at mouse cursor.")
+@click.option("--res", nargs=2, type=int, default=None, metavar=("W", "H"), hidden=True, help="Custom resolution. Overrides preset.")
+@click.option("--complexity", type=int, default=None, hidden=True, help="Gradient complexity (folds/points).")
+@click.option("--engine", type=click.Choice(list(GRADIENT_REGISTRY.keys())), default=None, hidden=True, help="Gradient engine to use.")
+@click.option("--warp-strength", type=float, default=None, hidden=True, help="Domain warping displacement strength (0.0-3.0).")
+@click.option("--ambient-weight", type=float, default=None, hidden=True, help="RBF base color anchor weight (0.0-1.0).")
+@click.option("--dispersion", type=float, default=None, hidden=True, help="RBF emitter dispersion/reach (0.05-1.5).")
+@click.option("--fractal-type", type=click.Choice(["fluid", "julia", "mandelbrot", "orbit_trap"]), default=None, hidden=True, help="Fractal formula: fluid, julia, mandelbrot, or orbit_trap.")
+@click.option("--fractal-zoom", type=float, default=None, hidden=True, help="Fractal magnification zoom factor.")
+@click.option("--fractal-center", nargs=2, type=float, default=None, metavar=("CX", "CY"), hidden=True, help="Fractal focal center coordinates (cx, cy).")
+@click.option("--fractal-angle", type=float, default=None, hidden=True, help="Fractal field rotation angle in radians.")
+@click.option("--phase-offset", type=float, default=None, hidden=True, help="Cyclic palette phase offset (0.0-1.0).")
+@click.option("--frequency", type=float, default=None, hidden=True, help="Fractal palette frequency cycle multiplier.")
+@click.option("--trap-weight", type=float, default=None, hidden=True, help="Geometric orbit trap blending weight (0.0-1.0).")
+@click.option("--channel-offset", type=float, default=None, hidden=True, help="Decoupled Oklab lightness/chroma channel phase offset.")
+@click.option("--fluid-mode", type=click.Choice(["random", "spatial"]), default=None, hidden=True, help="Fluid mesh generation logic.")
+@click.option("--legacy-idw", is_flag=True, default=None, hidden=True, help="Use legacy IDW gradient engine instead of fluid mesh.")
+@click.option("--harmonize", type=click.Choice(["perceptual", "theory", "nothing", "none"]), default=None, hidden=True, help="Color harmonizer algorithm.")
+@click.option("--dots", type=float, default=None, hidden=True, help="Dot matrix intensity (0.0-1.0).")
+@click.option("--dots-mode", type=click.Choice(["size", "alpha"]), default=None, hidden=True, help="Vary dot 'size' or 'alpha'.")
+@click.option("--dots-spacing", type=int, default=None, hidden=True, help="Pixel spacing between dots.")
+@click.option("--contours", "--contour", "contours", type=float, default=None, hidden=True, help="Topographic contour line intensity (0.0-1.0).")
+@click.option("--contour-levels", type=int, default=None, hidden=True, help="Number of elevation contour intervals.")
+@click.option("--contour-width", type=float, default=None, hidden=True, help="Pixel line thickness of contour lines.")
+@click.option("--contour-mode", type=click.Choice(["light", "dark", "accent"]), default=None, hidden=True, help="Contour line styling: 'light', 'dark', or 'accent'.")
+@click.option("--noise", type=float, default=None, hidden=True, help="Grain/noise amount (0.0-1.0).")
+@click.option("--vignette", type=float, default=None, hidden=True, help="Subtle radial edge darkening (0.0-1.0).")
+@click.option("--glass", is_flag=True, default=None, hidden=True, help="Apply frosted glass texture overlay.")
+@click.option("--aberration", "--chromatic-aberration", "chromatic_aberration", type=float, default=None, hidden=True, help="Chromatic aberration strength (0.0-0.1).")
+@click.option("--preview-fx", is_flag=True, default=None, hidden=True, help="Preview FX rendering layers.")
+@click.option("--seed", type=int, default=None, hidden=True, help="Base seed for reproducibility.")
+@click.pass_context
+def main(ctx: click.Context, **kwargs: object) -> None:
+    """Procedural wallpaper generator for macOS. Run with --help-all to see advanced engine and filter overrides."""
+    params = dict(ctx.params)
+
+    if sum(bool(params[key]) for key in ("preset", "colors", "sample")) > 1:
+        raise click.UsageError("--preset, --colors, and --sample are mutually exclusive")
+
+    _validate_cli_arguments(params)
+    args = SimpleNamespace(**params)
+
+    if args.inspect_image:
+        _inspect_image(args)
         return
 
-    if args.res and (args.res[0] <= 0 or args.res[1] <= 0):
-        parser.error("--res values must be positive")
+    if args.sample:
+        _sample_screen_color(args)
+
+    base_seed = args.seed if args.seed is not None else int(time.time())
+    if args.seed is None:
+        print(f"Base seed: {base_seed}  (pass --seed {base_seed} to reproduce)")
+
+    execute_batch(args, base_seed)
+
+
+def _validate_cli_arguments(params: dict) -> None:
+    """Validates parameter ranges and conflicts (exit code 2 on violation)."""
+    if params.get("inspect_image"):
+        return
+
+    res = params.get("res")
+    if res and (res[0] <= 0 or res[1] <= 0):
+        raise click.UsageError("--res values must be positive")
 
     positive_checks = [
-        ("--dots-spacing", args.dots_spacing),
-        ("--complexity", args.complexity),
-        ("--contour-levels", args.contour_levels),
-        ("--contour-width", args.contour_width),
-        ("--dispersion", args.dispersion),
-        ("--frequency", args.frequency),
-        ("--fractal-zoom", args.fractal_zoom),
+        ("--dots-spacing", params.get("dots_spacing")),
+        ("--complexity", params.get("complexity")),
+        ("--contour-levels", params.get("contour_levels")),
+        ("--contour-width", params.get("contour_width")),
+        ("--dispersion", params.get("dispersion")),
+        ("--frequency", params.get("frequency")),
+        ("--fractal-zoom", params.get("fractal_zoom")),
     ]
     for flag, val in positive_checks:
         if val is not None and val <= 0:
-            parser.error(f"{flag} must be positive")
+            raise click.UsageError(f"{flag} must be positive")
 
     range_checks = [
-        ("--dots", args.dots, 0.0, 1.0),
-        ("--contours", args.contours, 0.0, 1.0),
-        ("--noise", args.noise, 0.0, 1.0),
-        ("--vignette", args.vignette, 0.0, 1.0),
-        ("--aberration", args.chromatic_aberration, 0.0, 0.1),
-        ("--ambient-weight", args.ambient_weight, 0.0, 1.0),
-        ("--phase-offset", args.phase_offset, 0.0, 1.0),
-        ("--trap-weight", args.trap_weight, 0.0, 1.0),
+        ("--dots", params.get("dots"), 0.0, 1.0),
+        ("--contours", params.get("contours"), 0.0, 1.0),
+        ("--noise", params.get("noise"), 0.0, 1.0),
+        ("--vignette", params.get("vignette"), 0.0, 1.0),
+        ("--aberration", params.get("chromatic_aberration"), 0.0, 0.1),
+        ("--ambient-weight", params.get("ambient_weight"), 0.0, 1.0),
+        ("--phase-offset", params.get("phase_offset"), 0.0, 1.0),
+        ("--trap-weight", params.get("trap_weight"), 0.0, 1.0),
     ]
     for flag, val, lo, hi in range_checks:
         if val is not None and not lo <= val <= hi:
-            parser.error(f"{flag} must be between {lo} and {hi}")
+            raise click.UsageError(f"{flag} must be between {lo} and {hi}")
 
-    if args.count < 1:
-        parser.error("--count must be at least 1")
-    if args.count > 1 and args.output:
-        parser.error("--output cannot be used with --count > 1 (files are auto-named)")
+    if params["count"] < 1:
+        raise click.UsageError("--count must be at least 1")
+    if params["count"] > 1 and params["output"]:
+        raise click.UsageError("--output cannot be used with --count > 1 (files are auto-named)")
 
-    if args.colors:
+    if params.get("colors"):
         try:
-            [parse_hex_color(h) for h in args.colors]
+            [parse_hex_color(h) for h in params["colors"]]
         except ValueError as exc:
-            parser.error(str(exc))
+            raise click.UsageError(str(exc))
 
 
-def execute_batch(args: argparse.Namespace, base_seed: int) -> None:
+def _inspect_image(args: SimpleNamespace) -> None:
+    from engine.metadata import extract_image_metadata
+
+    metadata = extract_image_metadata(args.inspect_image)
+    if metadata is None:
+        print(f"Error: No wallpaper metadata found in '{args.inspect_image}'.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json_output:
+        print(metadata.to_json(indent=2))
+    else:
+        print(f"Engine:     {metadata.engine} (generator v{metadata.version})")
+        if metadata.parameters.get("preset"):
+            preset_str = str(metadata.parameters["preset"])
+            if metadata.parameters.get("preset_version"):
+                preset_str += f" (v{metadata.parameters['preset_version']})"
+            print(f"Preset:     {preset_str}")
+        print(f"Seed:       {metadata.seed}")
+        if metadata.created_at:
+            print(f"Created:    {metadata.created_at}")
+        print("Parameters:")
+        for key, val in sorted(metadata.parameters.items()):
+            print(f"  {key}: {val}")
+
+
+def _sample_screen_color(args: SimpleNamespace) -> None:
+    from tools.sampler import ScreenSampler
+    sampler = ScreenSampler()
+    print("Sampling screen color in 3 seconds... move your mouse!")
+    time.sleep(3)
+    color = sampler.sample_pixel()
+    print(f"Sampled color: {color} ({sampler.to_hex(color)})")
+    if not args.colors:
+        args.colors = [sampler.to_hex(color)]
+
+
+def execute_batch(args: SimpleNamespace, base_seed: int) -> None:
     """Executes single or multi-worker batch generation loop."""
     total = args.count
     workers = args.workers or min(total, os.cpu_count() or 1)
@@ -260,54 +293,6 @@ def execute_batch(args: argparse.Namespace, base_seed: int) -> None:
                 print(f"[{i+1}/{total}]", end=" ")
             path = generate(args, seed)
             print(f"  -> {path}")
-
-
-def main() -> None:
-    show_all = "--help-all" in sys.argv
-    parser = build_argument_parser(show_all=show_all)
-    args = parser.parse_args()
-    validate_cli_arguments(parser, args)
-
-    if args.inspect_image:
-        from engine.metadata import extract_image_metadata
-
-        metadata = extract_image_metadata(args.inspect_image)
-        if metadata is None:
-            print(f"Error: No wallpaper metadata found in '{args.inspect_image}'.", file=sys.stderr)
-            sys.exit(1)
-
-        if args.json_output:
-            print(metadata.to_json(indent=2))
-        else:
-            print(f"Engine:     {metadata.engine} (generator v{metadata.version})")
-            if metadata.parameters.get("preset"):
-                preset_str = str(metadata.parameters["preset"])
-                if metadata.parameters.get("preset_version"):
-                    preset_str += f" (v{metadata.parameters['preset_version']})"
-                print(f"Preset:     {preset_str}")
-            print(f"Seed:       {metadata.seed}")
-            if metadata.created_at:
-                print(f"Created:    {metadata.created_at}")
-            print("Parameters:")
-            for key, val in sorted(metadata.parameters.items()):
-                print(f"  {key}: {val}")
-        return
-
-    if args.sample:
-        from tools.sampler import ScreenSampler
-        sampler = ScreenSampler()
-        print("Sampling screen color in 3 seconds... move your mouse!")
-        time.sleep(3)
-        color = sampler.sample_pixel()
-        print(f"Sampled color: {color} ({sampler.to_hex(color)})")
-        if not args.colors:
-            args.colors = [sampler.to_hex(color)]
-
-    base_seed = args.seed if args.seed is not None else int(time.time())
-    if args.seed is None:
-        print(f"Base seed: {base_seed}  (pass --seed {base_seed} to reproduce)")
-
-    execute_batch(args, base_seed)
 
 
 if __name__ == "__main__":
