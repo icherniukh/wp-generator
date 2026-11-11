@@ -10,7 +10,9 @@ class WallpaperFilters:
         :param mode: 'size' modulates dot radius, 'alpha' modulates dot opacity.
         """
         width, height = image.size
-        
+        # Spacing addresses pixels, so coerce gaussian-sampled floats to int.
+        spacing = max(1, int(round(spacing)))
+
         # Convert image to grayscale to get luminance (0.0 to 1.0)
         grayscale = image.convert("L")
         lum_data = np.array(grayscale, dtype=np.float32) / 255.0
