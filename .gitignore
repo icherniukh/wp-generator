@@ -45,3 +45,6 @@ output/*/
 *.db
 .beads-credential-key
 .beads*.lock
+
+# Local agent tooling state
+.turbocharging/
