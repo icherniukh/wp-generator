@@ -48,3 +48,9 @@ output/*/
 
 # Local agent tooling state
 .turbocharging/
+
+# Local agent tooling state
+.turbocharging/
+.claude/
+.codex/
+.serena/
