@@ -1,4 +1,6 @@
 {
+    "preset_id": "sleek",
+    "version": "1.0.0",
     "name": "Sleek",
     "description": "Luminous, ultra-premium generative palettes. Dark anchors with screaming bright neon accents and a frosted glass finish.",
     "color_space": "oklch",

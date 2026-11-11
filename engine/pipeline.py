@@ -1,6 +1,5 @@
 import colorsys
 import io
-import os
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,21 +9,22 @@ import numpy as np
 from PIL import Image
 
 from engine.colors import (
-    ColorTheoryHarmonizer, PaletteContrast, StyleHarmonizer, evaluate_palette_contrast,
+    ColorTheoryHarmonizer,
+    PaletteContrast,
+    StyleHarmonizer,
+    evaluate_palette_contrast,
+    hex_to_rgb,
+    rgb_to_hex,
 )
 from engine.filters import WallpaperFilters
-from engine.gradients import (
-    DomainWarpGradient,
-    FlowFieldGradient,
-    FluidMeshGradient,
-    FractalFieldGradient,
-    MeshGradient,
-    RadialBasisGradient,
-    SimplexMeshGradient,
-    SplineWaveGradient,
-    TopographicGradient,
-    render_gradient,
+from engine.gradients import render_gradient
+from engine.metadata import (
+    ImageMetadata,
+    attach_metadata_to_image,
+    build_image_metadata,
+    extract_image_metadata,
 )
+from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
 
 DEVICE_RESOLUTIONS: Dict[str, Tuple[int, int]] = {
@@ -64,13 +64,10 @@ class PresetNotFoundError(KeyError):
 
 def parse_hex_color(hex_str: str) -> Tuple[int, int, int]:
     """Converts a 6-character hex string to an RGB tuple."""
-    cleaned = hex_str.strip().lstrip("#")
-    if len(cleaned) != 6:
-        raise PipelineConfigurationError(f"Invalid hex color: '{hex_str}'")
     try:
-        return tuple(int(cleaned[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+        return hex_to_rgb(hex_str)
     except ValueError as exc:
-        raise PipelineConfigurationError(f"Invalid hex color: '{hex_str}'") from exc
+        raise PipelineConfigurationError(str(exc)) from exc
 
 
 def resolve_preset_directory() -> Path:
@@ -102,6 +99,7 @@ class RenderConfiguration:
     glass: Optional[bool] = None
     chromatic_aberration: Optional[float] = None
     warp_strength: Optional[float] = None
+    transverse_warp: Optional[float] = None
     ambient_weight: Optional[float] = None
     dispersion: Optional[float] = None
     phase_offset: Optional[float] = None
@@ -130,6 +128,7 @@ class RenderResult:
     noise: float
     chromatic_aberration: float = 0.0
     warp_strength: Optional[float] = None
+    transverse_warp: Optional[float] = None
     ambient_weight: Optional[float] = None
     dispersion: Optional[float] = None
     contours: float = 0.0
@@ -141,8 +140,25 @@ class RenderResult:
     fractal_zoom: Optional[float] = None
     fractal_center: Optional[Tuple[float, float]] = None
     fractal_angle: Optional[float] = None
+    dots: float = 0.0
+    dots_spacing: Optional[int] = None
+    dots_mode: Optional[str] = None
+    contour_width: Optional[float] = None
+    contour_mode: Optional[str] = None
+    glass: bool = False
+    vignette: float = 0.0
+    channel_offset: Optional[float] = None
+    fluid_mode: Optional[str] = None
+    harmonize: Optional[str] = None
+    preset: Optional[str] = None
+    preset_version: Optional[str] = None
     base_image: Optional[Image.Image] = None
     palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
+    metadata: Optional[ImageMetadata] = None
+
+    def save(self, fp: Union[str, Path, io.BufferedIOBase], format: str = "PNG", **kwargs: Any) -> None:
+        """Saves rendered image to file path or buffer with embedded metadata."""
+        self.image.save(fp, format=format, **kwargs)
 
 
 class WallpaperPipeline:
@@ -150,33 +166,46 @@ class WallpaperPipeline:
         self.preset_dir = Path(preset_dir) if preset_dir else resolve_preset_directory()
         self.preset_engine = PresetEngine(preset_dir=str(self.preset_dir))
 
-    def list_presets(self) -> List[Dict[str, Any]]:
+    def list_presets(self, include_palette: bool = False) -> List[Dict[str, Any]]:
         """Returns metadata for all available presets sorted by identifier."""
         if not self.preset_dir.exists():
             return []
         presets = []
-        for file_path in sorted(self.preset_dir.glob("*.json")):
-            preset_id = file_path.stem
-            try:
-                data = self.preset_engine.load_preset(preset_id)
-                presets.append({
-                    "id": preset_id,
-                    "name": data.get("name", preset_id.capitalize()),
-                    "description": data.get("description", ""),
-                    "color_space": data.get("color_space", "hls"),
-                    "color_count": data.get("color_count", {}),
-                    "overrides": data.get("overrides", {}),
-                })
-            except Exception:
-                continue
+        rng_state = random.getstate() if include_palette else None
+        try:
+            for file_path in sorted(self.preset_dir.glob("*.json")):
+                preset_id = file_path.stem
+                try:
+                    data = self.preset_engine.load_preset(preset_id)
+                    entry: Dict[str, Any] = {
+                        "id": preset_id,
+                        "name": data.get("name", preset_id.capitalize()),
+                        "version": data.get("version", "1.0.0"),
+                        "description": data.get("description", ""),
+                        "color_space": data.get("color_space", "hls"),
+                        "color_count": data.get("color_count", {}),
+                        "overrides": data.get("overrides", {}),
+                    }
+                    if include_palette:
+                        random.seed(42)
+                        sample_colors = self.preset_engine.generate_palette(
+                            data, count=3, family_index=42
+                        )
+                        entry["sample_palette"] = [rgb_to_hex(c) for c in sample_colors]
+                    presets.append(entry)
+                except Exception:
+                    continue
+        finally:
+            if rng_state is not None:
+                random.setstate(rng_state)
         return presets
 
     def load_preset(self, preset_id: str) -> Dict[str, Any]:
         """Loads and returns preset dictionary by ID."""
-        preset_file = self.preset_dir / f"{preset_id}.json"
-        if not preset_file.exists():
-            raise PresetNotFoundError(f"Preset '{preset_id}' not found in {self.preset_dir}")
-        return self.preset_engine.load_preset(preset_id)
+        try:
+            return self.preset_engine.load_preset(preset_id)
+        except FileNotFoundError as exc:
+            raise PresetNotFoundError(f"Preset '{preset_id}' not found in {self.preset_dir}") from exc
 
     def _sample_dynamic_palette(self, num_colors: int) -> List[Tuple[int, int, int]]:
         palette = []
@@ -298,68 +327,75 @@ class WallpaperPipeline:
         random.seed(active_seed)
         np.random.seed(active_seed)
 
-        # Resolve preset data
         preset_data: Dict[str, Any] = {}
         if config.preset_data:
             preset_data = config.preset_data
         elif config.preset and config.preset not in THEME_FALLBACK_PALETTES:
             preset_data = self.load_preset(config.preset)
 
+        preset_version = self.preset_engine.get_preset_version(preset_data) if (config.preset or config.preset_data) else None
+
         overrides = self.preset_engine.get_engine_overrides(preset_data)
 
-        # Resolve parameters: Explicit Config > Preset Override > Default Distribution
-        def resolve_value(explicit_val: Any, override_key: str, default_generator: Any) -> Any:
+        def resolve(key: str, default: Any = None) -> Any:
+            explicit_val = getattr(config, key)
             if explicit_val is not None:
                 return explicit_val
-            if override_key in overrides:
-                val = overrides[override_key]
-                if isinstance(val, dict):
-                    if val.get("type", "").endswith("int"):
-                        return int(self.preset_engine._sample_distribution(val))
-                    return self.preset_engine._sample_distribution(val)
-                return val
-            return default_generator()
+            if key in overrides:
+                val = overrides[key]
+                return self.preset_engine.sample_distribution(val) if isinstance(val, dict) else val
+            return default() if callable(default) else default
 
-        complexity = resolve_value(config.complexity, "complexity", lambda: random.randint(2, 6))
-        noise = resolve_value(config.noise, "noise", lambda: round(random.uniform(0.005, 0.05), 3))
-        glass_param = resolve_value(config.glass, "glass", lambda: False)
-        chromatic_aberration = resolve_value(
-            config.chromatic_aberration, "chromatic_aberration", lambda: 0.0
+        complexity = resolve("complexity", lambda: PARAMETER_RANGES.sample("complexity"))
+        noise = resolve("noise", lambda: PARAMETER_RANGES.sample("noise"))
+        glass_param = resolve("glass", False)
+        chromatic_aberration = resolve("chromatic_aberration", 0.0)
+        fluid_mode = resolve("fluid_mode", "random")
+        vignette = resolve("vignette", 0.0)
+        engine_type = resolve("engine", "simplex")
+
+        warp_key_map = {
+            "rbf": "rbf_warp",
+            "radial-basis": "rbf_warp",
+            "topographic": "topo_warp",
+            "flow-field": "flow_warp",
+            "spline-wave": "spline_warp",
+        }
+        warp_range_key = warp_key_map.get(engine_type, "warp_strength")
+        warp_strength = resolve("warp_strength", lambda: PARAMETER_RANGES.sample(warp_range_key))
+        transverse_warp = resolve(
+            "transverse_warp", lambda: PARAMETER_RANGES.sample("transverse_warp")
         )
-        warp_strength = resolve_value(config.warp_strength, "warp_strength", lambda: 0.85)
-        ambient_weight = resolve_value(config.ambient_weight, "ambient_weight", lambda: 0.15)
-        dispersion = resolve_value(config.dispersion, "dispersion", lambda: 0.35)
-        fluid_mode = resolve_value(config.fluid_mode, "fluid_mode", lambda: "random")
-        vignette = resolve_value(config.vignette, "vignette", lambda: 0.0)
-        engine_type = resolve_value(config.engine, "engine", lambda: "simplex")
+        ambient_weight = resolve(
+            "ambient_weight", lambda: PARAMETER_RANGES.sample("ambient_weight")
+        )
+        dispersion = resolve("dispersion", lambda: PARAMETER_RANGES.sample("dispersion"))
 
-        dots = resolve_value(config.dots, "dots", lambda: 0.0)
-        dots_spacing = resolve_value(config.dots_spacing, "dots_spacing", lambda: random.randint(8, 60))
-        dots_mode = resolve_value(config.dots_mode, "dots_mode", lambda: random.choice(["size", "alpha"]))
+        dots = resolve("dots", 0.0)
+        dots_spacing = resolve("dots_spacing", lambda: random.randint(8, 60))
+        dots_mode = resolve("dots_mode", lambda: random.choice(["size", "alpha"]))
 
-        contours = resolve_value(config.contours, "contours", lambda: 0.0)
-        contour_levels = resolve_value(config.contour_levels, "contour_levels", lambda: 24)
-        contour_width = resolve_value(config.contour_width, "contour_width", lambda: 1.4)
-        contour_mode = resolve_value(config.contour_mode, "contour_mode", lambda: "light")
+        contours = resolve("contours", 0.0)
+        contour_levels = resolve("contour_levels", 24)
+        contour_width = resolve("contour_width", 1.4)
+        contour_mode = resolve("contour_mode", "light")
 
-        fractal_type = resolve_value(config.fractal_type, "fractal_type", lambda: "fluid")
-        fractal_zoom = resolve_value(config.fractal_zoom, "fractal_zoom", lambda: None)
-        fractal_center = resolve_value(config.fractal_center, "fractal_center", lambda: None)
-        fractal_angle = resolve_value(config.fractal_angle, "fractal_angle", lambda: None)
-        phase_offset = resolve_value(config.phase_offset, "phase_offset", lambda: 0.0)
-        frequency = resolve_value(config.frequency, "frequency", lambda: 1.0)
-        trap_weight = resolve_value(config.trap_weight, "trap_weight", lambda: 0.35)
-        channel_offset = resolve_value(config.channel_offset, "channel_offset", lambda: 0.0)
+        fractal_type = resolve("fractal_type", "fluid")
+        fractal_zoom = resolve("fractal_zoom", None)
+        fractal_center = resolve("fractal_center", None)
+        fractal_angle = resolve("fractal_angle", None)
+        phase_offset = resolve("phase_offset", 0.0)
+        frequency = resolve("frequency", lambda: PARAMETER_RANGES.sample("frequency"))
+        trap_weight = resolve("trap_weight", lambda: PARAMETER_RANGES.sample("trap_weight"))
+        channel_offset = resolve("channel_offset", 0.0)
 
-        # Resolve and harmonize palette
         base_colors = self._resolve_palette(config, preset_data, complexity, active_seed)
-        harmonize = resolve_value(config.harmonize, "harmonize", lambda: None)
+        harmonize = resolve("harmonize", None)
         if harmonize not in (None, "none", "nothing", "theory", "perceptual"):
             raise PipelineConfigurationError(f"Unknown harmonizer '{harmonize}'.")
         colors_were_specified = bool(config.colors or config.preset)
         final_colors = self._harmonize_palette(base_colors, harmonize, preset_data, colors_were_specified)
 
-        # Gradient synthesis
         image = render_gradient(
             engine_type,
             width=config.width,
@@ -368,6 +404,7 @@ class WallpaperPipeline:
             complexity=complexity,
             fluid_mode=fluid_mode,
             warp_strength=warp_strength,
+            transverse_warp=transverse_warp,
             ambient_weight=ambient_weight,
             dispersion=dispersion,
             fractal_type=fractal_type,
@@ -384,7 +421,6 @@ class WallpaperPipeline:
 
         base_image = image.copy() if config.capture_base_image else None
 
-        # Filter post-processing
         image = self._apply_filters(
             image,
             dots=dots,
@@ -400,13 +436,11 @@ class WallpaperPipeline:
             vignette=vignette,
         )
 
-        color_hexes = [f"#{r:02x}{g:02x}{b:02x}" for r, g, b in final_colors]
-
-        return RenderResult(
+        result = RenderResult(
             image=image,
             seed=active_seed,
             colors=final_colors,
-            color_hexes=color_hexes,
+            color_hexes=[rgb_to_hex(c) for c in final_colors],
             engine=engine_type,
             width=config.width,
             height=config.height,
@@ -414,25 +448,41 @@ class WallpaperPipeline:
             noise=noise,
             chromatic_aberration=chromatic_aberration,
             warp_strength=warp_strength,
+            transverse_warp=transverse_warp,
             ambient_weight=ambient_weight,
             dispersion=dispersion,
             contours=contours,
             contour_levels=contour_levels,
-            phase_offset=phase_offset,
+            contour_width=contour_width,
+            contour_mode=contour_mode,
+            dots=dots,
+            dots_spacing=dots_spacing,
+            dots_mode=dots_mode,
+            glass=glass_param,
+            vignette=vignette,
             frequency=frequency,
+            phase_offset=phase_offset,
             trap_weight=trap_weight,
+            channel_offset=channel_offset,
+            fluid_mode=fluid_mode,
+            harmonize=harmonize,
             fractal_type=fractal_type,
             fractal_zoom=fractal_zoom,
             fractal_center=fractal_center,
             fractal_angle=fractal_angle,
+            preset=config.preset,
+            preset_version=preset_version,
             base_image=base_image,
             palette_contrast=evaluate_palette_contrast(final_colors),
         )
+        metadata = build_image_metadata(result)
+        result.metadata = metadata
+        attach_metadata_to_image(result.image, metadata)
+        return result
 
     def render_png_bytes(self, config: RenderConfiguration) -> Tuple[bytes, RenderResult]:
         """Renders wallpaper directly to PNG bytes without disk access."""
         result = self.render(config)
         buffer = io.BytesIO()
-        result.image.save(buffer, format="PNG")
-        buffer.seek(0)
+        result.save(buffer, format="PNG")
         return buffer.getvalue(), result

@@ -4,17 +4,18 @@ import numpy as np
 from PIL import Image
 import scipy.ndimage
 
-from engine.colors import oklab_to_rgb
 from engine.gradients.interpolation import (
     colors_to_oklab,
-    generate_noise_plane,
     interpolate_color_curve,
+    oklab_image_to_pil,
+    validate_palette_colors,
 )
-
-try:
-    import noise
-except ImportError:
-    noise = None
+from engine.gradients.spatial import (
+    generate_noise_plane,
+    normalize_scalar_field,
+    warp_coordinates_perlin,
+)
+from engine.parameter_ranges import PARAMETER_RANGES
 
 
 class DomainWarpGradient:
@@ -26,11 +27,12 @@ class DomainWarpGradient:
         self,
         colors: Sequence[Sequence[float]],
         complexity: int = 5,
-        warp_strength: float = 0.85,
+        warp_strength: Optional[float] = None,
+        transverse_warp: Optional[float] = None,
         angle: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> Image.Image:
-        """Generates a gradient using nested vector domain warping in Oklab space."""
+        """Generates a gradient using nested 2D vector domain warping in Oklab space."""
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
@@ -48,6 +50,17 @@ class DomainWarpGradient:
         if angle is None:
             angle = random.uniform(0, 2 * np.pi)
 
+        eff_warp = (
+            float(warp_strength)
+            if warp_strength is not None
+            else float(PARAMETER_RANGES.sample("warp_strength"))
+        )
+        eff_transverse = (
+            float(transverse_warp)
+            if transverse_warp is not None
+            else float(PARAMETER_RANGES.sample("transverse_warp"))
+        )
+
         u = xv * np.cos(angle) + yv * np.sin(angle)
         v = -xv * np.sin(angle) + yv * np.cos(angle)
 
@@ -57,20 +70,35 @@ class DomainWarpGradient:
         qx = generate_noise_plane(h, w, scale=base_freq, octaves=2, offset=(ox1, oy1))
         qy = generate_noise_plane(h, w, scale=base_freq, octaves=2, offset=(ox2, oy2))
 
-        u_warped = u + warp_strength * qx
+        u_warped = u + eff_warp * qx
+        v_warped = v + eff_transverse * qy
+
         ox3, oy3 = random.uniform(1000, 1500), random.uniform(1000, 1500)
         rx = generate_noise_plane(h, w, scale=base_freq * 1.3, octaves=2, offset=(ox3, oy3))
 
-        t = u_warped + (warp_strength * 0.4) * rx
-        t_min, t_max = t.min(), t.max()
-        if t_max > t_min:
-            t = (t - t_min) / (t_max - t_min)
-        t_values = np.clip(t, 0.0, 1.0)
+        if eff_transverse > 0.0:
+            grid_y, grid_x = np.meshgrid(
+                np.arange(h, dtype=np.float32),
+                np.arange(w, dtype=np.float32),
+                indexing="ij",
+            )
+            warped_coords = [
+                grid_y + (eff_transverse * 0.45 * qy) * h,
+                grid_x + (eff_transverse * 0.45 * qx) * w,
+            ]
+            rx_warped = scipy.ndimage.map_coordinates(
+                rx, warped_coords, order=3, mode="reflect"
+            )
+            transverse_bend = eff_transverse * 0.35 * np.sin(v_warped * 1.5)
+        else:
+            rx_warped = rx
+            transverse_bend = 0.0
 
+        t_values = normalize_scalar_field(
+            u_warped + transverse_bend + (eff_warp * 0.35) * rx_warped
+        )
         grid_oklab = interpolate_color_curve(t_values, colors_oklab)
-        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
-        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
-        return img_mod.resize((self.width, self.height), Image.LANCZOS)
+        return oklab_image_to_pil(grid_oklab, (self.width, self.height))
 
 
 class RadialBasisGradient:
@@ -92,13 +120,11 @@ class RadialBasisGradient:
             random.seed(seed)
             np.random.seed(seed)
 
-        num_colors = len(colors)
-        if num_colors == 0:
-            raise ValueError("At least one color must be provided.")
-        if num_colors == 1:
-            c = tuple(int(v) for v in colors[0])
-            return Image.new("RGB", (self.width, self.height), c)
+        solid = validate_palette_colors(colors, self.width, self.height)
+        if solid is not None:
+            return solid
 
+        num_colors = len(colors)
         colors_oklab = colors_to_oklab(colors)
 
         scale_factor = 0.25
@@ -148,9 +174,7 @@ class RadialBasisGradient:
         weights /= np.maximum(weight_sum, 1e-6)
 
         grid_oklab = np.einsum("nhw,nc->hwc", weights, colors_oklab)
-        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
-        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
-        return img_mod.resize((self.width, self.height), Image.LANCZOS)
+        return oklab_image_to_pil(grid_oklab, (self.width, self.height))
 
 
 RBFFieldGradient = RadialBasisGradient
@@ -166,52 +190,25 @@ class FlowFieldGradient:
         colors: Sequence[Sequence[float]],
         complexity: int = 5,
         fluid_mode: str = "random",
+        warp_strength: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> Image.Image:
         """Generates an organic fluid gradient by warping coordinates along curl-noise flow vectors."""
-        if noise is None:
-            raise ImportError("The 'noise' package is required for FlowFieldGradient.")
-
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
 
         num_colors = len(colors)
         colors_oklab = colors_to_oklab(colors)
-        color_order = list(range(num_colors))
 
-        x = np.linspace(0, 1, self.width, dtype=np.float32)
-        y = np.linspace(0, 1, self.height, dtype=np.float32)
-        xv, yv = np.meshgrid(x, y)
-
-        res_scale = 0.1
-        small_h = max(2, int(self.height * res_scale))
-        small_w = max(2, int(self.width * res_scale))
-
-        ox = random.uniform(0, 1000)
-        oy = random.uniform(0, 1000)
-
-        warp_strength = random.uniform(0.2, 0.6)
-        scale = random.uniform(0.002, 0.006) * complexity
-
-        dx = np.zeros((small_h, small_w), dtype=np.float32)
-        dy = np.zeros((small_h, small_w), dtype=np.float32)
-
-        for sy in range(small_h):
-            for sx in range(small_w):
-                nx, ny = sx * scale, sy * scale
-                dx[sy, sx] = noise.pnoise2(nx + ox, ny + oy, octaves=3)
-                dy[sy, sx] = noise.pnoise2(nx + ox + 500, ny + oy + 500, octaves=3)
-
-        dx = scipy.ndimage.zoom(dx, (self.height / small_h, self.width / small_w), order=1)
-        dy = scipy.ndimage.zoom(dy, (self.height / small_h, self.width / small_w), order=1)
-
-        if dx.shape != xv.shape:
-            dx = np.pad(dx, ((0, max(0, xv.shape[0] - dx.shape[0])), (0, max(0, xv.shape[1] - dx.shape[1]))))[: xv.shape[0], : xv.shape[1]]
-            dy = np.pad(dy, ((0, max(0, yv.shape[0] - dy.shape[0])), (0, max(0, yv.shape[1] - dy.shape[1]))))[: yv.shape[0], : yv.shape[1]]
-
-        xv_warped = xv + dx * warp_strength
-        yv_warped = yv + dy * warp_strength
+        warp_range = (
+            (float(warp_strength), float(warp_strength))
+            if warp_strength is not None
+            else PARAMETER_RANGES.get_bounds("flow_warp")
+        )
+        xv_warped, yv_warped = warp_coordinates_perlin(
+            self.width, self.height, complexity, warp_range=warp_range, octaves=3
+        )
 
         points = []
         for i in range(num_colors):
@@ -228,13 +225,11 @@ class FlowFieldGradient:
         distances[0] *= 0.6
         distances = np.maximum(distances, 0.15)
 
-        p = 2.0
-        weights = 1.0 / (distances**p)
+        weights = 1.0 / (distances**2.0)
         weights /= np.sum(weights, axis=0)
 
-        res = np.einsum("ihw,ic->hwc", weights, colors_oklab[color_order])
-        srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
-        return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+        res = np.einsum("ihw,ic->hwc", weights, colors_oklab)
+        return oklab_image_to_pil(res)
 
 
 class TopographicGradient:
@@ -255,12 +250,9 @@ class TopographicGradient:
             random.seed(seed)
             np.random.seed(seed)
 
-        num_colors = len(colors)
-        if num_colors == 0:
-            raise ValueError("At least one color must be provided.")
-        if num_colors == 1:
-            c = tuple(int(v) for v in colors[0])
-            return Image.new("RGB", (self.width, self.height), c)
+        solid = validate_palette_colors(colors, self.width, self.height)
+        if solid is not None:
+            return solid
 
         colors_oklab = colors_to_oklab(colors)
 
@@ -294,11 +286,6 @@ class TopographicGradient:
         else:
             warped = raw_elevation
 
-        e_min, e_max = warped.min(), warped.max()
-        t_values = (warped - e_min) / (e_max - e_min) if e_max > e_min else np.zeros_like(warped)
-        t_values = np.clip(t_values, 0.0, 1.0)
+        grid_oklab = interpolate_color_curve(normalize_scalar_field(warped), colors_oklab)
+        return oklab_image_to_pil(grid_oklab, (self.width, self.height))
 
-        grid_oklab = interpolate_color_curve(t_values, colors_oklab)
-        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
-        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
-        return img_mod.resize((self.width, self.height), Image.LANCZOS)

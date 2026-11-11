@@ -1,5 +1,6 @@
 {
   "preset_id": "fractal",
+  "version": "1.0.0",
   "name": "Fractal",
   "description": "Volumetric dynamical Julia sets and fluid domain-warped folds unified with ambient lighting and cyclic phase offsets.",
   "color_space": "oklch",

@@ -1,5 +1,6 @@
 {
   "preset_id": "afterglow",
+  "version": "1.0.0",
   "color_space": "oklch",
   "palette_families": [
     ["#36156f", "#d940a9", "#f06449"],

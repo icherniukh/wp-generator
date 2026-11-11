@@ -158,35 +158,24 @@ def evaluate_palette_contrast(colors, threshold=4.5) -> PaletteContrast:
     return PaletteContrast(ratios, threshold)
 
 
+def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
+    """Convert a 6-character hex string (with or without leading '#') to an RGB tuple."""
+    cleaned = hex_str.strip().lstrip("#")
+    if len(cleaned) != 6:
+        raise ValueError(f"Invalid hex color: '{hex_str}'")
+    try:
+        return (int(cleaned[0:2], 16), int(cleaned[2:4], 16), int(cleaned[4:6], 16))
+    except ValueError as exc:
+        raise ValueError(f"Invalid hex color: '{hex_str}'") from exc
+
+
+def rgb_to_hex(rgb) -> str:
+    """Format an (R, G, B) tuple as a lowercase #rrggbb hex string."""
+    r, g, b = rgb
+    return f"#{int(r):02x}{int(g):02x}{int(b):02x}"
+
+
 class StyleHarmonizer:
-    NOTHING_PALETTE = {
-        "black": (15, 15, 18),
-        "white": (220, 220, 225),
-        "dark_gray": (35, 35, 40),
-        "red": (190, 40, 40),
-        "orange": (210, 80, 30),
-        "milky": (210, 210, 215)
-    }
-
-    @staticmethod
-    def evaluate_fit(colors):
-        """
-        Evaluates palette contrast using CIELAB space.
-        Returns a contrast score.
-        """
-        lab_colors = [rgb_to_lab(c) for c in colors]
-        
-        # Calculate Delta E distances (76 or 2000)
-        distances = []
-        for i in range(len(lab_colors)):
-            for j in range(i + 1, len(lab_colors)):
-                d_e = np.linalg.norm(lab_colors[i] - lab_colors[j])
-                distances.append(d_e)
-        
-        # In Nothing style, we want high contrast (large Delta E) 
-        # or very close monochrome (small Delta E) with 1 pop color (large Delta E).
-        return np.mean(distances)
-
     @staticmethod
     def adjust_for_nothing(colors):
         """Preserve hue while bounding vivid accents and muted grounding tones in OKLCH."""
@@ -200,84 +189,6 @@ class StyleHarmonizer:
                 bounds = {"lightness_bounds": lightness, "chroma_bounds": (0.0, 0.015)}
             adjusted.append(oklch_to_rgb_clamped(clamp_oklch(lch, **bounds)))
         return adjusted
-
-
-def rgb_to_lab(rgb):
-    rgb = np.array(rgb, dtype=np.float64)
-    if np.max(rgb) > 1:
-        rgb = rgb / 255.0
-
-    linear = np.where(
-        rgb <= 0.04045,
-        rgb / 12.92,
-        ((rgb + 0.055) / 1.055) ** 2.4,
-    )
-    xyz = np.array([
-        [0.4124564, 0.3575761, 0.1804375],
-        [0.2126729, 0.7151522, 0.0721750],
-        [0.0193339, 0.1191920, 0.9503041],
-    ]) @ linear
-    return xyz_to_lab(xyz)
-
-
-def lab_to_rgb(lab):
-    xyz = lab_to_xyz(lab)
-    linear = np.array([
-        [3.2404542, -1.5371385, -0.4985314],
-        [-0.9692660, 1.8760108, 0.0415560],
-        [0.0556434, -0.2040259, 1.0572252],
-    ]) @ xyz
-    linear = np.clip(linear, 0, 1)
-    return np.where(
-        linear <= 0.0031308,
-        12.92 * linear,
-        1.055 * (linear ** (1 / 2.4)) - 0.055,
-    )
-
-
-def xyz_to_lab(xyz):
-    white = np.array([0.95047, 1.0, 1.08883])
-    ratio = xyz / white
-    delta = 6 / 29
-    f = np.where(
-        ratio > delta ** 3,
-        np.cbrt(ratio),
-        ratio / (3 * delta ** 2) + 4 / 29,
-    )
-    return np.array([
-        116 * f[1] - 16,
-        500 * (f[0] - f[1]),
-        200 * (f[1] - f[2]),
-    ])
-
-
-def lab_to_xyz(lab):
-    white = np.array([0.95047, 1.0, 1.08883])
-    L, a, b = lab
-    fy = (L + 16) / 116
-    fx = fy + a / 500
-    fz = fy - b / 200
-    delta = 6 / 29
-    f = np.array([fx, fy, fz])
-    ratio = np.where(
-        f > delta,
-        f ** 3,
-        3 * delta ** 2 * (f - 4 / 29),
-    )
-    return ratio * white
-
-
-def lab_to_lch(lab):
-    L, a, b = lab
-    C = np.hypot(a, b)
-    H = np.degrees(np.arctan2(b, a)) % 360
-    return np.array([L, C, H])
-
-
-def lch_to_lab(lch):
-    L, C, H = lch
-    h_rad = np.radians(H)
-    return np.array([L, C * np.cos(h_rad), C * np.sin(h_rad)])
 
 
 class ColorTheoryHarmonizer:
@@ -333,18 +244,3 @@ class ColorTheoryHarmonizer:
 
         return result
 
-
-# Backward-compatible alias for older imports.
-ColorHarmonizer = StyleHarmonizer
-
-if __name__ == "__main__":
-    # Test
-    input_colors = [(100, 50, 50), (200, 100, 0)] # Jarring muddy red and orange
-    score = ColorHarmonizer.evaluate_fit(input_colors)
-    print(f"Initial Harmony Score: {score:.2f}")
-    
-    adjusted = StyleHarmonizer.adjust_for_nothing(input_colors)
-    print(f"Adjusted Colors: {adjusted}")
-    
-    score_new = ColorHarmonizer.evaluate_fit(adjusted)
-    print(f"New Harmony Score: {score_new:.2f}")

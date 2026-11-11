@@ -1,5 +1,6 @@
 {
   "preset_id": "nocturne",
+  "version": "1.0.0",
   "name": "Nocturne",
   "description": "Deep, richly-tinted grounding anchors paired with luminous twilight and neon accents, organic film grain, and radial prism aberration.",
   "color_space": "oklch",

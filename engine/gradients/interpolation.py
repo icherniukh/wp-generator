@@ -1,16 +1,14 @@
-import random
-from typing import List, Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 import numpy as np
 from PIL import Image
-import scipy.ndimage
 from scipy.interpolate import PchipInterpolator
 
 from engine.colors import oklab_to_rgb, rgb_to_oklab
-
-try:
-    import noise
-except ImportError:
-    noise = None
+from engine.gradients.spatial import (
+    generate_noise_plane,
+    normalize_scalar_field,
+    random_anchor_points,
+)
 
 
 def colors_to_oklab(colors: Sequence[Sequence[float]]) -> np.ndarray:
@@ -28,18 +26,27 @@ def interpolate_oklab(
     return np.clip(np.rint(oklab_to_rgb(mixed) * 255.0), 0, 255).astype(np.uint8)
 
 
-def oklab_image_to_pil(values: np.ndarray) -> Image.Image:
-    """Converts an (H, W, 3) Oklab array into a PIL RGB Image."""
+def oklab_image_to_pil(
+    values: np.ndarray, size: Optional[Tuple[int, int]] = None
+) -> Image.Image:
+    """Converts an (H, W, 3) Oklab array into a PIL RGB Image, optionally upscaling to size."""
     srgb = np.clip(oklab_to_rgb(values), 0.0, 1.0)
-    return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+    image = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+    if size is not None and image.size != size:
+        return image.resize(size, Image.LANCZOS)
+    return image
 
 
-def random_anchor_points(count: int, margin: float = 0.08) -> List[Tuple[float, float]]:
-    """Generates normalized anchor coordinates placed within canvas margins."""
-    return [
-        (random.uniform(margin, 1.0 - margin), random.uniform(margin, 1.0 - margin))
-        for _ in range(count)
-    ]
+def validate_palette_colors(
+    colors: Sequence[Sequence[float]], width: int, height: int
+) -> Optional[Image.Image]:
+    """Validates non-empty palette and returns a solid image if only one color is given."""
+    if len(colors) == 0:
+        raise ValueError("At least one color must be provided.")
+    if len(colors) == 1:
+        c = tuple(int(v) for v in colors[0])
+        return Image.new("RGB", (width, height), c)  # type: ignore[arg-type]
+    return None
 
 
 def interpolate_color_curve(
@@ -74,28 +81,14 @@ def evaluate_decoupled_palette(
     return np.column_stack([flat_L, flat_ab]).reshape((height, width, 3)).astype(np.float32)
 
 
-def generate_noise_plane(
-    h: int,
-    w: int,
-    scale: float = 1.0,
-    octaves: int = 2,
-    offset: Tuple[float, float] = (0.0, 0.0),
-) -> np.ndarray:
-    """Generates a continuous 2D scalar noise plane via Simplex noise or sinusoidal harmonic fallback."""
-    if noise is None:
-        y = np.linspace(-1.0, 1.0, h, dtype=np.float32) * scale + offset[1]
-        x = np.linspace(-1.0, 1.0, w, dtype=np.float32) * scale + offset[0]
-        xv, yv = np.meshgrid(x, y)
-        return np.sin(xv * np.pi) * np.cos(yv * np.pi)
-
-    sample_h = max(8, h // 4)
-    sample_w = max(8, w // 4)
-    y = np.linspace(-1.0, 1.0, sample_h, dtype=np.float32) * scale + offset[1]
-    x = np.linspace(-1.0, 1.0, sample_w, dtype=np.float32) * scale + offset[0]
-    grid = np.zeros((sample_h, sample_w), dtype=np.float32)
-    for iy in range(sample_h):
-        for ix in range(sample_w):
-            grid[iy, ix] = noise.snoise2(x[ix], y[iy], octaves=octaves)
-    zoom_y = h / sample_h
-    zoom_x = w / sample_w
-    return scipy.ndimage.zoom(grid, (zoom_y, zoom_x), order=3)[:h, :w]
+__all__ = [
+    "colors_to_oklab",
+    "evaluate_decoupled_palette",
+    "generate_noise_plane",
+    "interpolate_color_curve",
+    "interpolate_oklab",
+    "normalize_scalar_field",
+    "oklab_image_to_pil",
+    "random_anchor_points",
+    "validate_palette_colors",
+]

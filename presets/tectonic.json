@@ -1,5 +1,6 @@
 {
   "preset_id": "tectonic",
+  "version": "1.0.0",
   "name": "Tectonic",
   "description": "Deep obsidian and volcanic basalt trenches paired with luminous cyan and ember elevation peaks, finished with vector topographic contour isobars.",
   "color_space": "oklch",

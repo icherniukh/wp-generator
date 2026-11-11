@@ -68,6 +68,15 @@ class TestPresetAndOutputResolution(unittest.TestCase):
             with Image.open(out_file) as img:
                 self.assertEqual(img.size, (64, 48))
 
+    def test_cli_version_flag(self):
+        from engine import __version__
+        result = subprocess.run([
+            sys.executable, str(Path(__file__).resolve().parents[1] / "main.py"),
+            "--version",
+        ], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), f"wp-generator {__version__}")
+
 
 if __name__ == "__main__":
     unittest.main()

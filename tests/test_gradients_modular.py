@@ -86,6 +86,42 @@ class TestModularGradients(unittest.TestCase):
         self.assertEqual(res.shape, (8, 8, 3))
         self.assertFalse(np.isnan(res).any())
 
+    def test_fractal_angle_does_not_leak_into_domain_warp(self):
+        colors = [(20, 30, 45), (200, 100, 80), (60, 160, 210)]
+        img_default = render_gradient(
+            "domain-warp",
+            width=48,
+            height=36,
+            colors=colors,
+            seed=42,
+            fractal_angle=None,
+        )
+        img_with_fractal_angle = render_gradient(
+            "domain-warp",
+            width=48,
+            height=36,
+            colors=colors,
+            seed=42,
+            fractal_angle=1.57,
+        )
+        np.testing.assert_array_equal(
+            np.asarray(img_default), np.asarray(img_with_fractal_angle)
+        )
+
+    def test_dedicated_fluid_and_escape_fractal_engines(self):
+        colors = [(15, 25, 40), (220, 90, 120), (50, 180, 210)]
+        for engine_name in ("fluid-fractal", "escape-fractal"):
+            img = render_gradient(
+                engine_name,
+                width=48,
+                height=36,
+                colors=colors,
+                complexity=3,
+                seed=42,
+            )
+            self.assertEqual(img.size, (48, 36))
+
 
 if __name__ == "__main__":
     unittest.main()
+

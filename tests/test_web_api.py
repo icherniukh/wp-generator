@@ -33,6 +33,7 @@ class TestWebAPI(unittest.TestCase):
         # Verify structure
         first = data[0]
         self.assertIn("name", first)
+        self.assertIn("version", first)
         self.assertIn("color_space", first)
         self.assertIn("sample_palette", first)
 
@@ -207,6 +208,55 @@ class TestWebAPI(unittest.TestCase):
         self.assertEqual(post_res.status_code, 200)
         self.assertEqual(post_res.headers["x-render-engine"], "fractal")
 
+    def test_calibration_lab_page_renders_html(self):
+        res = self.client.get("/calibrate")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("text/html", res.headers["content-type"])
+        self.assertIn("Effect &amp; Parameter Range Calibration Lab", res.text)
+
+    def test_parameter_ranges_get_update_and_reset(self):
+        get_res = self.client.get("/api/parameter-ranges")
+        self.assertEqual(get_res.status_code, 200)
+        specs = {item["key"]: item for item in get_res.json()}
+        self.assertIn("warp_strength", specs)
+        self.assertIn("transverse_warp", specs)
+
+        try:
+            put_res = self.client.put(
+                "/api/parameter-ranges",
+                json={"ranges": {"transverse_warp": [0.05, 0.18]}},
+            )
+            self.assertEqual(put_res.status_code, 200)
+            updated = {item["key"]: item for item in put_res.json()}
+            self.assertEqual(updated["transverse_warp"]["selected_min"], 0.05)
+            self.assertEqual(updated["transverse_warp"]["selected_max"], 0.18)
+
+            bad_res = self.client.put(
+                "/api/parameter-ranges",
+                json={"ranges": {"transverse_warp": [0.5, 0.1]}},
+            )
+            self.assertEqual(bad_res.status_code, 422)
+        finally:
+            reset_res = self.client.post("/api/parameter-ranges/reset")
+            self.assertEqual(reset_res.status_code, 200)
+
+    def test_domain_warp_transverse_warp_via_get_and_post(self):
+        params = {
+            "preset": "nocturne",
+            "engine": "domain-warp",
+            "width": 80,
+            "height": 60,
+            "seed": 42,
+            "warp_strength": 0.6,
+            "transverse_warp": 0.15,
+        }
+        get_res = self.client.get("/api/render", params=params)
+        post_res = self.client.post("/api/render", json=params)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertEqual(post_res.status_code, 200)
+        self.assertEqual(get_res.content, post_res.content)
+
 
 if __name__ == "__main__":
     unittest.main()
+

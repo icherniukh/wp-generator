@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wallpaper Engine — Effect & Range Calibration Lab</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #131720;
+      --panel-elevated: #1a202c;
+      --border: #262f40;
+      --border-active: #4f8cff;
+      --text: #e6edf7;
+      --text-muted: #8b98af;
+      --accent: #4f8cff;
+      --accent-soft: rgba(79, 140, 255, 0.16);
+      --success: #2dd4bf;
+      --warning: #f59e0b;
+      --danger: #f87171;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", sans-serif;
+      line-height: 1.45;
+      padding-bottom: 64px;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(11, 13, 18, 0.92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand h1 {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .brand p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .control-group label {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    select, input[type="number"], input[type="text"] {
+      background: var(--panel-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    select:focus, input:focus {
+      border-color: var(--accent);
+    }
+
+    button {
+      background: var(--panel-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      background: rgba(79, 140, 255, 0.12);
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    button.primary:hover {
+      filter: brightness(1.1);
+    }
+
+    .category-bar {
+      max-width: 1480px;
+      margin: 20px auto 0;
+      padding: 0 28px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .cat-pill {
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .cat-pill.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    main {
+      max-width: 1480px;
+      margin: 20px auto;
+      padding: 0 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .param-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .param-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .param-title-group {
+      max-width: 720px;
+    }
+
+    .param-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .param-title-row h2 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 5px;
+      background: var(--panel-elevated);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .param-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+    .range-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      background: var(--panel-elevated);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 10px;
+    }
+
+    .bound-input {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .bound-input input {
+      width: 74px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .dual-slider {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 220px;
+    }
+
+    .dual-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .dual-slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .strip-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    @media (max-width: 1200px) {
+      .strip-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .strip-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .sample-tile {
+      background: var(--panel-elevated);
+      border: 2px solid var(--border);
+      border-radius: 9px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+      position: relative;
+    }
+
+    .sample-tile.in-range {
+      border-color: rgba(45, 212, 191, 0.65);
+    }
+
+    .sample-tile.out-of-range {
+      opacity: 0.52;
+      border-color: rgba(248, 113, 113, 0.35);
+    }
+
+    .sample-tile.random-sample {
+      border-color: var(--accent);
+    }
+
+    .sample-tile:hover {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+
+    .thumb-wrap {
+      aspect-ratio: 16 / 10;
+      width: 100%;
+      background: #080a0e;
+      position: relative;
+      cursor: zoom-in;
+      overflow: hidden;
+    }
+
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .status-tag {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(11, 13, 18, 0.82);
+      backdrop-filter: blur(4px);
+    }
+
+    .status-tag.in {
+      color: var(--success);
+      border: 1px solid rgba(45, 212, 191, 0.4);
+    }
+
+    .status-tag.out {
+      color: var(--danger);
+      border: 1px solid rgba(248, 113, 113, 0.4);
+    }
+
+    .status-tag.rand {
+      color: var(--accent);
+      border: 1px solid rgba(79, 140, 255, 0.5);
+    }
+
+    .tile-meta {
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 11.5px;
+    }
+
+    .val-readout {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 600;
+    }
+
+    .tile-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .tile-actions button {
+      padding: 2px 6px;
+      font-size: 10.5px;
+      border-radius: 4px;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--panel-elevated);
+      border: 1px solid var(--success);
+      color: var(--text);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+      display: none;
+      z-index: 100;
+    }
+
+    #modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 7, 10, 0.86);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 90;
+      padding: 32px;
+    }
+
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: 1120px;
+      width: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .modal-body {
+      background: #05070a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-body img {
+      max-width: 100%;
+      max-height: 78vh;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>Effect &amp; Parameter Range Calibration Lab</h1>
+      <p>Inspect each procedural effect across its spectrum and set [min, max] sampling bounds before warping degrades into noise.</p>
+    </div>
+    <div class="toolbar">
+      <div class="control-group">
+        <label for="presetSelect">Palette Preset</label>
+        <select id="presetSelect"></select>
+      </div>
+      <div class="control-group">
+        <label for="seedInput">Seed</label>
+        <input type="number" id="seedInput" value="42" style="width: 78px;" />
+        <button id="randomSeedBtn" title="Pick a new seed">Randomize</button>
+      </div>
+      <div class="control-group">
+        <label for="sweepModeSelect">Strip Sweep</label>
+        <select id="sweepModeSelect">
+          <option value="full">Full Hardware Bounds [hard_min .. hard_max]</option>
+          <option value="selected">Active Range Only [selected_min .. selected_max]</option>
+        </select>
+      </div>
+      <button id="resetBtn">Reset Factory Ranges</button>
+      <button id="saveAllBtn" class="primary">Save All Ranges</button>
+    </div>
+  </header>
+
+  <div class="category-bar" id="categoryBar"></div>
+  <main id="cardsContainer"></main>
+
+  <div id="toast"></div>
+
+  <div id="modal" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="modalTitle">High-Resolution Inspection</span>
+        <button onclick="closeModal()">Close (Esc)</button>
+      </div>
+      <div class="modal-body">
+        <img id="modalImg" src="" alt="High-resolution preview" />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let parameterSpecs = [];
+    let activeCategory = "All";
+    const STEPS = 5;
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.borderColor = isError ? "var(--danger)" : "var(--success)";
+      el.style.display = "block";
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => { el.style.display = "none"; }, 2800);
+    }
+
+    function openModal(title, hiResUrl) {
+      document.getElementById("modalTitle").textContent = title;
+      document.getElementById("modalImg").src = hiResUrl;
+      document.getElementById("modal").style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("modal").style.display = "none";
+      document.getElementById("modalImg").src = "";
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeModal();
+    });
+
+    function formatValue(val, isInt, step) {
+      if (isInt) return String(Math.round(val));
+      const decimals = step < 0.01 ? 3 : 2;
+      return Number(val).toFixed(decimals);
+    }
+
+    function buildRenderUrl(spec, paramValue, width = 320, height = 200, seedOverride = null) {
+      const preset = document.getElementById("presetSelect").value || "nocturne";
+      const seed = seedOverride !== null ? seedOverride : (parseInt(document.getElementById("seedInput").value, 10) || 42);
+      const params = new URLSearchParams({
+        preset,
+        engine: spec.engine,
+        width: String(width),
+        height: String(height),
+        seed: String(seed),
+        noise: "0.0",
+        vignette: "0.0",
+        dots: "0.0",
+        contours: "0.0",
+        aberration: "0.0",
+        glass: "false",
+      });
+
+      if (spec.fixed_params) {
+        for (const [k, v] of Object.entries(spec.fixed_params)) {
+          params.set(k, String(v));
+        }
+      }
+      params.set(spec.render_param, formatValue(paramValue, spec.is_int, spec.step));
+      return `/api/render?${params.toString()}`;
+    }
+
+    function computeSweepValues(spec) {
+      const mode = document.getElementById("sweepModeSelect").value;
+      const low = mode === "selected" ? spec.selected_min : spec.hard_min;
+      const high = mode === "selected" ? spec.selected_max : spec.hard_max;
+      const values = [];
+      for (let i = 0; i < STEPS; i++) {
+        const t = STEPS === 1 ? 0 : i / (STEPS - 1);
+        const raw = low + t * (high - low);
+        values.push(spec.is_int ? Math.round(raw) : Number(raw.toFixed(4)));
+      }
+      return values;
+    }
+
+    function renderCategoryBar() {
+      const categories = ["All", ...new Set(parameterSpecs.map((s) => s.category))];
+      const bar = document.getElementById("categoryBar");
+      bar.innerHTML = "";
+      for (const cat of categories) {
+        const pill = document.createElement("button");
+        pill.className = "cat-pill" + (cat === activeCategory ? " active" : "");
+        pill.textContent = cat;
+        pill.onclick = () => {
+          activeCategory = cat;
+          renderCategoryBar();
+          renderCards();
+        };
+        bar.appendChild(pill);
+      }
+    }
+
+    function updateCardRangeUI(spec, card, refreshImages = false) {
+      const minInput = card.querySelector(".input-min");
+      const maxInput = card.querySelector(".input-max");
+      const minSlider = card.querySelector(".slider-min");
+      const maxSlider = card.querySelector(".slider-max");
+
+      minInput.value = formatValue(spec.selected_min, spec.is_int, spec.step);
+      maxInput.value = formatValue(spec.selected_max, spec.is_int, spec.step);
+      minSlider.value = spec.selected_min;
+      maxSlider.value = spec.selected_max;
+
+      if (refreshImages || document.getElementById("sweepModeSelect").value === "selected") {
+        populateStrip(spec, card);
+      } else {
+        const tiles = card.querySelectorAll(".sample-tile.sweep-step");
+        tiles.forEach((tile) => {
+          const v = parseFloat(tile.dataset.val);
+          const inRange = v >= spec.selected_min - 1e-6 && v <= spec.selected_max + 1e-6;
+          tile.classList.toggle("in-range", inRange);
+          tile.classList.toggle("out-of-range", !inRange);
+          const tag = tile.querySelector(".status-tag");
+          tag.className = "status-tag " + (inRange ? "in" : "out");
+          tag.textContent = inRange ? "IN RANGE" : "OUTSIDE";
+        });
+      }
+    }
+
+    function populateStrip(spec, card) {
+      const strip = card.querySelector(".strip-grid");
+      strip.innerHTML = "";
+      const values = computeSweepValues(spec);
+
+      values.forEach((val) => {
+        const inRange = val >= spec.selected_min - 1e-6 && val <= spec.selected_max + 1e-6;
+        const tile = document.createElement("div");
+        tile.className = "sample-tile sweep-step " + (inRange ? "in-range" : "out-of-range");
+        tile.dataset.val = String(val);
+
+        const thumbUrl = buildRenderUrl(spec, val, 320, 200);
+        const hiResUrl = buildRenderUrl(spec, val, 1280, 800);
+        const formatted = formatValue(val, spec.is_int, spec.step);
+
+        tile.innerHTML = `
+          <div class="thumb-wrap" title="Click to inspect at 1280x800">
+            <img loading="lazy" src="${thumbUrl}" alt="${spec.label} = ${formatted}" />
+            <span class="status-tag ${inRange ? "in" : "out"}">${inRange ? "IN RANGE" : "OUTSIDE"}</span>
+          </div>
+          <div class="tile-meta">
+            <span class="val-readout">${spec.render_param}: ${formatted}</span>
+            <div class="tile-actions">
+              <button class="set-min-btn" title="Set as range minimum">Min</button>
+              <button class="set-max-btn" title="Set as range maximum">Max</button>
+            </div>
+          </div>
+        `;
+
+        tile.querySelector(".thumb-wrap").onclick = () => {
+          openModal(`${spec.label} (${spec.render_param} = ${formatted})`, hiResUrl);
+        };
+        tile.querySelector(".set-min-btn").onclick = () => {
+          spec.selected_min = Math.min(val, spec.selected_max);
+          updateCardRangeUI(spec, card);
+          saveSingleRange(spec);
+        };
+        tile.querySelector(".set-max-btn").onclick = () => {
+          spec.selected_max = Math.max(val, spec.selected_min);
+          updateCardRangeUI(spec, card);
+          saveSingleRange(spec);
+        };
+        strip.appendChild(tile);
+      });
+
+      const randVal = spec.is_int
+        ? Math.floor(spec.selected_min + Math.random() * (spec.selected_max - spec.selected_min + 1))
+        : spec.selected_min + Math.random() * (spec.selected_max - spec.selected_min);
+      const formattedRand = formatValue(randVal, spec.is_int, spec.step);
+      const randTile = document.createElement("div");
+      randTile.className = "sample-tile random-sample";
+      const randThumbUrl = buildRenderUrl(spec, randVal, 320, 200);
+      const randHiResUrl = buildRenderUrl(spec, randVal, 1280, 800);
+
+      randTile.innerHTML = `
+        <div class="thumb-wrap" title="Click to inspect random sample in range">
+          <img loading="lazy" src="${randThumbUrl}" alt="Random sample ${formattedRand}" />
+          <span class="status-tag rand">RANDOM SAMPLE</span>
+        </div>
+        <div class="tile-meta">
+          <span class="val-readout">Sampled: ${formattedRand}</span>
+          <div class="tile-actions">
+            <button class="resample-btn">Resample</button>
+          </div>
+        </div>
+      `;
+      randTile.querySelector(".thumb-wrap").onclick = () => {
+        openModal(`${spec.label} — Sampled in Range (${formattedRand})`, randHiResUrl);
+      };
+      randTile.querySelector(".resample-btn").onclick = () => {
+        populateStrip(spec, card);
+      };
+      strip.appendChild(randTile);
+    }
+
+    function renderCards() {
+      const container = document.getElementById("cardsContainer");
+      container.innerHTML = "";
+
+      const visibleSpecs = activeCategory === "All"
+        ? parameterSpecs
+        : parameterSpecs.filter((s) => s.category === activeCategory);
+
+      visibleSpecs.forEach((spec) => {
+        const card = document.createElement("section");
+        card.className = "param-card";
+        card.innerHTML = `
+          <div class="param-header">
+            <div class="param-title-group">
+              <div class="param-title-row">
+                <h2>${spec.label}</h2>
+                <span class="badge">engine: ${spec.engine}</span>
+                <span class="badge">param: ${spec.key}</span>
+              </div>
+              <p class="param-desc">${spec.description}</p>
+            </div>
+            <div class="range-controls">
+              <div class="bound-input">
+                <label>Min</label>
+                <input type="number" class="input-min" min="${spec.hard_min}" max="${spec.hard_max}" step="${spec.step}" value="${formatValue(spec.selected_min, spec.is_int, spec.step)}" />
+              </div>
+              <div class="dual-slider">
+                <div class="dual-slider-row">
+                  <span>Min</span>
+                  <input type="range" class="slider-min" min="${spec.hard_min}" max="${spec.hard_max}" step="${spec.step}" value="${spec.selected_min}" />
+                </div>
+                <div class="dual-slider-row">
+                  <span>Max</span>
+                  <input type="range" class="slider-max" min="${spec.hard_min}" max="${spec.hard_max}" step="${spec.step}" value="${spec.selected_max}" />
+                </div>
+              </div>
+              <div class="bound-input">
+                <label>Max</label>
+                <input type="number" class="input-max" min="${spec.hard_min}" max="${spec.hard_max}" step="${spec.step}" value="${formatValue(spec.selected_max, spec.is_int, spec.step)}" />
+              </div>
+              <button class="apply-card-btn primary">Apply Range</button>
+            </div>
+          </div>
+          <div class="strip-grid"></div>
+        `;
+
+        const minInput = card.querySelector(".input-min");
+        const maxInput = card.querySelector(".input-max");
+        const minSlider = card.querySelector(".slider-min");
+        const maxSlider = card.querySelector(".slider-max");
+
+        minSlider.oninput = () => {
+          const v = Math.min(parseFloat(minSlider.value), spec.selected_max);
+          spec.selected_min = spec.is_int ? Math.round(v) : v;
+          updateCardRangeUI(spec, card, false);
+        };
+        maxSlider.oninput = () => {
+          const v = Math.max(parseFloat(maxSlider.value), spec.selected_min);
+          spec.selected_max = spec.is_int ? Math.round(v) : v;
+          updateCardRangeUI(spec, card, false);
+        };
+        minInput.onchange = () => {
+          let v = parseFloat(minInput.value);
+          v = Math.max(spec.hard_min, Math.min(spec.selected_max, v));
+          spec.selected_min = spec.is_int ? Math.round(v) : v;
+          updateCardRangeUI(spec, card, false);
+        };
+        maxInput.onchange = () => {
+          let v = parseFloat(maxInput.value);
+          v = Math.min(spec.hard_max, Math.max(spec.selected_min, v));
+          spec.selected_max = spec.is_int ? Math.round(v) : v;
+          updateCardRangeUI(spec, card, false);
+        };
+        card.querySelector(".apply-card-btn").onclick = async () => {
+          await saveSingleRange(spec);
+          populateStrip(spec, card);
+        };
+
+        populateStrip(spec, card);
+        container.appendChild(card);
+      });
+    }
+
+    async function saveSingleRange(spec) {
+      try {
+        const res = await fetch("/api/parameter-ranges", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ranges: {
+              [spec.key]: [spec.selected_min, spec.selected_max],
+            },
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast(`Saved ${spec.key}: [${formatValue(spec.selected_min, spec.is_int, spec.step)}, ${formatValue(spec.selected_max, spec.is_int, spec.step)}]`);
+      } catch (err) {
+        showToast(`Failed to save range: ${err.message}`, true);
+      }
+    }
+
+    async function saveAllRanges() {
+      const ranges = {};
+      parameterSpecs.forEach((s) => {
+        ranges[s.key] = [s.selected_min, s.selected_max];
+      });
+      try {
+        const res = await fetch("/api/parameter-ranges", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ranges }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("All parameter ranges saved to presets/parameter_ranges.json");
+      } catch (err) {
+        showToast(`Error saving ranges: ${err.message}`, true);
+      }
+    }
+
+    async function init() {
+      const [presetsRes, rangesRes] = await Promise.all([
+        fetch("/api/presets"),
+        fetch("/api/parameter-ranges"),
+      ]);
+      const presets = await presetsRes.json();
+      parameterSpecs = await rangesRes.json();
+
+      const presetSelect = document.getElementById("presetSelect");
+      presets.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        if (p.id === "nocturne") opt.selected = true;
+        presetSelect.appendChild(opt);
+      });
+
+      presetSelect.onchange = () => renderCards();
+      document.getElementById("seedInput").onchange = () => renderCards();
+      document.getElementById("sweepModeSelect").onchange = () => renderCards();
+      document.getElementById("randomSeedBtn").onclick = () => {
+        document.getElementById("seedInput").value = Math.floor(Math.random() * 9000) + 100;
+        renderCards();
+      };
+      document.getElementById("saveAllBtn").onclick = saveAllRanges;
+      document.getElementById("resetBtn").onclick = async () => {
+        const res = await fetch("/api/parameter-ranges/reset", { method: "POST" });
+        parameterSpecs = await res.json();
+        renderCards();
+        showToast("Reset all parameter ranges to factory defaults");
+      };
+
+      renderCategoryBar();
+      renderCards();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,12 +1,15 @@
-import asyncio
-import os
-import random
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from engine.metadata import extract_image_metadata
+from engine import __version__
+
+from engine.parameter_ranges import PARAMETER_RANGES
 from engine.pipeline import (
     DEVICE_RESOLUTIONS,
     PipelineConfigurationError,
@@ -19,10 +22,11 @@ from engine.pipeline import (
 app = FastAPI(
     title="Wallpaper Generator API",
     description="Procedural statistical wallpaper rendering engine API.",
-    version="0.1.0",
+    version=__version__,
 )
 
 pipeline = WallpaperPipeline()
+CALIBRATE_HTML_PATH = Path(__file__).resolve().parent / "static" / "calibrate.html"
 
 # Max allowed dimensions for web rendering to prevent resource exhaustion
 MAX_DIMENSION = 5120
@@ -32,6 +36,7 @@ MAX_PIXELS = 5120 * 2880
 class PresetSummary(BaseModel):
     id: str
     name: str
+    version: str = "1.0.0"
     description: str
     color_space: str
     sample_palette: List[str]
@@ -41,6 +46,10 @@ class DeviceSummary(BaseModel):
     key: str
     width: int
     height: int
+
+
+class ParameterRangeUpdateRequest(BaseModel):
+    ranges: Dict[str, Tuple[float, float]]
 
 
 class RenderRequest(BaseModel):
@@ -65,6 +74,7 @@ class RenderRequest(BaseModel):
     glass: Optional[bool] = Field(default=None)
     chromatic_aberration: Optional[float] = Field(default=None, ge=0.0, le=0.1)
     warp_strength: Optional[float] = Field(default=None, ge=0.0, le=3.0)
+    transverse_warp: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     ambient_weight: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     dispersion: Optional[float] = Field(default=None, ge=0.05, le=2.0)
     phase_offset: Optional[float] = Field(default=None, ge=0.0, le=1.0)
@@ -99,6 +109,13 @@ def _resolve_dimensions(
     return DEVICE_RESOLUTIONS["mbp14"]
 
 
+@app.get("/", response_class=HTMLResponse)
+@app.get("/calibrate", response_class=HTMLResponse)
+def calibration_lab_page() -> HTMLResponse:
+    """Serves the interactive effect and parameter range demonstration & calibration lab."""
+    return HTMLResponse(content=CALIBRATE_HTML_PATH.read_text(encoding="utf-8"))
+
+
 @app.get("/health")
 def health_check() -> Dict[str, str]:
     return {"status": "ok", "service": "wp-generator"}
@@ -116,100 +133,44 @@ def list_devices() -> List[DeviceSummary]:
 @app.get("/api/presets", response_model=List[PresetSummary])
 def list_presets() -> List[PresetSummary]:
     """Lists available presets along with metadata and sampled palette colors."""
-    catalog = pipeline.list_presets()
-    summaries = []
-    for item in catalog:
-        preset_id = item["id"]
-        # Sample preview colors with fixed seed for determinism
-        try:
-            data = pipeline.load_preset(preset_id)
-            colors = pipeline.preset_engine.generate_palette(data, count=3, family_index=42)
-            hexes = [f"#{r:02x}{g:02x}{b:02x}" for r, g, b in colors]
-        except Exception:
-            hexes = []
-        summaries.append(
-            PresetSummary(
-                id=preset_id,
-                name=item["name"],
-                description=item["description"],
-                color_space=item["color_space"],
-                sample_palette=hexes,
-            )
+    return [
+        PresetSummary(
+            id=item["id"],
+            name=item["name"],
+            version=item.get("version", "1.0.0"),
+            description=item["description"],
+            color_space=item["color_space"],
+            sample_palette=item.get("sample_palette", []),
         )
-    return summaries
+        for item in pipeline.list_presets(include_palette=True)
+    ]
 
 
-@app.get("/api/render")
-async def render_get(
-    preset: Optional[str] = Query(default="nocturne"),
-    device: Optional[str] = Query(default=None),
-    width: Optional[int] = Query(default=None, ge=16, le=MAX_DIMENSION),
-    height: Optional[int] = Query(default=None, ge=16, le=MAX_DIMENSION),
-    seed: Optional[int] = Query(default=None),
-    complexity: Optional[int] = Query(default=None, ge=1, le=10),
-    engine: Optional[str] = Query(default=None),
-    harmonize: Optional[Literal["perceptual", "theory", "nothing", "none"]] = Query(default=None),
-    noise: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    vignette: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    dots: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    contours: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    contour_levels: Optional[int] = Query(default=None, ge=1, le=100),
-    contour_width: Optional[float] = Query(default=None, ge=0.1, le=10.0),
-    contour_mode: Optional[Literal["light", "dark", "accent"]] = Query(default=None),
-    glass: Optional[bool] = Query(default=None),
-    aberration: Optional[float] = Query(default=None, ge=0.0, le=0.1),
-    warp_strength: Optional[float] = Query(default=None, ge=0.0, le=3.0),
-    ambient_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    dispersion: Optional[float] = Query(default=None, ge=0.05, le=2.0),
-    phase_offset: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    frequency: Optional[float] = Query(default=None, gt=0.0),
-    trap_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    channel_offset: Optional[float] = Query(default=None, ge=-1.0, le=1.0),
-    fractal_type: Optional[Literal["fluid", "julia", "mandelbrot", "orbit_trap"]] = Query(default=None),
-    fractal_zoom: Optional[float] = Query(default=None, gt=0.0),
-    fractal_center_x: Optional[float] = Query(default=None),
-    fractal_center_y: Optional[float] = Query(default=None),
-    fractal_angle: Optional[float] = Query(default=None),
-) -> Response:
-    """Renders wallpaper directly as a streaming PNG image response."""
-    w, h = _resolve_dimensions(device, width, height)
-    active_seed = seed if seed is not None else random.randint(0, 2_147_483_647)
-    fractal_center = (
-        (fractal_center_x, fractal_center_y)
-        if fractal_center_x is not None and fractal_center_y is not None
-        else None
-    )
+@app.get("/api/parameter-ranges")
+def get_parameter_ranges() -> List[Dict[str, Any]]:
+    """Returns all parameter range specifications and their active [selected_min, selected_max] bounds."""
+    return PARAMETER_RANGES.list_specs()
 
-    config = RenderConfiguration(
-        width=w,
-        height=h,
-        preset=preset,
-        complexity=complexity,
-        engine=engine,
-        harmonize=harmonize,
-        noise=noise,
-        vignette=vignette,
-        dots=dots,
-        contours=contours,
-        contour_levels=contour_levels,
-        contour_width=contour_width,
-        contour_mode=contour_mode,
-        glass=glass,
-        chromatic_aberration=aberration,
-        warp_strength=warp_strength,
-        ambient_weight=ambient_weight,
-        dispersion=dispersion,
-        phase_offset=phase_offset,
-        frequency=frequency,
-        trap_weight=trap_weight,
-        channel_offset=channel_offset,
-        fractal_type=fractal_type,
-        fractal_zoom=fractal_zoom,
-        fractal_center=fractal_center,
-        fractal_angle=fractal_angle,
-        seed=active_seed,
-    )
 
+@app.put("/api/parameter-ranges")
+def update_parameter_ranges(body: ParameterRangeUpdateRequest) -> List[Dict[str, Any]]:
+    """Updates and persists active [selected_min, selected_max] sampling bounds."""
+    try:
+        return PARAMETER_RANGES.update_ranges(body.ranges)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+@app.post("/api/parameter-ranges/reset")
+def reset_parameter_ranges() -> List[Dict[str, Any]]:
+    """Resets all parameter sampling ranges to factory defaults."""
+    return PARAMETER_RANGES.reset_defaults()
+
+
+async def _execute_render(config: RenderConfiguration) -> Response:
+    """Executes pipeline render in a worker thread and formats the HTTP PNG response."""
     try:
         png_bytes, result = await run_in_threadpool(pipeline.render_png_bytes, config)
     except PresetNotFoundError as exc:
@@ -242,11 +203,86 @@ async def render_get(
     return Response(content=png_bytes, media_type="image/png", headers=headers)
 
 
+@app.get("/api/render")
+async def render_get(
+    preset: Optional[str] = Query(default="nocturne"),
+    device: Optional[str] = Query(default=None),
+    width: Optional[int] = Query(default=None, ge=16, le=MAX_DIMENSION),
+    height: Optional[int] = Query(default=None, ge=16, le=MAX_DIMENSION),
+    seed: Optional[int] = Query(default=None),
+    complexity: Optional[int] = Query(default=None, ge=1, le=10),
+    engine: Optional[str] = Query(default=None),
+    harmonize: Optional[Literal["perceptual", "theory", "nothing", "none"]] = Query(default=None),
+    noise: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    vignette: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    dots: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    dots_spacing: Optional[int] = Query(default=None, ge=4, le=100),
+    contours: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    contour_levels: Optional[int] = Query(default=None, ge=1, le=100),
+    contour_width: Optional[float] = Query(default=None, ge=0.1, le=10.0),
+    contour_mode: Optional[Literal["light", "dark", "accent"]] = Query(default=None),
+    glass: Optional[bool] = Query(default=None),
+    aberration: Optional[float] = Query(default=None, ge=0.0, le=0.1),
+    warp_strength: Optional[float] = Query(default=None, ge=0.0, le=3.0),
+    transverse_warp: Optional[float] = Query(default=None, ge=0.0, le=2.0),
+    ambient_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    dispersion: Optional[float] = Query(default=None, ge=0.05, le=2.0),
+    phase_offset: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    frequency: Optional[float] = Query(default=None, gt=0.0),
+    trap_weight: Optional[float] = Query(default=None, ge=0.0, le=1.0),
+    channel_offset: Optional[float] = Query(default=None, ge=-1.0, le=1.0),
+    fractal_type: Optional[Literal["fluid", "julia", "mandelbrot", "orbit_trap"]] = Query(default=None),
+    fractal_zoom: Optional[float] = Query(default=None, gt=0.0),
+    fractal_center_x: Optional[float] = Query(default=None),
+    fractal_center_y: Optional[float] = Query(default=None),
+    fractal_angle: Optional[float] = Query(default=None),
+) -> Response:
+    """Renders wallpaper directly as a streaming PNG image response."""
+    w, h = _resolve_dimensions(device, width, height)
+    fractal_center = (
+        (fractal_center_x, fractal_center_y)
+        if fractal_center_x is not None and fractal_center_y is not None
+        else None
+    )
+
+    config = RenderConfiguration(
+        width=w,
+        height=h,
+        preset=preset,
+        complexity=complexity,
+        engine=engine,
+        harmonize=harmonize,
+        noise=noise,
+        vignette=vignette,
+        dots=dots,
+        dots_spacing=dots_spacing,
+        contours=contours,
+        contour_levels=contour_levels,
+        contour_width=contour_width,
+        contour_mode=contour_mode,
+        glass=glass,
+        chromatic_aberration=aberration,
+        warp_strength=warp_strength,
+        transverse_warp=transverse_warp,
+        ambient_weight=ambient_weight,
+        dispersion=dispersion,
+        phase_offset=phase_offset,
+        frequency=frequency,
+        trap_weight=trap_weight,
+        channel_offset=channel_offset,
+        fractal_type=fractal_type,
+        fractal_zoom=fractal_zoom,
+        fractal_center=fractal_center,
+        fractal_angle=fractal_angle,
+        seed=seed,
+    )
+    return await _execute_render(config)
+
+
 @app.post("/api/render")
 async def render_post(body: RenderRequest) -> Response:
     """Renders wallpaper from detailed JSON request parameters."""
     w, h = _resolve_dimensions(body.device, body.width, body.height)
-    active_seed = body.seed if body.seed is not None else random.randint(0, 2_147_483_647)
 
     parsed_colors = None
     if body.colors:
@@ -278,6 +314,7 @@ async def render_post(body: RenderRequest) -> Response:
         glass=body.glass,
         chromatic_aberration=body.chromatic_aberration,
         warp_strength=body.warp_strength,
+        transverse_warp=body.transverse_warp,
         ambient_weight=body.ambient_weight,
         dispersion=body.dispersion,
         phase_offset=body.phase_offset,
@@ -288,36 +325,27 @@ async def render_post(body: RenderRequest) -> Response:
         fractal_zoom=body.fractal_zoom,
         fractal_center=body.fractal_center,
         fractal_angle=body.fractal_angle,
-        seed=active_seed,
+        seed=body.seed,
     )
+    return await _execute_render(config)
 
-    try:
-        png_bytes, result = await run_in_threadpool(pipeline.render_png_bytes, config)
-    except PresetNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except PipelineConfigurationError as exc:
+
+@app.post("/api/metadata/extract")
+async def extract_metadata_endpoint(request: Request) -> Dict[str, Any]:
+    """Extracts wallpaper engine parameters and version from uploaded image bytes."""
+    body_bytes = await request.body()
+    if not body_bytes:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
-    except Exception as exc:
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty image payload. Send raw image binary in the request body.",
+        )
+    metadata = extract_image_metadata(body_bytes)
+    if metadata is None:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Rendering failure: {exc}",
-        ) from exc
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No wallpaper metadata found in provided image.",
+        )
+    return metadata.to_dict()
 
-    headers = {
-        "Content-Type": "image/png",
-        "X-Render-Seed": str(result.seed),
-        "X-Render-Colors": ",".join(result.color_hexes),
-        "X-Render-Engine": result.engine,
-        "X-Render-Width": str(result.width),
-        "X-Render-Height": str(result.height),
-        "X-Render-Contrast-Ratios": ",".join(str(ratio) for ratio in result.palette_contrast.ratios),
-        "X-Render-Contrast-Pass": str(result.palette_contrast.passes).lower(),
-    }
-    if result.chromatic_aberration > 0.0:
-        headers["X-Render-Aberration"] = str(result.chromatic_aberration)
-    if result.contours > 0.0:
-        headers["X-Render-Contours"] = str(result.contours)
 
-    return Response(content=png_bytes, media_type="image/png", headers=headers)
+

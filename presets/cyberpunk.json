@@ -1,5 +1,6 @@
 {
   "preset_id": "cyberpunk",
+  "version": "1.0.0",
   "color_space": "oklch",
   "color_count": { "type": "uniform_int", "min": 4, "max": 5 },
   "palette_structure": [

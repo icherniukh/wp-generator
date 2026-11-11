@@ -2,21 +2,18 @@ import argparse
 import concurrent.futures
 from datetime import datetime
 import os
-import random
 import sys
 import time
-from typing import List, Optional, Tuple
 
+from engine import __version__
+from engine.gradients import GRADIENT_REGISTRY
 from engine.pipeline import (
     DEVICE_RESOLUTIONS,
-    PipelineConfigurationError,
     RenderConfiguration,
     WallpaperPipeline,
     parse_hex_color,
+    resolve_preset_directory,
 )
-
-SCREEN_PRESETS = DEVICE_RESOLUTIONS
-hex_to_rgb = parse_hex_color
 
 
 def default_output_path(preset_name: str, seed: int, directory: str = ".") -> str:
@@ -25,7 +22,7 @@ def default_output_path(preset_name: str, seed: int, directory: str = ".") -> st
     return os.path.join(directory, f"wp_{preset_name}_{timestamp}_{seed}.png")
 
 
-def build_render_configuration(args: argparse.Namespace, nothing_style: bool, seed: int) -> RenderConfiguration:
+def build_render_configuration(args: argparse.Namespace, seed: int) -> RenderConfiguration:
     """Translates parsed CLI arguments into a pipeline RenderConfiguration."""
     if args.res:
         width, height = args.res
@@ -33,14 +30,6 @@ def build_render_configuration(args: argparse.Namespace, nothing_style: bool, se
         width, height = DEVICE_RESOLUTIONS.get(args.device, DEVICE_RESOLUTIONS["mbp14"])
 
     parsed_colors = [parse_hex_color(h) for h in args.colors] if args.colors else None
-
-    harmonize = args.harmonize
-    if harmonize is None and nothing_style:
-        harmonize = "nothing"
-
-    dots = args.dots
-    if dots is None and nothing_style:
-        dots = 0.8
 
     return RenderConfiguration(
         width=width,
@@ -50,10 +39,10 @@ def build_render_configuration(args: argparse.Namespace, nothing_style: bool, se
         complexity=args.complexity,
         engine=args.engine,
         fluid_mode=args.fluid_mode,
-        harmonize=harmonize,
+        harmonize=args.harmonize,
         noise=args.noise,
         vignette=args.vignette,
-        dots=dots,
+        dots=args.dots,
         dots_spacing=args.dots_spacing,
         dots_mode=args.dots_mode,
         contours=args.contours,
@@ -71,11 +60,11 @@ def build_render_configuration(args: argparse.Namespace, nothing_style: bool, se
         channel_offset=args.channel_offset,
         fractal_type=args.fractal_type,
         fractal_zoom=args.fractal_zoom,
-        fractal_center=tuple(args.fractal_center) if getattr(args, "fractal_center", None) is not None else None,
-        fractal_angle=getattr(args, "fractal_angle", None),
-        legacy_idw=bool(getattr(args, "legacy_idw", False)),
+        fractal_center=tuple(args.fractal_center) if args.fractal_center is not None else None,
+        fractal_angle=args.fractal_angle,
+        legacy_idw=bool(args.legacy_idw),
         seed=seed,
-        capture_base_image=bool(getattr(args, "preview_fx", False)),
+        capture_base_image=bool(args.preview_fx),
     )
 
 
@@ -96,23 +85,20 @@ def save_preview_image(result, output_path: str) -> None:
     print(f"  -> Preview saved to {preview_path}")
 
 
-def generate(args: argparse.Namespace, nothing_style: bool, seed: int) -> str:
+def generate(args: argparse.Namespace, seed: int) -> str:
     """Renders a single wallpaper instance and writes it to disk."""
-    config = build_render_configuration(args, nothing_style, seed)
-    pipeline = WallpaperPipeline()
-    result = pipeline.render(config)
+    config = build_render_configuration(args, seed)
+    result = WallpaperPipeline().render(config)
 
     if args.output is not None:
         output_path = args.output
     else:
-        preset_name = args.preset if getattr(args, "preset", None) else "custom"
-        output_path = default_output_path(
-            preset_name, seed, directory=getattr(args, "out_dir", None) or "."
-        )
+        preset_name = args.preset or "custom"
+        output_path = default_output_path(preset_name, seed, directory=args.out_dir or ".")
 
     color_hex = " ".join(result.color_hexes[:3])
     if len(result.color_hexes) > 3:
-        color_hex += f" (+{len(result.color_hexes)-3} more)"
+        color_hex += f" (+{len(result.color_hexes) - 3} more)"
     print(f"  seed={seed}  complexity={result.complexity}  noise={result.noise}  colors={color_hex}")
     contrast = result.palette_contrast
     ratios = ", ".join(f"{ratio:.2f}:1" for ratio in contrast.ratios)
@@ -122,10 +108,10 @@ def generate(args: argparse.Namespace, nothing_style: bool, seed: int) -> str:
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    if getattr(args, "preview_fx", False):
+    if args.preview_fx:
         save_preview_image(result, output_path)
 
-    result.image.save(output_path, "PNG")
+    result.save(output_path)
     return output_path
 
 
@@ -140,26 +126,25 @@ def build_argument_parser(show_all: bool = False) -> argparse.ArgumentParser:
     help_group = parser.add_argument_group("Help")
     help_group.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="Show compact help and exit.")
     help_group.add_argument("--help-all", action="help", default=argparse.SUPPRESS, help="Show all options including advanced overrides.")
+    help_group.add_argument("-v", "--version", action="version", version=f"wp-generator {__version__}", help="Show generator engine version and exit.")
 
     def adv_help(text: str) -> str:
         return text if show_all else argparse.SUPPRESS
 
     core_group = parser.add_argument_group("Core Settings")
-    core_group.add_argument("--device", choices=list(SCREEN_PRESETS.keys()), default="mbp14", help="Standard screen resolution device.")
+    core_group.add_argument("--device", choices=list(DEVICE_RESOLUTIONS.keys()), default="mbp14", help="Standard screen resolution device.")
     core_group.add_argument("--count", type=int, default=1, help="Number of wallpapers to generate.")
     core_group.add_argument("--output", default=None, help="Output path (single image). Auto-named if omitted.")
     core_group.add_argument("--out-dir", default=None, help="Directory to save generated wallpapers.")
     core_group.add_argument("--workers", type=int, default=None, help="Worker count for parallel generation.")
+    core_group.add_argument("--metadata", "--inspect", dest="inspect_image", default=None, metavar="PATH", help="Extract and display engine metadata from an image.")
+    core_group.add_argument("--json", action="store_true", dest="json_output", help="Format extracted metadata as JSON.")
 
     color_group = parser.add_argument_group("Color Palettes")
     color_source = color_group.add_mutually_exclusive_group()
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    presets_dir = os.path.join(base_dir, "presets")
-    try:
-        available_presets = [f.replace(".json", "") for f in os.listdir(presets_dir) if f.endswith(".json")]
-    except FileNotFoundError:
-        available_presets = []
+    presets_dir = resolve_preset_directory()
+    available_presets = sorted(p.stem for p in presets_dir.glob("*.json")) if presets_dir.exists() else []
 
     color_source.add_argument("--preset", choices=available_presets, help="Pre-defined aesthetic preset.")
     color_source.add_argument("--colors", nargs="+", metavar="HEX", help="Custom hex colors.")
@@ -169,7 +154,7 @@ def build_argument_parser(show_all: bool = False) -> argparse.ArgumentParser:
     engine_group = parser.add_argument_group(engine_title)
     engine_group.add_argument("--res", nargs=2, type=int, default=None, metavar=("W", "H"), help=adv_help("Custom resolution. Overrides preset."))
     engine_group.add_argument("--complexity", type=int, default=None, help=adv_help("Gradient complexity (folds/points)."))
-    engine_group.add_argument("--engine", choices=["simplex", "flow-field", "fluid-wave", "idw", "spline-wave", "domain-warp", "rbf", "topographic", "fractal"], default=None, help=adv_help("Gradient engine to use."))
+    engine_group.add_argument("--engine", choices=list(GRADIENT_REGISTRY.keys()), default=None, help=adv_help("Gradient engine to use."))
     engine_group.add_argument("--warp-strength", type=float, default=None, help=adv_help("Domain warping displacement strength (0.0-3.0)."))
     engine_group.add_argument("--ambient-weight", type=float, default=None, help=adv_help("RBF base color anchor weight (0.0-1.0)."))
     engine_group.add_argument("--dispersion", type=float, default=None, help=adv_help("RBF emitter dispersion/reach (0.05-1.5)."))
@@ -203,48 +188,44 @@ def build_argument_parser(show_all: bool = False) -> argparse.ArgumentParser:
     misc_group = parser.add_argument_group("Miscellaneous" if show_all else "Miscellaneous (hidden, use --help-all)")
     misc_group.add_argument("--seed", type=int, default=None, help=adv_help("Base seed for reproducibility."))
 
-    parser.add_argument("--style", choices=["generic", "nothing"], default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--nothing", action="store_true", default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--no-adjust", action="store_true", default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--no-nothing", action="store_true", default=None, help=argparse.SUPPRESS)
-
     return parser
 
 
 def validate_cli_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     """Validates parameter ranges and conflicts."""
+    if getattr(args, "inspect_image", None):
+        return
+
     if args.res and (args.res[0] <= 0 or args.res[1] <= 0):
         parser.error("--res values must be positive")
-    if args.dots_spacing is not None and args.dots_spacing <= 0:
-        parser.error("--dots-spacing must be positive")
-    if args.complexity is not None and args.complexity <= 0:
-        parser.error("--complexity must be positive")
-    if args.dots is not None and not 0 <= args.dots <= 1:
-        parser.error("--dots must be between 0.0 and 1.0")
-    if args.contours is not None and not 0 <= args.contours <= 1:
-        parser.error("--contours must be between 0.0 and 1.0")
-    if args.contour_levels is not None and args.contour_levels <= 0:
-        parser.error("--contour-levels must be positive")
-    if args.contour_width is not None and args.contour_width <= 0:
-        parser.error("--contour-width must be positive")
-    if args.noise is not None and not 0 <= args.noise <= 1:
-        parser.error("--noise must be between 0.0 and 1.0")
-    if args.vignette is not None and not 0 <= args.vignette <= 1:
-        parser.error("--vignette must be between 0.0 and 1.0")
-    if args.chromatic_aberration is not None and not 0 <= args.chromatic_aberration <= 0.1:
-        parser.error("--aberration must be between 0.0 and 0.1")
-    if args.ambient_weight is not None and not 0.0 <= args.ambient_weight <= 1.0:
-        parser.error("--ambient-weight must be between 0.0 and 1.0")
-    if args.dispersion is not None and args.dispersion <= 0:
-        parser.error("--dispersion must be positive")
-    if args.phase_offset is not None and not 0.0 <= args.phase_offset <= 1.0:
-        parser.error("--phase-offset must be between 0.0 and 1.0")
-    if args.frequency is not None and args.frequency <= 0:
-        parser.error("--frequency must be positive")
-    if args.trap_weight is not None and not 0.0 <= args.trap_weight <= 1.0:
-        parser.error("--trap-weight must be between 0.0 and 1.0")
-    if args.fractal_zoom is not None and args.fractal_zoom <= 0:
-        parser.error("--fractal-zoom must be positive")
+
+    positive_checks = [
+        ("--dots-spacing", args.dots_spacing),
+        ("--complexity", args.complexity),
+        ("--contour-levels", args.contour_levels),
+        ("--contour-width", args.contour_width),
+        ("--dispersion", args.dispersion),
+        ("--frequency", args.frequency),
+        ("--fractal-zoom", args.fractal_zoom),
+    ]
+    for flag, val in positive_checks:
+        if val is not None and val <= 0:
+            parser.error(f"{flag} must be positive")
+
+    range_checks = [
+        ("--dots", args.dots, 0.0, 1.0),
+        ("--contours", args.contours, 0.0, 1.0),
+        ("--noise", args.noise, 0.0, 1.0),
+        ("--vignette", args.vignette, 0.0, 1.0),
+        ("--aberration", args.chromatic_aberration, 0.0, 0.1),
+        ("--ambient-weight", args.ambient_weight, 0.0, 1.0),
+        ("--phase-offset", args.phase_offset, 0.0, 1.0),
+        ("--trap-weight", args.trap_weight, 0.0, 1.0),
+    ]
+    for flag, val, lo, hi in range_checks:
+        if val is not None and not lo <= val <= hi:
+            parser.error(f"{flag} must be between {lo} and {hi}")
+
     if args.count < 1:
         parser.error("--count must be at least 1")
     if args.count > 1 and args.output:
@@ -257,7 +238,7 @@ def validate_cli_arguments(parser: argparse.ArgumentParser, args: argparse.Names
             parser.error(str(exc))
 
 
-def execute_batch(args: argparse.Namespace, nothing_style: bool, base_seed: int) -> None:
+def execute_batch(args: argparse.Namespace, base_seed: int) -> None:
     """Executes single or multi-worker batch generation loop."""
     total = args.count
     workers = args.workers or min(total, os.cpu_count() or 1)
@@ -266,12 +247,10 @@ def execute_batch(args: argparse.Namespace, nothing_style: bool, base_seed: int)
         print(f"Generating {total} wallpapers in parallel using {workers} workers...")
         with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(generate, args, nothing_style, base_seed + i): i + 1
+                executor.submit(generate, args, base_seed + i): i + 1
                 for i in range(total)
             }
-            completed_count = 0
-            for future in concurrent.futures.as_completed(futures):
-                completed_count += 1
+            for completed_count, future in enumerate(concurrent.futures.as_completed(futures), 1):
                 path = future.result()
                 print(f"[{completed_count}/{total}] -> {path}")
     else:
@@ -279,7 +258,7 @@ def execute_batch(args: argparse.Namespace, nothing_style: bool, base_seed: int)
             seed = base_seed + i
             if total > 1:
                 print(f"[{i+1}/{total}]", end=" ")
-            path = generate(args, nothing_style, seed)
+            path = generate(args, seed)
             print(f"  -> {path}")
 
 
@@ -289,9 +268,30 @@ def main() -> None:
     args = parser.parse_args()
     validate_cli_arguments(parser, args)
 
-    nothing_style = args.nothing or args.style == "nothing"
-    if getattr(args, "no_nothing", False):
-        nothing_style = False
+    if args.inspect_image:
+        from engine.metadata import extract_image_metadata
+
+        metadata = extract_image_metadata(args.inspect_image)
+        if metadata is None:
+            print(f"Error: No wallpaper metadata found in '{args.inspect_image}'.", file=sys.stderr)
+            sys.exit(1)
+
+        if args.json_output:
+            print(metadata.to_json(indent=2))
+        else:
+            print(f"Engine:     {metadata.engine} (generator v{metadata.version})")
+            if metadata.parameters.get("preset"):
+                preset_str = str(metadata.parameters["preset"])
+                if metadata.parameters.get("preset_version"):
+                    preset_str += f" (v{metadata.parameters['preset_version']})"
+                print(f"Preset:     {preset_str}")
+            print(f"Seed:       {metadata.seed}")
+            if metadata.created_at:
+                print(f"Created:    {metadata.created_at}")
+            print("Parameters:")
+            for key, val in sorted(metadata.parameters.items()):
+                print(f"  {key}: {val}")
+        return
 
     if args.sample:
         from tools.sampler import ScreenSampler
@@ -307,8 +307,9 @@ def main() -> None:
     if args.seed is None:
         print(f"Base seed: {base_seed}  (pass --seed {base_seed} to reproduce)")
 
-    execute_batch(args, nothing_style, base_seed)
+    execute_batch(args, base_seed)
 
 
 if __name__ == "__main__":
     main()
+

@@ -123,6 +123,30 @@ class TestPresetEngine(unittest.TestCase):
         self.assertEqual(len(colors), 4)
         self.assertTrue(all(isinstance(c, tuple) and len(c) == 3 for c in colors))
 
+    def test_all_live_presets_have_version(self):
+        from pathlib import Path
+        import json
+        preset_dir = Path("presets")
+        for preset_file in preset_dir.glob("*.json"):
+            with open(preset_file, "r") as f:
+                data = json.load(f)
+            self.assertIn("version", data, f"Preset {preset_file.name} missing 'version'")
+            parts = data["version"].split(".")
+            self.assertGreaterEqual(len(parts), 2, f"Invalid version format in {preset_file.name}")
+
+    def test_get_preset_version(self):
+        self.assertEqual(self.engine.get_preset_version({"version": "2.1.0"}), "2.1.0")
+        self.assertEqual(self.engine.get_preset_version({}), "1.0.0")
+
+    def test_list_presets_includes_version(self):
+        from engine.pipeline import WallpaperPipeline
+        pipeline = WallpaperPipeline()
+        presets = pipeline.list_presets()
+        self.assertGreater(len(presets), 0)
+        for p in presets:
+            self.assertIn("version", p)
+            self.assertEqual(p["version"], "1.0.0")
+
 
 if __name__ == '__main__':
     unittest.main()

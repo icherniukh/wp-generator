@@ -1,5 +1,6 @@
 {
   "preset_id": "balanced",
+  "version": "1.0.0",
   "color_space": "hls",
   "color_count": { "type": "uniform_int", "min": 2, "max": 5 },
   "palette_structure": [

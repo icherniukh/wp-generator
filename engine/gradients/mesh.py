@@ -4,10 +4,14 @@ import numpy as np
 from PIL import Image
 import scipy.ndimage
 
-from engine.colors import oklab_to_rgb
 from engine.gradients.interpolation import (
     colors_to_oklab,
     interpolate_color_curve,
+    oklab_image_to_pil,
+)
+from engine.gradients.spatial import (
+    generate_noise_plane,
+    normalize_scalar_field,
     random_anchor_points,
 )
 
@@ -43,20 +47,13 @@ class FluidMeshGradient:
 
         t_base = xv * np.cos(angle) + yv * np.sin(angle)
         fold = np.sin(xv * np.pi) * np.cos(yv * np.pi) * 0.25
-        t_values = t_base + fold
-
-        t_min, t_max = t_values.min(), t_values.max()
-        if t_max > t_min:
-            t_values = (t_values - t_min) / (t_max - t_min)
-        t_values = np.clip(t_values, 0.0, 1.0)
+        t_values = normalize_scalar_field(t_base + fold)
 
         grid_oklab = interpolate_color_curve(t_values, colors_arr)
-
-        zoom_y = self.height / rows
-        zoom_x = self.width / cols
-        res = scipy.ndimage.zoom(grid_oklab, (zoom_y, zoom_x, 1), order=3, mode="nearest")
-        srgb = np.clip(oklab_to_rgb(res), 0.0, 1.0)
-        return Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
+        res = scipy.ndimage.zoom(
+            grid_oklab, (self.height / rows, self.width / cols, 1), order=3, mode="nearest"
+        )
+        return oklab_image_to_pil(res)
 
 
 class SimplexMeshGradient:
@@ -92,30 +89,15 @@ class SimplexMeshGradient:
         if noise is not None:
             ox = random.uniform(0, 1000)
             oy = random.uniform(0, 1000)
-            noise_scale = 1.0 + (complexity * 0.2)
-            noise_h, noise_w = max(4, int(h / 4)), max(4, int(w / 4))
-            nx = np.linspace(-0.5, 0.5, noise_w, dtype=np.float32) * noise_scale
-            ny = np.linspace(-0.5, 0.5, noise_h, dtype=np.float32) * noise_scale
-            noise_grid = np.zeros((noise_h, noise_w), dtype=np.float32)
-            for iy in range(noise_h):
-                for ix in range(noise_w):
-                    noise_grid[iy, ix] = noise.snoise2(nx[ix] + ox, ny[iy] + oy, octaves=2)
-
-            t_noise = scipy.ndimage.zoom(noise_grid, (h / noise_h, w / noise_w), order=3)[:h, :w]
+            noise_scale = 0.5 * (1.0 + complexity * 0.2)
+            t_noise = generate_noise_plane(h, w, scale=noise_scale, octaves=2, offset=(ox, oy))
             t_values = t_base * 0.6 + t_noise * 1.5
         else:
             fold = np.sin(xv * np.pi) * np.cos(yv * np.pi) * 0.5
             t_values = t_base + fold
 
-        t_min, t_max = t_values.min(), t_values.max()
-        if t_max > t_min:
-            t_values = (t_values - t_min) / (t_max - t_min)
-        t_values = np.clip(t_values, 0.0, 1.0)
-
-        grid_oklab = interpolate_color_curve(t_values, colors_arr)
-        srgb = np.clip(oklab_to_rgb(grid_oklab), 0.0, 1.0)
-        img_mod = Image.fromarray(np.rint(srgb * 255.0).astype(np.uint8))
-        return img_mod.resize((self.width, self.height), Image.LANCZOS)
+        grid_oklab = interpolate_color_curve(normalize_scalar_field(t_values), colors_arr)
+        return oklab_image_to_pil(grid_oklab, (self.width, self.height))
 
 
 class MeshGradient:
