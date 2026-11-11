@@ -2,6 +2,43 @@
 
 A procedural wallpaper generator driven by a statistical preset engine. Each preset defines color palettes as probability distributions in HLS or perceptual OKLCH color space—every run is statistically unique but aesthetically coherent.
 
+## Samples
+
+One render per preset, grouped by style. Table columns keep the previews small; open any image for full resolution.
+
+### Dark and Neon
+
+| Balanced | Cyberpunk | Sleek |
+| :---: | :---: | :---: |
+| ![Balanced preset](samples/balanced.png) | ![Cyberpunk preset](samples/cyberpunk.png) | ![Sleek preset](samples/sleek.png) |
+| Wide hue range, dark anchor | Neon palette, near-black | Luminous neon, frosted glass |
+
+| Afterglow | Nocturne | Tectonic |
+| :---: | :---: | :---: |
+| ![Afterglow preset](samples/afterglow.png) | ![Nocturne preset](samples/nocturne.png) | ![Tectonic preset](samples/tectonic.png) |
+| Vivid violet, cyan, and ember fields | Twilight and ember on deep tints | Obsidian trenches, contour isobars |
+
+### Quiet and Minimal
+
+| Ink | Nothing |
+| :---: | :---: |
+| ![Ink preset](samples/ink.png) | ![Nothing preset](samples/nothing.png) |
+| Monochromatic near-black | Industrial dark, dot-matrix overlay |
+
+### Light and Soft
+
+| Cupertino | Pastel |
+| :---: | :---: |
+| ![Cupertino preset](samples/cupertino.png) | ![Pastel preset](samples/pastel.png) |
+| Soft, muted light and dark | Light anchors, desaturated accents |
+
+### Experimental
+
+| Fractal |
+| :---: |
+| ![Fractal preset](samples/fractal.png) |
+| Volumetric Julia sets, domain-warped folds |
+
 ## Key Features
 
 - **Statistical Preset Engine:** Presets encode color aesthetics as HLS distributions. The engine samples them at generation time — no two outputs are identical, but all stay within the preset's aesthetic envelope.
@@ -133,8 +170,3 @@ python main.py --preset nothing --preview-fx
 
 This output file (`*_preview.png`) places the raw, un-filtered fluid mesh on the left and the fully processed final render on the right, making it convenient to immediately see the impact of effects like noise and dot-matrix patterns.
 
-### Sample Outputs
-
-![Nothing Preset](samples/nothing.png)
-![Balanced Preset](samples/balanced.png)
-![Cyberpunk Preset](samples/cyberpunk.png)
