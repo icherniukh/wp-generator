@@ -4,60 +4,6 @@ from PIL import Image, ImageFilter
 
 class WallpaperFilters:
     @staticmethod
-    def apply_dot_matrix(image, spacing=25, max_radius=4, intensity=0.8, mode="size"):
-        """
-        Applies a dot-matrix overlay.
-        :param mode: 'size' modulates dot radius, 'alpha' modulates dot opacity.
-        """
-        width, height = image.size
-        # Spacing addresses pixels, so coerce gaussian-sampled floats to int.
-        spacing = max(1, int(round(spacing)))
-
-        # Convert image to grayscale to get luminance (0.0 to 1.0)
-        grayscale = image.convert("L")
-        lum_data = np.array(grayscale, dtype=np.float32) / 255.0
-        
-        # Create coordinate grid
-        y, x = np.ogrid[:height, :width]
-        
-        # Find offset to the nearest dot center
-        half_space = spacing // 2
-        dx = (x + half_space) % spacing - half_space
-        dy = (y + half_space) % spacing - half_space
-        dist_sq = dx**2 + dy**2
-        
-        # Find coordinates of the nearest dot center to sample a uniform cell luminance
-        cx = np.clip(x - dx, 0, width - 1)
-        cy = np.clip(y - dy, 0, height - 1)
-        cell_lum = lum_data[cy, cx]
-        
-        # Prepare an RGBA overlay (all white, transparent initially)
-        overlay = np.zeros((height, width, 4), dtype=np.uint8)
-        overlay[..., :3] = 255
-        
-        if mode == "size":
-            # Modulate radius: Brighter pixels = smaller dots
-            radius = max_radius * (1.0 - cell_lum) * intensity
-            alpha_val = int(255 * intensity)
-            dist = np.sqrt(dist_sq)
-            # Smoothstep-like falloff for anti-aliasing
-            coverage = np.clip(radius - dist + 0.5, 0, 1)
-            # Only apply if radius > 0.5
-            coverage = np.where(radius > 0.5, coverage, 0)
-            overlay[..., 3] = (coverage * alpha_val).astype(np.uint8)
-        else: # alpha mode
-            radius = max_radius
-            # Darker pixels = higher opacity
-            alpha = np.clip(255 * (1.0 - cell_lum) * intensity, 0, 255)
-            dist = np.sqrt(dist_sq)
-            coverage = np.clip(radius - dist + 0.5, 0, 1)
-            final_alpha = coverage * alpha
-            overlay[..., 3] = np.where(final_alpha > 5, final_alpha, 0).astype(np.uint8)
-        
-        overlay_img = Image.fromarray(overlay)
-        return Image.alpha_composite(image.convert("RGBA"), overlay_img)
-
-    @staticmethod
     def apply_dither(image, amount=0.05):
         """
         Adds bounded monochromatic dither before final PNG quantization.

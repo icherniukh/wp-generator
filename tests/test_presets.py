@@ -101,7 +101,7 @@ class TestPresetEngine(unittest.TestCase):
         data = self.engine.load_preset("nocturne")
         self.assertEqual(data["color_space"], "oklch")
         self.assertEqual(data["overrides"]["engine"], "fluid-wave")
-        self.assertEqual(data["overrides"]["dots"], 0.0)
+        self.assertNotIn("dots", data["overrides"])
         self.assertEqual(data["overrides"]["glass"], False)
         colors = self.engine.generate_palette(data, count=3)
         self.assertEqual(len(colors), 3)

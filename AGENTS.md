@@ -12,6 +12,30 @@ This repo uses `bd` for issue tracking.
 
 Do not use markdown TODO files or duplicate the same task outside beads.
 
+## Environment
+
+- Runtime is `uv`. Environment lives in project-local `.venv`; never install into the system interpreter.
+- `uv sync` for the default env. Web and macOS extras are opt-in: `uv sync --extra web --extra macos`.
+- Run everything through `uv run` (e.g. `uv run python main.py ...`, `uv run python -m pytest tests/`).
+- `uv.lock` is the source of truth. `requirements.txt` is a legacy pip fallback; do not add deps to it.
+
+## Layout
+
+- `main.py` — Click CLI. Flag names match `RenderConfiguration` fields 1:1; the builder in `main.py` passes them through, so new config fields need no mapping code.
+- `engine/` — pipeline, palette/harmonizer logic, gradient engines (`engine/gradients/`, 12 registered variants), filters, parameter ranges, embedded-metadata support.
+- `web/` — FastAPI app and the `/calibrate` lab. Run: `uv run uvicorn web.app:app`.
+- `presets/*.json` — OKLCH/HLS sampling distributions plus engine overrides.
+- `tests/` — pytest suite. Run green before finishing any behavior change.
+- `samples/*.png` — committed gallery renders (see README). Regenerate with `main.py` when the engine changes their look.
+- `output/` — local renders only, gitignored except `.gitkeep`.
+
+## Conventions
+
+- Conventional Commits. No AI attribution in commits, PRs, or issues.
+- Keep the CLI surface minimal: advanced engine/filter flags stay `hidden=True` (compact `--help`, full `--help-all`).
+- Validate user-facing behavior by running it; keep 119+ tests passing.
+- Do not commit agent tooling state (`.turbocharging/`, `.codex/`, `.claude/`, `.serena/`), experiment reports, or planning docs — all gitignored or intentionally untracked.
+
 ## Shell
 
 Use non-interactive forms for file operations:

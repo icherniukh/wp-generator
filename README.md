@@ -1,6 +1,6 @@
 # Wallpaper Generator
 
-A procedural wallpaper generator driven by a statistical preset engine. Each preset defines color palettes as probability distributions in HLS or perceptual OKLCH color space—every run is statistically unique but aesthetically coherent.
+Procedural macOS wallpapers from a statistical preset engine. Every run samples a fresh palette from a probability distribution — statistically unique, but always inside the preset's aesthetic envelope.
 
 ## Samples
 
@@ -13,17 +13,17 @@ One render per preset, grouped by style. Table columns keep the previews small; 
 | ![Balanced preset](samples/balanced.png) | ![Cyberpunk preset](samples/cyberpunk.png) | ![Sleek preset](samples/sleek.png) |
 | Wide hue range, dark anchor | Neon palette, near-black | Luminous neon, frosted glass |
 
-| Afterglow | Nocturne | Tectonic |
-| :---: | :---: | :---: |
-| ![Afterglow preset](samples/afterglow.png) | ![Nocturne preset](samples/nocturne.png) | ![Tectonic preset](samples/tectonic.png) |
-| Vivid violet, cyan, and ember fields | Twilight and ember on deep tints | Obsidian trenches, contour isobars |
+| Afterglow | Nocturne |
+| :---: | :---: |
+| ![Afterglow preset](samples/afterglow.png) | ![Nocturne preset](samples/nocturne.png) |
+| Vivid violet, cyan, and ember fields | Twilight and ember on deep tints |
 
 ### Quiet and Minimal
 
 | Ink | Nothing |
 | :---: | :---: |
 | ![Ink preset](samples/ink.png) | ![Nothing preset](samples/nothing.png) |
-| Monochromatic near-black | Industrial dark, dot-matrix overlay |
+| Monochromatic near-black | Industrial dark, high-contrast accents and grain |
 
 ### Light and Soft
 
@@ -39,70 +39,57 @@ One render per preset, grouped by style. Table columns keep the previews small; 
 | ![Fractal preset](samples/fractal.png) |
 | Volumetric Julia sets, domain-warped folds |
 
-## Key Features
+## Quickstart
 
-- **Statistical Preset Engine:** Presets encode color aesthetics as HLS distributions. The engine samples them at generation time — no two outputs are identical, but all stay within the preset's aesthetic envelope.
-- **Fluid Mesh Gradient:** Bicubic mesh interpolation, Simplex, Domain Warp, RBF, and Topographic procedural engines.
-- **Style Filters:** Anti-aliased vector topographic contour isobars, dot-matrix overlays, film grain, frosted glass, and chromatic aberration.
-- **Color Harmonizers:** Hue-preserving OKLCH lightness/chroma adjustment, with a Nothing-inspired profile for muted anchors and vivid accents.
-- **Device Presets:** Common resolutions built-in — MacBook, 4K, ultrawide, mobile.
-- **Screen Sampler:** Grab colors directly from the screen at the mouse cursor (macOS).
-
-## Installation
-
-1. Ensure Python 3.12+ is installed.
-2. Install `uv`, clone this repository, and navigate to the folder.
-
-### Option 1: Global Install (Recommended)
+Requires Python 3.12+ and `uv`.
 
 ```bash
-./install.sh
+git clone https://github.com/icherniukh/wp-generator && cd wp-generator
+./install.sh                      # installs deps, adds a global wp-generator command
+wp-generator --preset cupertino   # first wallpaper
 ```
 
-Installs dependencies and creates a global `wp-generator` command. Requires sudo for `/usr/local/bin` symlink.
-
-### Option 2: Manual
+Or without installing:
 
 ```bash
 uv sync
 uv run python main.py --preset cupertino
 ```
 
-## Usage
+## How It Works
 
-### Basic Examples
+Every wallpaper is three operations:
 
-```bash
-# Preset-driven generation (statistical engine picks palette on every run)
-python main.py --preset cupertino
+1. **Palette** — 2–5 harmonious OKLCH colors: a dark grounding anchor plus luminous accents, sampled from the preset's distributions (or your `--colors`, or the screen sampler).
+2. **Field** — a procedural engine maps 2D coordinates through a mathematical field (domain warping, radial emitters, topography, fractals) and paints it through the palette.
+3. **Finish** — optional surface effects: film grain, vignette, optional contour isobars, frosted glass, chromatic aberration.
 
-# Target a specific display
-uv run python main.py --preset cyberpunk --res 4k
+Explore the [visual field guide](index.html) for controlled before/after comparisons and a real palette → field → finish walkthrough. The [architecture reference](docs/ARCHITECTURE.md) documents implementation and configuration.
 
-# Custom hex colors
-python main.py --colors "#FF5000" --colors "#1A1A2E"
-
-# Batch — generate 10 variations of the same preset
-python main.py --preset pastel --count 10
-
-# Reproducible output
-python main.py --preset nothing --seed 42
+```mermaid
+flowchart LR
+    CLI["CLI (Click)\n--preset --engine --colors …"] --> CFG["RenderConfiguration\nengine · seed · colors · params"]
+    WEB["Web API (FastAPI)\n+ /calibrate lab"] --> CFG
+    CFG --> PAL["Palette\nOKLCH anchor + accents"]
+    PAL --> ENG["Field engine\n12 registered variants"]
+    ENG --> FX["Finish (filters)\ngrain · vignette · glass · aberration …"]
+    FX --> OUT["PNG + embedded render metadata"]
+    OUT --> CAL["/calibrate\nsliders + previews"]
+    CAL -.->|"tune ranges"| CFG
 ```
 
-### Available Presets
+## CLI Reference
 
-| Preset | Aesthetic |
-| :--- | :--- |
-| `balanced` | Wide hue range, dark anchor, vivid accents |
-| `cupertino` | Soft, bimodal light/dark with muted tones |
-| `cyberpunk` | Neon palette, near-black background |
-| `ink` | Monochromatic near-black, minimal chroma |
-| `nothing` | Industrial dark with high-contrast accent and dot-matrix overlay |
-| `pastel` | Light anchors, desaturated accents |
-| `afterglow` | Vivid reference-derived violet, cyan, coral, orange, and magenta fields |
-| `sleek` | Luminous neon accents on dark anchor with frosted glass texture |
-| `nocturne` | Deep richly-tinted grounding anchors paired with luminous twilight and ember accents |
-| `tectonic` | Deep volcanic obsidian and basalt trenches paired with luminous cyan/ember peaks and vector contour isobars |
+```bash
+wp-generator --preset cyberpunk --res 1920 1080   # one-off size
+wp-generator --preset pastel --count 10            # batch of 10
+wp-generator --preset nothing --seed 42            # reproducible output
+wp-generator --colors "#FF5000" --colors "#1A1A2E" # custom palette
+wp-generator --sample                              # grab a color from the screen
+wp-generator --metadata wp_*.png                  # inspect an existing render
+```
+
+Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--preset`, `--colors` (repeat per color), `--sample`, `--metadata`/`--inspect`, `--json`. Everything else is an advanced engine/filter override, hidden from `--help` — run `--help-all` for the full list (`--seed`, `--res`, `--engine`, `--complexity`, `--fluid-mode`, `--harmonize`, `--noise`, `--contours`, `--glass`, and the fractal family).
 
 ### Device Presets (`--device`)
 
@@ -120,53 +107,69 @@ python main.py --preset nothing --seed 42
 | `suw` | 5120×1440 | Super Ultrawide (32:9) |
 | `mobile` | 1080×1920 | Smartphone Portrait |
 
-### Advanced Overrides
+## Presets
 
-Run `--help-all` for advanced flags including `--complexity`, `--engine` (`simplex`, `domain-warp`, `rbf`, `topographic`, etc.), `--contours`, `--contour-levels`, `--contour-mode`, `--noise`, `--dots`, `--dots-spacing`, `--fluid-mode`, `--harmonize`, `--res`, and `--seed`.
+| Preset | Aesthetic |
+| :--- | :--- |
+| `balanced` | Wide hue range, dark anchor, vivid accents |
+| `cupertino` | Soft, bimodal light/dark with muted tones |
+| `cyberpunk` | Neon palette, near-black background |
+| `ink` | Monochromatic near-black, minimal chroma |
+| `nothing` | Industrial dark with high-contrast accent and film grain |
+| `pastel` | Light anchors, desaturated accents |
+| `afterglow` | Vivid reference-derived violet, cyan, coral, orange, and magenta fields |
+| `sleek` | Luminous neon accents on dark anchor with frosted glass texture |
+| `nocturne` | Deep richly-tinted grounding anchors paired with luminous twilight and ember accents |
+| `fractal` | Volumetric dynamical Julia sets and fluid domain-warped folds |
+
+Presets live in `presets/*.json` as OKLCH/HLS sampling distributions plus optional engine overrides and harmonization bounds. Any engine or filter flag on the CLI overrides the sampled value for that run.
+
+## Engines
+
+Twelve registered field variants in four mathematical families (`engine/gradients/`):
+
+| Family | Engines |
+| :--- | :--- |
+| Directional sweeps + warping | `domain-warp`, `simplex`, `spline-wave`, `fluid-wave` |
+| 2D point emitters | `rbf`, `radial-basis`, `flow-field`, `idw` |
+| Harmonic elevation | `topographic` |
+| Fractal fields | `fractal`, `fluid-fractal`, `escape-fractal` |
+
+Select with `--engine`. `radial-basis` is an alias of `rbf`. The fractal names share a core: `fluid-fractal` fixes fluid mode, while `escape-fractal` selects Julia/Mandelbrot dynamics. The other sweep and point-emitter variants use different mathematics; grouping them does not make them interchangeable. Presets without an engine pin fall back to `simplex`.
+
+## Filters
+
+| Filter | Effect |
+| :--- | :--- |
+| Film grain | Two-scale grain with midtone weighting (`--noise`) |
+| Vignette | Radial edge darkening (`--vignette`) |
+| Contour isobars | Vector topographic lines, light/dark/accent (`--contours`, `--contour-levels`, `--contour-width`, `--contour-mode`) |
+| Frosted glass | Diffusion blur + frost noise (`--glass`) |
+| Chromatic aberration | Radial lens dispersion (`--aberration`) |
+| Dither | Bounded monochromatic dither (defined, currently unwired) |
+
+Use `--preview-fx` to compare the unfiltered base against the entire enabled finish stack (base left, finished render right). It does not isolate individual effects; the visual guide demonstrates those separately. Finish effects fall into three groups: texture (grain/dither), optical treatment (glass/aberration/vignette), and optional graphic contours.
+
+## Web API
 
 ```bash
-python main.py --help-all
+uv sync --extra web
+uv run uvicorn web.app:app --reload   # calibrate lab at http://127.0.0.1:8000/calibrate
 ```
 
-Use `--harmonize perceptual` to preserve each input hue and palette order while
-bounding OKLCH lightness to 0.12–0.90 and chroma to 0–0.25. `--harmonize theory`
-uses the same behavior for compatibility. `nothing` applies its muted/vivid
-profile; `none` keeps the input palette. Explicit classical modes such as
-`ColorTheoryHarmonizer.harmonize(colors, mode="triadic")` remain available in Python.
-Gamut mapping can reduce chroma further; 8-bit RGB conversion introduces small
-rounding differences.
+| Route | Purpose |
+| :--- | :--- |
+| `GET /calibrate` | Interactive effect and parameter-range lab |
+| `GET /api/devices`, `GET /api/presets` | Device and preset catalogs with sample palettes |
+| `GET / PUT /api/parameter-ranges`, `POST /api/parameter-ranges/reset` | Inspect, tune, and reset sampling ranges |
+| `GET / POST /api/render` | Render a wallpaper (`preset`, `engine`, overrides, `harmonize`) |
+| `POST /api/metadata/extract` | Read embedded render metadata from an image |
+| `GET /health` | Health check |
 
-Presets can set their own bounds when selecting perceptual harmonization:
+Renders report WCAG contrast ratios of every accent against the palette anchor via `X-Render-Contrast-Ratios` / `X-Render-Contrast-Pass` headers; the CLI prints the same ratios. Blended pixels need separate evaluation for text placed over them.
 
-```json
-{
-  "harmonization": {
-    "lightness_bounds": [0.2, 0.8],
-    "chroma_bounds": [0.0, 0.16]
-  },
-  "overrides": { "harmonize": "perceptual" }
-}
-```
-
-Chroma bounds use actual OKLCH units; palette distribution `chroma` values retain
-their existing normalized 0–1 scale.
-
-Each render reports the contrast of every accent against the first palette color
-(the anchor). CLI output shows the ratios and whether every pair meets the 4.5:1
-target. Web GET/POST responses expose `X-Render-Contrast-Ratios` and
-`X-Render-Contrast-Pass`, and accept `harmonize=perceptual` or the corresponding
-JSON field. The calculation follows [WCAG sRGB relative luminance](https://www.w3.org/TR/WCAG22/#dfn-relative-luminance)
-and compares unrounded ratios. It checks solid palette colors; the blended,
-filtered wallpaper needs separate evaluation for any text placed over it.
-
-### Preview Mechanism (FX Testing)
-
-When developing or evaluating new visual effects (e.g. volumetric lighting, dot matrix overlays), you can isolate the effects from the underlying base mesh. Pass the `--preview-fx` flag to generate an additional side-by-side composite image:
+## Testing
 
 ```bash
-# Generates both the final wallpaper and a side-by-side "_preview" image
-python main.py --preset nothing --preview-fx
+uv run python -m pytest tests/ -x -q
 ```
-
-This output file (`*_preview.png`) places the raw, un-filtered fluid mesh on the left and the fully processed final render on the right, making it convenient to immediately see the impact of effects like noise and dot-matrix patterns.
-

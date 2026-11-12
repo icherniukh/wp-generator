@@ -64,9 +64,6 @@ class RenderRequest(BaseModel):
     harmonize: Optional[Literal["perceptual", "theory", "nothing", "none"]] = Field(default=None)
     noise: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     vignette: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    dots: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    dots_spacing: Optional[int] = Field(default=None, ge=4, le=100)
-    dots_mode: Optional[str] = Field(default=None)
     contours: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     contour_levels: Optional[int] = Field(default=None, ge=1, le=100)
     contour_width: Optional[float] = Field(default=None, ge=0.1, le=10.0)
@@ -215,8 +212,6 @@ async def render_get(
     harmonize: Optional[Literal["perceptual", "theory", "nothing", "none"]] = Query(default=None),
     noise: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     vignette: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    dots: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    dots_spacing: Optional[int] = Query(default=None, ge=4, le=100),
     contours: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     contour_levels: Optional[int] = Query(default=None, ge=1, le=100),
     contour_width: Optional[float] = Query(default=None, ge=0.1, le=10.0),
@@ -254,8 +249,6 @@ async def render_get(
         harmonize=harmonize,
         noise=noise,
         vignette=vignette,
-        dots=dots,
-        dots_spacing=dots_spacing,
         contours=contours,
         contour_levels=contour_levels,
         contour_width=contour_width,
@@ -304,9 +297,6 @@ async def render_post(body: RenderRequest) -> Response:
         harmonize=body.harmonize,
         noise=body.noise,
         vignette=body.vignette,
-        dots=body.dots,
-        dots_spacing=body.dots_spacing,
-        dots_mode=body.dots_mode,
         contours=body.contours,
         contour_levels=body.contour_levels,
         contour_width=body.contour_width,

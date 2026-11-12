@@ -42,7 +42,6 @@
     "phase_offset": 0.0,
     "noise": 0.03,
     "vignette": 0.22,
-    "dots": 0.0,
     "glass": false,
     "harmonize": "none"
   }

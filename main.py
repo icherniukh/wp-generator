@@ -149,9 +149,6 @@ def _available_presets() -> list:
 @click.option("--fluid-mode", type=click.Choice(["random", "spatial"]), default=None, hidden=True, help="Fluid mesh generation logic.")
 @click.option("--legacy-idw", is_flag=True, default=None, hidden=True, help="Use legacy IDW gradient engine instead of fluid mesh.")
 @click.option("--harmonize", type=click.Choice(["perceptual", "theory", "nothing", "none"]), default=None, hidden=True, help="Color harmonizer algorithm.")
-@click.option("--dots", type=float, default=None, hidden=True, help="Dot matrix intensity (0.0-1.0).")
-@click.option("--dots-mode", type=click.Choice(["size", "alpha"]), default=None, hidden=True, help="Vary dot 'size' or 'alpha'.")
-@click.option("--dots-spacing", type=int, default=None, hidden=True, help="Pixel spacing between dots.")
 @click.option("--contours", "--contour", "contours", type=float, default=None, hidden=True, help="Topographic contour line intensity (0.0-1.0).")
 @click.option("--contour-levels", type=int, default=None, hidden=True, help="Number of elevation contour intervals.")
 @click.option("--contour-width", type=float, default=None, hidden=True, help="Pixel line thickness of contour lines.")
@@ -197,7 +194,6 @@ def _validate_cli_arguments(params: dict) -> None:
         raise click.UsageError("--res values must be positive")
 
     positive_checks = [
-        ("--dots-spacing", params.get("dots_spacing")),
         ("--complexity", params.get("complexity")),
         ("--contour-levels", params.get("contour_levels")),
         ("--contour-width", params.get("contour_width")),
@@ -210,7 +206,6 @@ def _validate_cli_arguments(params: dict) -> None:
             raise click.UsageError(f"{flag} must be positive")
 
     range_checks = [
-        ("--dots", params.get("dots"), 0.0, 1.0),
         ("--contours", params.get("contours"), 0.0, 1.0),
         ("--noise", params.get("noise"), 0.0, 1.0),
         ("--vignette", params.get("vignette"), 0.0, 1.0),
