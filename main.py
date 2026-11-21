@@ -1,5 +1,6 @@
 import concurrent.futures
 import dataclasses
+import multiprocessing
 from datetime import datetime
 import os
 import sys
@@ -259,8 +260,12 @@ def _sample_screen_color(args: SimpleNamespace) -> None:
     try:
         from engine.sampler import ScreenSampler
     except ImportError as exc:
+        if sys.platform != "darwin":
+            raise click.UsageError("--sample is available on macOS only") from exc
+        if getattr(sys, "frozen", False):
+            raise click.UsageError("--sample is not available in this build") from exc
         raise click.UsageError(
-            "--sample works on macOS only and needs the 'macos' extra: "
+            "--sample needs the 'macos' extra: "
             "uv tool install 'wp-generator[macos] @ git+https://github.com/icherniukh/wp-generator'"
         ) from exc
     sampler = ScreenSampler()
@@ -297,5 +302,8 @@ def execute_batch(args: SimpleNamespace, base_seed: int) -> None:
 
 
 if __name__ == "__main__":
+    # Standalone builds re-launch this executable for --workers child processes;
+    # freeze_support() hands those launches to multiprocessing instead of Click.
+    multiprocessing.freeze_support()
     main()
 
