@@ -28,6 +28,8 @@ from engine.metadata import (
 from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
 from engine.stages import Trace
+from engine.stages.finish import finish_stages
+from engine.stages.runner import StageParams, run_stages
 from engine.stages.palette import make_palette
 
 DEVICE_RESOLUTIONS: Dict[str, Tuple[int, int]] = {
@@ -282,37 +284,22 @@ class WallpaperPipeline:
         vignette: float,
         trace: Optional[Trace] = None,
     ) -> Image.Image:
-        """Applies configured post-processing filter overlays sequentially."""
-
-        def record(name: str, **arguments: Any) -> None:
-            if trace is not None:
-                trace.add(name, "finish", image, inputs=("image",), output_name="image", arguments=arguments)
-
-        if contours > 0.0:
-            image = WallpaperFilters.apply_contour_lines(
-                image,
-                levels=contour_levels,
-                line_width=contour_width,
-                intensity=contours,
-                mode=contour_mode,
+        """Applies the enabled finish effects in their fixed order (engine.stages.finish)."""
+        params = StageParams(
+            dict(
+                contours=contours,
+                contour_levels=contour_levels,
+                contour_width=contour_width,
+                contour_mode=contour_mode,
+                glass=glass,
+                chromatic_aberration=chromatic_aberration,
+                noise=noise,
+                vignette=vignette,
             )
-            record("contours", contours=contours, contour_levels=contour_levels,
-                   contour_width=contour_width, contour_mode=contour_mode)
-        if glass:
-            image = WallpaperFilters.apply_frosted_glass(image, blur_radius=60, noise_amount=0.15)
-            record("glass", glass=glass, blur_radius=60, noise_amount=0.15)
-        if chromatic_aberration > 0.0:
-            image = WallpaperFilters.apply_chromatic_aberration(
-                image, strength=chromatic_aberration
-            )
-            record("chromatic aberration", chromatic_aberration=chromatic_aberration)
-        if noise > 0.0:
-            image = WallpaperFilters.apply_film_grain(image, amount=noise)
-            record("film grain", noise=noise)
-        if vignette > 0.0:
-            image = WallpaperFilters.apply_vignette(image, strength=vignette)
-            record("vignette", vignette=vignette)
-        return image
+        )
+        stages = finish_stages(params)
+        state = run_stages(stages, params, rng=random, state={"final": image}, trace=trace)
+        return state["final"]
 
     def render(self, config: RenderConfiguration, trace: Optional[Trace] = None) -> RenderResult:
         """Executes the complete generation pipeline and returns an in-memory RenderResult.

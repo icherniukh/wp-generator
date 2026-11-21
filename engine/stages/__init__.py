@@ -33,7 +33,7 @@ def render_staged(
     plan = STAGED_PLANS[engine]
     stage_params = StageParams(params)
     if trace is not None:
-        trace.params = stage_params
+        trace.watch(stage_params)
     if plan.reseeds:
         with stage_params.reading_for("seed"):
             seed = stage_params.get("seed")
