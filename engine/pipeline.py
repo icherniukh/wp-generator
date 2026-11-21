@@ -27,7 +27,7 @@ from engine.metadata import (
 )
 from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
-from engine.stages import Trace, has_staged_plan
+from engine.stages import Trace
 from engine.stages.palette import make_palette
 
 DEVICE_RESOLUTIONS: Dict[str, Tuple[int, int]] = {
@@ -405,6 +405,7 @@ class WallpaperPipeline:
                 ),
             )
 
+        records_before = len(trace.records) if trace is not None else 0
         image = render_gradient(
             engine_type,
             width=config.width,
@@ -428,9 +429,9 @@ class WallpaperPipeline:
             legacy_idw=config.legacy_idw,
             trace=trace,
         )
-        if trace is not None and not has_staged_plan("idw" if config.legacy_idw else engine_type):
+        if trace is not None and len(trace.records) == records_before:
             trace.add(
-                f"{engine_type} (not split into stages yet)",
+                f"{engine_type} (custom engine, not split into stages)",
                 "engine",
                 image,
                 output_name="image",

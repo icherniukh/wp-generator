@@ -18,6 +18,7 @@ class Palette:
 
     rgb: Tuple[Tuple[int, int, int], ...]
     oklab: np.ndarray  # (n, 3)
+    srgb: np.ndarray  # (n, 3) float32, 0-255, exactly as given
 
     @property
     def size(self) -> int:
@@ -25,13 +26,23 @@ class Palette:
 
 
 @dataclass(frozen=True)
+class Camera:
+    """Where a view sits on an unbounded plane: used by the fractal fields."""
+
+    zoom: float
+    angle: float
+    center: Tuple[float, float]
+    aspect: float
+
+
+@dataclass(frozen=True)
 class Coords:
     """Sample positions on the working grid.
 
-    x, y are the current positions (after any warp); base_x, base_y are the
-    positions before warping, which some fields combine with the warped ones.
-    displacement holds the last warp's unscaled noise planes, for fields that
-    reuse them.
+    x, y are the current positions (after any rotation or warp); base_x,
+    base_y are the grid as first sampled, which some fields combine with the
+    moved positions. displacement holds the last noise warp's unscaled planes,
+    for fields that reuse them. camera is set by camera framing.
     """
 
     x: np.ndarray  # (h, w)
@@ -40,6 +51,7 @@ class Coords:
     base_y: np.ndarray
     output_size: Tuple[int, int]  # final (width, height); the grid is usually smaller
     displacement: Optional[Tuple[np.ndarray, np.ndarray]] = None
+    camera: Optional[Camera] = None
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -78,5 +90,12 @@ Field = Union[ScalarField, WeightField]
 @dataclass(frozen=True)
 class OklabImage:
     """A mapped image on the working grid, still in floating-point Oklab."""
+
+    values: np.ndarray  # (h, w, 3)
+
+
+@dataclass(frozen=True)
+class SrgbImage:
+    """A mapped image in floating-point sRGB 0-255 (only the idw blend uses it)."""
 
     values: np.ndarray  # (h, w, 3)

@@ -94,3 +94,113 @@ def radial_emitters(
     weight_sum = np.sum(weights, axis=0, keepdims=True)
     weights /= np.maximum(weight_sum, 1e-6)
     return WeightField(weights, background=0)
+
+
+def noisy_ramp(coords: Coords, *, complexity: int, rng: Any) -> ScalarField:
+    """A linear ramp along x plus a stronger simplex-noise plane."""
+    h, w = coords.shape
+    ox = rng.uniform(0, 1000)
+    oy = rng.uniform(0, 1000)
+    noise_scale = 0.5 * (1.0 + complexity * 0.2)
+    t_noise = generate_noise_plane(h, w, scale=noise_scale, octaves=2, offset=(ox, oy))
+    return ScalarField(normalize_scalar_field(coords.x * 0.6 + t_noise * 1.5))
+
+
+def folded_ramp(coords: Coords) -> ScalarField:
+    """A linear ramp along x plus one fixed fold over the unrotated grid."""
+    fold = np.sin(coords.base_x * np.pi) * np.cos(coords.base_y * np.pi) * 0.25
+    return ScalarField(normalize_scalar_field(coords.x + fold))
+
+
+def smooth_ramp(coords: Coords) -> ScalarField:
+    """A linear ramp along x, stretched between its 1st and 99th percentile and smoothstepped."""
+    t_values = coords.x
+    t_min, t_max = np.percentile(t_values, [1, 99])
+    if t_max > t_min:
+        t_values = (t_values - t_min) / (t_max - t_min)
+    t_values = np.clip(t_values, 0.0, 1.0)
+    return ScalarField(t_values * t_values * (3.0 - 2.0 * t_values))
+
+
+def elevation(coords: Coords, *, complexity: int, noise: float, rng: Any) -> ScalarField:
+    """Three interfering sine waves as terrain height, plus simplex noise added to the height."""
+    h, w = coords.shape
+    u, v = coords.x, coords.y
+    base_freq = 0.7 + (complexity * 0.1)
+    h1 = np.sin(u * base_freq * 1.4) * np.cos(v * base_freq * 1.1)
+    h2 = np.sin((u + v) * base_freq * 2.1 + 1.1) * 0.5
+    h3 = np.cos(np.sqrt(u**2 + v**2) * base_freq * 2.8) * 0.25
+    raw_elevation = h1 + h2 + h3
+
+    effective = max(0.0, float(noise))
+    if effective > 0.0:
+        ox = rng.uniform(0, 500)
+        oy = rng.uniform(500, 1000)
+        noise_plane = generate_noise_plane(h, w, scale=base_freq, octaves=2, offset=(ox, oy))
+        raw_elevation = raw_elevation + (effective * 0.6) * noise_plane
+    return ScalarField(normalize_scalar_field(raw_elevation))
+
+
+def orbiting_emitters(coords: Coords, palette: Palette, *, rng: Any) -> WeightField:
+    """One emitter per color on a ring around the center, partly off-screen;
+    inverse-square weights, with color 0 pulled closer."""
+    num_colors = palette.size
+    h, w = coords.shape
+    points = []
+    for i in range(num_colors):
+        angle = i * (2 * np.pi / num_colors) + rng.uniform(0, np.pi)
+        dist = rng.uniform(0.5, 1.2)
+        points.append((0.5 + np.cos(angle) * dist, 0.5 + np.sin(angle) * dist))
+
+    distances = np.zeros((num_colors, h, w), dtype=np.float32)
+    for i, (px, py) in enumerate(points):
+        distances[i] = np.sqrt((coords.x - px) ** 2 + (coords.y - py) ** 2)
+    distances[0] *= 0.6
+    distances = np.maximum(distances, 0.15)
+    weights = 1.0 / (distances**2.0)
+    weights /= np.sum(weights, axis=0)
+    return WeightField(weights)
+
+
+def anchor_points(
+    coords: Coords, palette: Palette, *, power: float, softness: float = 0.12, margin: float = 0.08, rng: Any
+) -> WeightField:
+    """One random anchor per color; inverse-distance weights (IDW)."""
+    num_colors = palette.size
+    h, w = coords.shape
+    points = [
+        (rng.uniform(margin, 1.0 - margin), rng.uniform(margin, 1.0 - margin))
+        for _ in range(num_colors)
+    ]
+    distances = np.zeros((num_colors, h, w), dtype=np.float32)
+    for i, (px, py) in enumerate(points):
+        distances[i] = np.sqrt((coords.x - px) ** 2 + (coords.y - py) ** 2)
+    distances = np.maximum(distances, softness)
+    weights = 1.0 / (distances**power)
+    weights /= np.sum(weights, axis=0)
+    return WeightField(weights)
+
+
+def fractal_field(coords: Coords, *, kind: str, complexity: int, trap_weight: float) -> ScalarField:
+    """kind "fluid": nested fBm domain warp over a radial carrier and a sweep.
+    Otherwise an escape-time fractal (mandelbrot, or a Julia set) with an orbit trap.
+
+    Needs fractal_camera, and the camera-frame positions in x, y.
+    """
+    from engine.gradients.fractal import FractalFieldGradient
+
+    cam = coords.camera
+    if cam is None:
+        raise ValueError("fractal_field needs fractal_camera before it")
+    safe_complexity = max(1, int(complexity))
+    if kind == "fluid":
+        cx, cy = cam.center
+        rf = np.sqrt((coords.base_x - cx) ** 2 + (coords.base_y - cy) ** 2)
+        t = FractalFieldGradient._compute_fluid_field(
+            coords.base_x, coords.base_y, coords.x, coords.y, rf, cam.angle, cam.aspect, safe_complexity
+        )
+    else:
+        t = FractalFieldGradient._compute_escape_time_field(
+            coords.x, coords.y, kind, safe_complexity, np.clip(float(trap_weight), 0.0, 1.0)
+        )
+    return ScalarField(t)
