@@ -121,7 +121,7 @@ flowchart LR
     CLI["CLI (Click)\n--preset --engine --colors …"] --> CFG["RenderConfiguration\nengine · seed · colors · params"]
     WEB["Web API (FastAPI)\n+ /calibrate lab"] --> CFG
     CFG --> PAL["Palette\nOKLCH anchor + accents"]
-    PAL --> ENG["Field engine\n12 registered variants"]
+    PAL --> ENG["Field engine\n13 registered variants"]
     ENG --> FX["Finish (filters)\ngrain · vignette · glass · aberration …"]
     FX --> OUT["PNG + embedded render metadata"]
     OUT --> CAL["/calibrate\nsliders + previews"]
@@ -176,12 +176,13 @@ Presets live in `presets/*.json` as OKLCH/HLS sampling distributions plus option
 
 ## Engines
 
-Twelve registered field variants in four mathematical families (`engine/gradients/`):
+Thirteen registered field variants in five mathematical families (`engine/gradients/`):
 
 | Family | Engines |
 | :--- | :--- |
 | Directional sweeps + warping | `domain-warp`, `simplex`, `spline-wave`, `fluid-wave` |
 | 2D point emitters | `rbf`, `radial-basis`, `flow-field`, `idw` |
+| Control-point mesh | `patch-mesh` |
 | Harmonic elevation | `topographic` |
 | Fractal fields | `fractal`, `fluid-fractal`, `escape-fractal` |
 

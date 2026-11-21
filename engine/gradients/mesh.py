@@ -34,6 +34,19 @@ class SimplexMeshGradient(StagedEngine):
         return self._render(colors, complexity=complexity, fluid_mode=fluid_mode, seed=seed)
 
 
+class PatchMeshGradient(StagedEngine):
+    plan = "patch-mesh"
+
+    def generate(
+        self,
+        colors: Sequence[Sequence[float]],
+        complexity: int = 5,
+        seed: Optional[int] = None,
+    ) -> Image.Image:
+        """A grid of colored control points blended by a bicubic spline, in Oklab."""
+        return self._render(colors, complexity=complexity, seed=seed)
+
+
 class MeshGradient(StagedEngine):
     plan = "idw"
 

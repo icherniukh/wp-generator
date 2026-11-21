@@ -41,6 +41,12 @@ def _complexity_field(p: StageParams) -> Dict[str, Any]:
     return {"complexity": p["complexity"]}
 
 
+def _patch_mesh_size(p: StageParams) -> Dict[str, Any]:
+    from engine.stages.plans import patch_mesh_size
+
+    return patch_mesh_size(p)
+
+
 def _w(name: str, fn: Callable, summary: str, **defaults: Any) -> Choice:
     return Choice(Stage(name, "warp", fn, ("coords",), "coords", _fixed(**defaults)), summary)
 
@@ -92,6 +98,8 @@ FIELDS: Dict[str, Choice] = {
     "radial": _f("radial", fields.radial, "distance from the center"),
     "voronoi": _f("voronoi", fields.voronoi, "cells around random points (mode: distance, edges, f2, cells)",
                   bind=lambda p: {"cells": max(4, 3 * p["complexity"]), "mode": "distance"}),
+    "patch-mesh": _f("patch-mesh", fields.patch_mesh, "colored control grid blended bicubically (patch-mesh)",
+                     inputs=("coords", "palette"), bind=lambda p: _patch_mesh_size(p)),
     "ridged": _f("ridged", fields.ridged_noise, "ridged multifractal noise, sharp crests",
                  bind=_fixed(scale=1.5, octaves=4, sharpness=2.0)),
     "billow": _f("billow", fields.billow_noise, "billow noise, rounded puffs with creases",
@@ -117,6 +125,7 @@ _FIELD_KIND = {
     fields.conic: "scalar", fields.spiral: "scalar", fields.radial: "scalar", fields.voronoi: "scalar",
     fields.ridged_noise: "scalar", fields.billow_noise: "scalar", fields.fbm_noise: "scalar",
     fields.radial_emitters: "weights", fields.orbiting_emitters: "weights", fields.anchor_points: "weights",
+    fields.patch_mesh: "weights",
 }
 _FIELD_REQUIRES = {fields.folded_noise: ("displacement",), fields.fractal_field: ("camera",)}
 _MAPPING_ACCEPTS = {

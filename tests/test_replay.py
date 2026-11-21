@@ -28,6 +28,8 @@ COMPOSED = [
     dict(engine="domain-warp", field_stage="spiral"),
     dict(engine="fractal", warps=["none", "bulge"]),
     dict(engine="rbf", field_stage="ridged", mapping="cycles"),
+    dict(engine="patch-mesh", warps=["sphere"], stage_params={"patch-mesh": {"jitter": 0.4}}),
+    dict(engine="simplex", field_stage="patch-mesh"),
 ]
 
 
