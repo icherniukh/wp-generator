@@ -21,6 +21,7 @@ Each archive holds a `wp-generator` folder. Keep the folder together: the execut
 ```bash
 curl -L -o /tmp/wp-generator.zip https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-macos-arm64.zip
 mkdir -p ~/.local/opt ~/.local/bin
+rm -rf ~/.local/opt/wp-generator
 ditto -x -k /tmp/wp-generator.zip ~/.local/opt
 ln -sf ~/.local/opt/wp-generator/wp-generator ~/.local/bin/wp-generator
 ```
@@ -31,9 +32,13 @@ The macOS build is signed and notarized by Apple. If `~/.local/bin` isn't on you
 
 ```powershell
 $dest = "$env:LOCALAPPDATA\Programs"
-Invoke-WebRequest https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-windows-x64.zip -OutFile "$env:TEMP\wp-generator.zip"
+Invoke-WebRequest https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-windows-x64.zip -OutFile "$env:TEMP\wp-generator.zip" -UseBasicParsing
+Remove-Item "$dest\wp-generator" -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive "$env:TEMP\wp-generator.zip" -DestinationPath $dest -Force
-[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";$dest\wp-generator", "User")
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if (($userPath -split ";") -notcontains "$dest\wp-generator") {
+    [Environment]::SetEnvironmentVariable("Path", "$userPath;$dest\wp-generator", "User")
+}
 ```
 
 Open a new PowerShell window afterwards so the `PATH` change applies. The Windows build isn't code-signed. If you downloaded the zip in a browser, Windows may show "Windows protected your PC" the first time: choose *More info → Run anyway*. You can also run `Get-ChildItem "$dest\wp-generator" -Recurse | Unblock-File` once.
@@ -42,6 +47,7 @@ Open a new PowerShell window afterwards so the `PATH` change applies. The Window
 
 ```bash
 mkdir -p ~/.local/opt ~/.local/bin
+rm -rf ~/.local/opt/wp-generator
 curl -L https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-linux-x64.tar.gz | tar -xz -C ~/.local/opt
 ln -sf ~/.local/opt/wp-generator/wp-generator ~/.local/bin/wp-generator
 ```

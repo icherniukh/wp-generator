@@ -11,6 +11,9 @@ on:
       - ".github/workflows/release.yml"
       - "pyproject.toml"
       - "uv.lock"
+      - "main.py"
+      - "engine/**"
+      - "presets/**"
   workflow_dispatch:
 
 permissions:
@@ -54,6 +57,12 @@ jobs:
 
       - name: Build executable
         run: uv run --no-sync --with pyinstaller pyinstaller packaging/wp-generator.spec --noconfirm
+
+      - name: Require signing for tagged releases
+        if: startsWith(matrix.os, 'macos') && startsWith(github.ref, 'refs/tags/') && env.SIGN_MACOS != 'true'
+        run: |
+          echo "macOS signing secrets are not set; refusing to publish an unsigned macOS build" >&2
+          exit 1
 
       - name: Import signing certificate
         if: env.SIGN_MACOS == 'true'
@@ -141,7 +150,13 @@ jobs:
       - name: Check signature (macOS)
         if: runner.os == 'macOS'
         working-directory: ${{ runner.temp }}/download
-        run: codesign -dv wp-generator/wp-generator 2>&1 | grep -E "Authority|Signature|flags" || echo "not signed"
+        run: |
+          info=$(codesign -dv --verbose=2 wp-generator/wp-generator 2>&1 || true)
+          echo "$info" | grep -E "Authority|Signature|flags" || true
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "$info" | grep -q "Authority=Developer ID Application" || { echo "not Developer ID signed" >&2; exit 1; }
+            echo "$info" | grep -q "runtime" || { echo "hardened runtime missing" >&2; exit 1; }
+          fi
 
       - name: Smoke test
         shell: pwsh
@@ -185,3 +200,7 @@ jobs:
           files: assets/*
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+  readme-install:
+    needs: release
+    uses: ./.github/workflows/readme-install.yml
