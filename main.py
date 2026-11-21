@@ -161,7 +161,7 @@ def _available_presets() -> list:
 @click.option("--seed", type=int, default=None, hidden=True, help="Base seed for reproducibility.")
 @click.pass_context
 def main(ctx: click.Context, **kwargs: object) -> None:
-    """Procedural wallpaper generator for macOS. Run with --help-all to see advanced engine and filter overrides."""
+    """Procedural wallpaper generator: writes PNG wallpapers for any screen. Run with --help-all to see advanced engine and filter overrides."""
     params = dict(ctx.params)
 
     if sum(bool(params[key]) for key in ("preset", "colors", "sample")) > 1:
@@ -256,7 +256,13 @@ def _inspect_image(args: SimpleNamespace) -> None:
 
 
 def _sample_screen_color(args: SimpleNamespace) -> None:
-    from tools.sampler import ScreenSampler
+    try:
+        from engine.sampler import ScreenSampler
+    except ImportError as exc:
+        raise click.UsageError(
+            "--sample works on macOS only and needs the 'macos' extra: "
+            "uv tool install 'wp-generator[macos] @ git+https://github.com/icherniukh/wp-generator'"
+        ) from exc
     sampler = ScreenSampler()
     print("Sampling screen color in 3 seconds... move your mouse!")
     time.sleep(3)

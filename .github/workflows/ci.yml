@@ -57,7 +57,13 @@ jobs:
       - name: Install as a uv tool
         shell: bash
         run: |
-          uv tool install dist/*.whl
+          wheel=$(ls dist/*.whl)
+          if [ "$RUNNER_OS" = macOS ]; then
+            # Same as the README's macOS install: includes the --sample extra.
+            uv tool install "wp-generator[macos] @ file://$PWD/$wheel"
+          else
+            uv tool install "$wheel"
+          fi
           uv tool dir --bin >> "$GITHUB_PATH"
 
       # Everything below runs from outside the checkout, through the installed
@@ -87,6 +93,12 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $count = (Get-ChildItem batch -Filter *.png).Count
           if ($count -ne 2) { Write-Error "expected 2 images, got $count"; exit 1 }
+
+      - name: Screen sampler imports (macOS extra)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: "$(uv tool dir)/wp-generator/bin/python" -I -c "import engine.sampler"
 
       - name: Run from cmd
         if: runner.os == 'Windows'
