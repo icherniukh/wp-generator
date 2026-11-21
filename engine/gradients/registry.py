@@ -77,12 +77,14 @@ def render_gradient(
     seed: Optional[int] = None,
     legacy_idw: bool = False,
     trace: Optional[Any] = None,
+    composition: Optional[Any] = None,
 ) -> Image.Image:
     """Renders a gradient with the named engine.
 
     Built-in engines run their stage plan (engine.stages.plans) and can fill a
-    trace. An unknown name falls back to simplex. Engines registered over a
-    built-in name, or under a new name, run their own class.
+    trace and take a composition (engine.stages.Composition). An unknown name
+    falls back to simplex. Engines registered over a built-in name, or under a
+    new name, run their own class and cannot take a composition.
     """
     resolved_name = "idw" if legacy_idw else engine_type
     if not resolved_name or resolved_name not in GRADIENT_REGISTRY:
@@ -112,8 +114,13 @@ def render_gradient(
             channel_offset=channel_offset,
             seed=seed,
         )
-        return render_staged(resolved_name, params, trace=trace)
+        return render_staged(resolved_name, params, trace=trace, composition=composition)
 
+    if composition:
+        raise ValueError(
+            f"engine {resolved_name!r} is a custom class without a stage plan; "
+            "--warp, --field, --mapping and --stage-param need a built-in engine"
+        )
     engine = engine_cls(width=width, height=height)
     custom_adapter = _CUSTOM_ADAPTERS.get(engine_cls)
     if custom_adapter is not None:
