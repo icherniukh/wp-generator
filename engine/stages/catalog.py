@@ -66,6 +66,8 @@ WARPS: Dict[str, Choice] = {
     "twist": _w("twist", warp.twist, "swirl around the center", amount=2.0, radius=1.0),
     "bulge": _w("bulge", warp.bulge, "lens magnify (or pinch, amount < 0) at the center", amount=0.5, radius=1.0),
     "wave": _w("wave", warp.wave, "sideways sine ripple", amplitude=0.08, waves=3.0, angle=0.0),
+    "sphere": _w("sphere", warp.sphere, "wrap the center disc around a sphere", amount=1.0, radius=1.0),
+    "lens": _w("lens", warp.lens, "barrel (amount > 0) or pincushion (< 0) lens distortion", amount=0.3),
 }
 
 FIELDS: Dict[str, Choice] = {
@@ -88,10 +90,14 @@ FIELDS: Dict[str, Choice] = {
     "conic": _f("conic", fields.conic, "sweep around the center", bind=_fixed(turns=1.0)),
     "spiral": _f("spiral", fields.spiral, "conic sweep advancing with distance", bind=_fixed(turns=1.0, tightness=1.5)),
     "radial": _f("radial", fields.radial, "distance from the center"),
-    "voronoi": _f("voronoi", fields.voronoi, "cells around random points (mode: distance, edges, cells)",
+    "voronoi": _f("voronoi", fields.voronoi, "cells around random points (mode: distance, edges, f2, cells)",
                   bind=lambda p: {"cells": max(4, 3 * p["complexity"]), "mode": "distance"}),
     "ridged": _f("ridged", fields.ridged_noise, "ridged multifractal noise, sharp crests",
                  bind=_fixed(scale=1.5, octaves=4, sharpness=2.0)),
+    "billow": _f("billow", fields.billow_noise, "billow noise, rounded puffs with creases",
+                 bind=_fixed(scale=1.5, octaves=4)),
+    "fbm": _f("fbm", fields.fbm_noise, "plain fractal noise (gain, lacunarity, octaves)",
+              bind=_fixed(scale=1.2, octaves=5)),
 }
 
 MAPPINGS: Dict[str, Choice] = {
@@ -109,7 +115,7 @@ _FIELD_KIND = {
     fields.noisy_ramp: "scalar", fields.folded_ramp: "scalar", fields.smooth_ramp: "scalar",
     fields.folded_noise: "scalar", fields.elevation: "scalar", fields.fractal_field: "scalar",
     fields.conic: "scalar", fields.spiral: "scalar", fields.radial: "scalar", fields.voronoi: "scalar",
-    fields.ridged_noise: "scalar",
+    fields.ridged_noise: "scalar", fields.billow_noise: "scalar", fields.fbm_noise: "scalar",
     fields.radial_emitters: "weights", fields.orbiting_emitters: "weights", fields.anchor_points: "weights",
 }
 _FIELD_REQUIRES = {fields.folded_noise: ("displacement",), fields.fractal_field: ("camera",)}

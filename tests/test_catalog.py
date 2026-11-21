@@ -49,7 +49,7 @@ def test_composition_renders_or_refuses(engine, composition):
 
 
 def test_every_new_field_renders_on_simplex():
-    for name in ("conic", "spiral", "radial", "voronoi", "ridged"):
+    for name in ("conic", "spiral", "radial", "voronoi", "ridged", "billow", "fbm"):
         assert _render("simplex", Composition(field=name)) is not None, name
 
 
@@ -87,3 +87,52 @@ def test_parse_stage_params():
 
 def test_no_composition_is_the_plain_plan():
     assert np.array_equal(_render("simplex", None), _render("simplex", Composition()))
+
+
+def _grid(width=41, height=21):
+    from engine.stages.frame import sample_grid
+
+    return sample_grid(width=width, height=height, extent=(-1.0, 1.0), aspect_correct=True)
+
+
+def test_sphere_keeps_center_and_rim_and_swells_inside():
+    from engine.stages.warp import Frame, sphere
+
+    coords = _grid()
+    moved = sphere(coords, amount=1.0, radius=1.0)
+    frame = Frame(coords)
+    u0, v0 = frame.from_xy(coords.x, coords.y)
+    u1, v1 = frame.from_xy(moved.x, moved.y)
+    r0, r1 = np.hypot(u0, v0), np.hypot(u1, v1)
+    outside = r0 >= 1.0
+    assert np.allclose(r1[outside], r0[outside], atol=1e-5)
+    inside = (r0 > 0.05) & (r0 < 0.95)
+    # Inside the disc each pixel samples closer to the center, asin(r) / (pi/2) < r,
+    # so the middle is magnified.
+    assert np.all(r1[inside] < r0[inside])
+    assert np.allclose(sphere(coords, amount=0.0).x, coords.x, atol=1e-6)
+
+
+def test_lens_moves_corners_by_amount():
+    from engine.stages.warp import Frame, lens
+
+    coords = _grid()
+    frame = Frame(coords)
+    u0, v0 = frame.from_xy(coords.x, coords.y)
+    for amount in (0.3, -0.2):
+        moved = lens(coords, amount=amount)
+        u1, v1 = frame.from_xy(moved.x, moved.y)
+        ratio = np.hypot(u1, v1)[0, 0] / np.hypot(u0, v0)[0, 0]
+        assert ratio == pytest.approx(1.0 + amount, rel=1e-4)
+
+
+def test_voronoi_f2_differs_from_f1():
+    f1 = _render("simplex", Composition(field="voronoi"))
+    f2 = _render("simplex", Composition(field="voronoi", stage_params={"voronoi": {"mode": "f2"}}))
+    assert not np.array_equal(f1, f2)
+
+
+def test_noise_folds_differ():
+    images = {name: _render("simplex", Composition(field=name)) for name in ("ridged", "billow", "fbm")}
+    assert not np.array_equal(images["ridged"], images["billow"])
+    assert not np.array_equal(images["billow"], images["fbm"])

@@ -357,6 +357,7 @@ def voronoi(
 
     mode "distance": distance to the nearest point (soft bubbles, F1).
     mode "edges": second-nearest minus nearest distance (cracks between cells, F2-F1).
+    mode "f2": distance to the second-nearest point (F2, rounded facets).
     mode "cells": one random value per cell (flat mosaic).
     """
     from scipy.spatial import cKDTree
@@ -386,16 +387,17 @@ def voronoi(
         return ScalarField(t)
     elif mode == "distance":
         t = dist[:, 0].reshape(coords.shape)
+    elif mode == "f2":
+        t = dist[:, 1].reshape(coords.shape)
     else:
-        raise ValueError(f"voronoi mode must be distance, edges or cells, not {mode!r}")
+        raise ValueError(f"voronoi mode must be distance, edges, f2 or cells, not {mode!r}")
     return ScalarField(normalize_scalar_field(t.astype(np.float32)))
 
 
-def ridged_noise(
-    coords: Coords, *, scale: float = 1.5, octaves: int = 4, sharpness: float = 2.0, rng: Any
+def _octave_noise(
+    coords: Coords, *, scale: float, octaves: int, fold: Any, gain: float, lacunarity: float, rng: Any
 ) -> ScalarField:
-    """Ridged multifractal: each octave contributes (1 - |noise|)^sharpness, so
-    zero crossings of the noise become sharp crests, like mountain ridges."""
+    """Sums octaves of simplex noise, each passed through fold, on a half-size grid."""
     from engine.gradients.noise import snoise2
 
     h, w = coords.shape
@@ -407,9 +409,46 @@ def ridged_noise(
     amp, freq, norm = 1.0, float(scale), 0.0
     for _ in range(max(1, int(octaves))):
         n = snoise2(sx * freq + ox, sy * freq + oy, octaves=1)
-        total += amp * (1.0 - np.abs(n)) ** sharpness
+        total += amp * fold(n)
         norm += amp
-        amp *= 0.5
-        freq *= 2.0
+        amp *= gain
+        freq *= lacunarity
     grid = scipy.ndimage.zoom(total / norm, (h / total.shape[0], w / total.shape[1]), order=3)[:h, :w]
     return ScalarField(normalize_scalar_field(grid.astype(np.float32)))
+
+
+def ridged_noise(
+    coords: Coords,
+    *,
+    scale: float = 1.5,
+    octaves: int = 4,
+    sharpness: float = 2.0,
+    gain: float = 0.5,
+    lacunarity: float = 2.0,
+    rng: Any,
+) -> ScalarField:
+    """Ridged multifractal: each octave contributes (1 - |noise|)^sharpness, so
+    zero crossings of the noise become sharp crests, like mountain ridges."""
+    return _octave_noise(
+        coords, scale=scale, octaves=octaves, fold=lambda n: (1.0 - np.abs(n)) ** sharpness,
+        gain=gain, lacunarity=lacunarity, rng=rng,
+    )
+
+
+def billow_noise(
+    coords: Coords, *, scale: float = 1.5, octaves: int = 4, gain: float = 0.5, lacunarity: float = 2.0, rng: Any
+) -> ScalarField:
+    """Billow noise: each octave contributes |noise|, so zero crossings become
+    creases between rounded puffs (the inverse look of ridged)."""
+    return _octave_noise(
+        coords, scale=scale, octaves=octaves, fold=np.abs, gain=gain, lacunarity=lacunarity, rng=rng
+    )
+
+
+def fbm_noise(
+    coords: Coords, *, scale: float = 1.2, octaves: int = 5, gain: float = 0.5, lacunarity: float = 2.0, rng: Any
+) -> ScalarField:
+    """Plain fractal Brownian motion: octaves of simplex noise summed as they are."""
+    return _octave_noise(
+        coords, scale=scale, octaves=octaves, fold=lambda n: n, gain=gain, lacunarity=lacunarity, rng=rng
+    )
