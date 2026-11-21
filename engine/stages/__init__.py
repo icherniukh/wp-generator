@@ -53,6 +53,7 @@ def render_staged(
 
 
 __all__ = [
+    "Camera",
     "Coords",
     "Field",
     "OklabImage",
@@ -63,6 +64,7 @@ __all__ = [
     "StageParams",
     "StageRecord",
     "STAGED_PLANS",
+    "SrgbImage",
     "Trace",
     "WeightField",
     "has_staged_plan",

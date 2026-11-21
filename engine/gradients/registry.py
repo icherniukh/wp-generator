@@ -76,119 +76,45 @@ def render_gradient(
     channel_offset: float = 0.0,
     seed: Optional[int] = None,
     legacy_idw: bool = False,
-    staged: bool = True,
     trace: Optional[Any] = None,
 ) -> Image.Image:
     """Renders a gradient with the named engine.
 
-    Built-in engines run through their stage plans in engine.stages, which can
-    fill a trace. staged=False runs the original engine classes instead (same
-    output; kept to verify the stage plans). Engines registered over a
-    built-in name, or under a new name, always run their own class.
+    Built-in engines run their stage plan (engine.stages.plans) and can fill a
+    trace. An unknown name falls back to simplex. Engines registered over a
+    built-in name, or under a new name, run their own class.
     """
     resolved_name = "idw" if legacy_idw else engine_type
-    builtin = resolved_name in _BUILTIN_ENGINES and GRADIENT_REGISTRY.get(resolved_name) is _BUILTIN_ENGINES[resolved_name]
-    if (staged or trace is not None) and builtin:
-        from engine.stages import has_staged_plan, render_staged
+    if not resolved_name or resolved_name not in GRADIENT_REGISTRY:
+        resolved_name = "simplex"
+    engine_cls = GRADIENT_REGISTRY[resolved_name]
 
-        if has_staged_plan(resolved_name):
-            params = dict(
-                width=width,
-                height=height,
-                colors=colors,
-                complexity=complexity,
-                fluid_mode=fluid_mode,
-                warp_strength=warp_strength,
-                transverse_warp=transverse_warp,
-                ambient_weight=ambient_weight,
-                dispersion=dispersion,
-                fractal_type=fractal_type,
-                fractal_zoom=fractal_zoom,
-                fractal_center=fractal_center,
-                fractal_angle=fractal_angle,
-                phase_offset=phase_offset,
-                frequency=frequency,
-                trap_weight=trap_weight,
-                channel_offset=channel_offset,
-                seed=seed,
-            )
-            return render_staged(resolved_name, params, trace=trace)
-    engine_cls = get_gradient_engine_class(resolved_name)
-    engine = engine_cls(width=width, height=height)
+    if engine_cls is _BUILTIN_ENGINES.get(resolved_name):
+        from engine.stages import render_staged
 
-    if engine_cls is SimplexMeshGradient:
-        return engine.generate(
-            colors, complexity=complexity, fluid_mode=fluid_mode, seed=seed
-        )
-    if engine_cls is FlowFieldGradient:
-        return engine.generate(
-            colors,
+        params = dict(
+            width=width,
+            height=height,
+            colors=colors,
             complexity=complexity,
             fluid_mode=fluid_mode,
             warp_strength=warp_strength,
-            seed=seed,
-        )
-    if engine_cls is FluidMeshGradient:
-        return engine.generate(
-            colors, complexity=complexity, fluid_mode=fluid_mode
-        )
-    if engine_cls is SplineWaveGradient:
-        return engine.generate(
-            colors, complexity=complexity, warp_strength=warp_strength, seed=seed
-        )
-    if engine_cls is DomainWarpGradient:
-        return engine.generate(
-            colors,
-            complexity=complexity,
-            warp_strength=warp_strength,
             transverse_warp=transverse_warp,
-            seed=seed,
-        )
-    if engine_cls is RadialBasisGradient:
-        return engine.generate(
-            colors,
-            complexity=complexity,
-            warp_strength=1.0 if warp_strength is None else warp_strength,
             ambient_weight=ambient_weight,
             dispersion=dispersion,
-            seed=seed,
-        )
-    if engine_cls is TopographicGradient:
-        return engine.generate(
-            colors,
-            complexity=complexity,
-            warp_strength=0.85 if warp_strength is None else warp_strength,
-            seed=seed,
-        )
-    if engine_cls is FluidFractalGradient:
-        return engine.generate(
-            colors,
-            complexity=complexity,
-            zoom=fractal_zoom,
-            center=fractal_center,
-            angle=fractal_angle,
-            phase_offset=phase_offset,
-            frequency=frequency,
-            channel_offset=channel_offset,
-            seed=seed,
-        )
-    if engine_cls is EscapeTimeFractalGradient or issubclass(engine_cls, FractalFieldGradient):
-        return engine.generate(
-            colors,
-            complexity=complexity,
             fractal_type=fractal_type,
-            zoom=fractal_zoom,
-            center=fractal_center,
-            angle=fractal_angle,
+            fractal_zoom=fractal_zoom,
+            fractal_center=fractal_center,
+            fractal_angle=fractal_angle,
             phase_offset=phase_offset,
             frequency=frequency,
             trap_weight=trap_weight,
             channel_offset=channel_offset,
             seed=seed,
         )
-    if engine_cls is MeshGradient:
-        return engine.generate(colors, p=2.5)
+        return render_staged(resolved_name, params, trace=trace)
 
+    engine = engine_cls(width=width, height=height)
     custom_adapter = _CUSTOM_ADAPTERS.get(engine_cls)
     if custom_adapter is not None:
         return custom_adapter(engine, colors=colors, complexity=complexity, seed=seed)

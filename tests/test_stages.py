@@ -1,6 +1,8 @@
-"""The staged path must reproduce the legacy engines pixel for pixel."""
+"""Stage plans: traces, parameter tracking and registry dispatch.
 
-import random
+Pixel output is pinned by the golden renders (tests/test_golden.py).
+"""
+
 
 import numpy as np
 import pytest
@@ -10,48 +12,8 @@ from engine.stages import STAGED_PLANS, ScalarField, Trace, WeightField
 
 PALETTE = [(18, 24, 64), (220, 80, 120), (250, 190, 90), (60, 170, 200)]
 
-CASES = [
-    dict(complexity=4, warp_strength=0.6, transverse_warp=0.4, fractal_type="julia", trap_weight=0.6),
-    dict(complexity=2, warp_strength=0.0, transverse_warp=0.0, fractal_type="mandelbrot", frequency=2.3),
-    dict(complexity=6, warp_strength=1.3, transverse_warp=0.0, ambient_weight=0.4, dispersion=0.2,
-         fractal_type="orbit_trap", phase_offset=0.3, channel_offset=0.15),
-    dict(complexity=3, warp_strength=None, transverse_warp=None, fractal_type="fluid",
-         fractal_zoom=1.4, fractal_center=(0.2, -0.1), fractal_angle=0.7),
-]
-SIZES = [(96, 60), (200, 50), (40, 90)]
-
-
-def _render(engine, staged, size, seed, **kwargs):
-    random.seed(999)  # state before the call must not matter when a seed is given
-    image = render_gradient(
-        engine, width=size[0], height=size[1], colors=PALETTE, seed=seed, staged=staged, **kwargs
-    )
-    return np.asarray(image)
-
-
-@pytest.mark.parametrize("engine", sorted(STAGED_PLANS))
-@pytest.mark.parametrize("case", CASES)
-@pytest.mark.parametrize("size", SIZES)
-def test_staged_matches_legacy(engine, case, size):
-    for seed in (1, 77, 2024):
-        legacy = _render(engine, False, size, seed, **case)
-        staged = _render(engine, True, size, seed, **case)
-        assert legacy.shape == staged.shape
-        assert np.array_equal(legacy, staged), f"{engine} {case} {size} seed {seed}"
-
-
-def test_unseeded_render_draws_from_global_state_like_legacy():
-    random.seed(5)
-    np.random.seed(5)
-    legacy = np.asarray(render_gradient("domain-warp", width=64, height=40, colors=PALETTE, staged=False))
-    random.seed(5)
-    np.random.seed(5)
-    staged = np.asarray(render_gradient("domain-warp", width=64, height=40, colors=PALETTE, staged=True))
-    assert np.array_equal(legacy, staged)
-
-
 def test_single_color_rbf_is_solid():
-    image = render_gradient("rbf", width=20, height=10, colors=[(10, 20, 30)], seed=1, staged=True)
+    image = render_gradient("rbf", width=20, height=10, colors=[(10, 20, 30)], seed=1)
     assert image.getcolors() == [(200, (10, 20, 30))]
 
 

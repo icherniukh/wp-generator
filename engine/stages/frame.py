@@ -65,6 +65,64 @@ def rotate(coords: Coords, *, angle: Optional[float] = None, rng: Any) -> Coords
     return coords.moved(u, v, coords.displacement)
 
 
+_MANDELBROT_FOCAL_POINTS = [
+    (-0.7436438870371587, 0.1318259042053119),
+    (-0.1011, 0.9563),
+    (-0.75, 0.1),
+    (-0.748, 0.065),
+    (-1.25, 0.0),
+    (0.275, 0.0),
+]
+
+
+def resolve_fractal_camera(
+    kind: str,
+    zoom: Optional[float],
+    center: Optional[Tuple[float, float]],
+    angle: Optional[float],
+    aspect: float,
+    rng: Any,
+) -> Tuple[float, float, float, float]:
+    """Zoom, angle and center for a fractal view; each drawn at random unless given.
+
+    Mandelbrot views zoom into one of a few known detailed points. Other kinds
+    pick a zoom tier (macro, medium, detail) and place the center off-screen,
+    in a corner or near the middle.
+    """
+    if zoom is not None:
+        eff_zoom = float(zoom)
+    elif kind == "mandelbrot":
+        eff_zoom = rng.uniform(8.0, 35.0)
+    else:
+        radius_tier = rng.choices(["macro", "medium", "detail"], weights=[0.45, 0.40, 0.15])[0]
+        zoom_ranges = {"macro": (0.40, 0.85), "medium": (0.85, 1.75), "detail": (1.75, 3.20)}
+        eff_zoom = rng.uniform(*zoom_ranges[radius_tier])
+
+    eff_angle = float(angle) if angle is not None else rng.uniform(0.0, 2.0 * np.pi)
+
+    if center is not None:
+        cx, cy = float(center[0]), float(center[1])
+    elif kind == "mandelbrot":
+        cx, cy = rng.choice(_MANDELBROT_FOCAL_POINTS)
+    else:
+        focal_archetype = rng.choices(["offscreen", "corner", "centered"], weights=[0.45, 0.35, 0.20])[0]
+        if focal_archetype == "offscreen":
+            theta_off = rng.uniform(0.0, 2.0 * np.pi)
+            dist_off = rng.uniform(1.4, 2.8) / eff_zoom
+            cx = dist_off * aspect * np.cos(theta_off)
+            cy = dist_off * np.sin(theta_off)
+        elif focal_archetype == "corner":
+            sign_x = rng.choice([-1.0, 1.0])
+            sign_y = rng.choice([-1.0, 1.0])
+            cx = sign_x * rng.uniform(0.40, 0.95) * aspect / eff_zoom
+            cy = sign_y * rng.uniform(0.35, 0.90) / eff_zoom
+        else:
+            cx = rng.uniform(-0.35, 0.35) * aspect / eff_zoom
+            cy = rng.uniform(-0.35, 0.35) / eff_zoom
+
+    return eff_zoom, eff_angle, cx, cy
+
+
 def fractal_camera(
     *,
     width: int,
@@ -73,17 +131,16 @@ def fractal_camera(
     zoom: Optional[float],
     center: Optional[Tuple[float, float]],
     angle: Optional[float],
+    rng: Any,
 ) -> Coords:
     """Picks zoom, angle and center (random unless given) and samples the view.
 
     The view spans 1.3 / zoom vertically around the origin, aspect-corrected.
     """
-    from engine.gradients.fractal import FractalFieldGradient
-
     h = max(16, int(height * 0.25))
     w = max(16, int(width * 0.25))
     aspect = w / h
-    eff_zoom, eff_angle, cx, cy = FractalFieldGradient._resolve_camera(kind, zoom, center, angle, aspect)
+    eff_zoom, eff_angle, cx, cy = resolve_fractal_camera(kind, zoom, center, angle, aspect, rng)
     y = np.linspace(-1.3 / eff_zoom, 1.3 / eff_zoom, h, dtype=np.float32)
     x = np.linspace(-1.3 * aspect / eff_zoom, 1.3 * aspect / eff_zoom, w, dtype=np.float32)
     xv, yv = np.meshgrid(x, y)

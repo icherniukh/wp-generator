@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional, Sequence, Tuple
 
 import numpy as np
 import scipy.ndimage
 
-from engine.gradients.spatial import generate_noise_plane, normalize_scalar_field
+from engine.gradients.spatial import generate_noise_plane, normalize_scalar_field, trig_fbm_field
 from engine.stages.types import Coords, Palette, ScalarField, WeightField
 
 
@@ -163,15 +163,23 @@ def orbiting_emitters(coords: Coords, palette: Palette, *, rng: Any) -> WeightFi
 
 
 def anchor_points(
-    coords: Coords, palette: Palette, *, power: float, softness: float = 0.12, margin: float = 0.08, rng: Any
+    coords: Coords,
+    palette: Palette,
+    *,
+    power: float,
+    softness: float = 0.12,
+    points: Optional[Sequence[Tuple[float, float]]] = None,
+    margin: float = 0.08,
+    rng: Any,
 ) -> WeightField:
-    """One random anchor per color; inverse-distance weights (IDW)."""
+    """One anchor per color, random unless given; inverse-distance weights (IDW)."""
     num_colors = palette.size
     h, w = coords.shape
-    points = [
-        (rng.uniform(margin, 1.0 - margin), rng.uniform(margin, 1.0 - margin))
-        for _ in range(num_colors)
-    ]
+    if points is None:
+        points = [
+            (rng.uniform(margin, 1.0 - margin), rng.uniform(margin, 1.0 - margin))
+            for _ in range(num_colors)
+        ]
     distances = np.zeros((num_colors, h, w), dtype=np.float32)
     for i, (px, py) in enumerate(points):
         distances[i] = np.sqrt((coords.x - px) ** 2 + (coords.y - py) ** 2)
@@ -181,14 +189,115 @@ def anchor_points(
     return WeightField(weights)
 
 
-def fractal_field(coords: Coords, *, kind: str, complexity: int, trap_weight: float) -> ScalarField:
+def fluid_fractal_field(
+    xv: np.ndarray,
+    yv: np.ndarray,
+    rot_x: np.ndarray,
+    rot_y: np.ndarray,
+    rf: np.ndarray,
+    angle: float,
+    aspect: float,
+    complexity: int,
+    rng: Any,
+) -> np.ndarray:
+    """Two levels of trigonometric-fBm domain warp, mixed with a radial carrier and a sweep."""
+    q_x = trig_fbm_field(rot_x, rot_y, octaves=2, rng=rng)
+    q_y = trig_fbm_field(rot_x + 3.8, rot_y + 1.5, octaves=2, rng=rng)
+    r_x = trig_fbm_field(rot_x + 1.8 * q_x + 1.4, rot_y + 1.8 * q_y + 2.8, octaves=2, rng=rng)
+    r_y = trig_fbm_field(rot_x + 1.8 * q_x + 4.5, rot_y + 1.8 * q_y + 1.6, octaves=2, rng=rng)
+
+    radial_freq = rng.uniform(0.35, 0.80)
+    radial_carrier = 0.5 + 0.5 * np.cos(rf * radial_freq)
+
+    sweep_angle = angle + rng.uniform(-0.5, 0.5)
+    ambient_sweep = 0.5 * (np.cos(sweep_angle) * (xv / aspect) + np.sin(sweep_angle) * yv)
+
+    fluid_folds = trig_fbm_field(
+        rot_x + 2.2 * r_x, rot_y + 2.2 * r_y, octaves=max(2, min(5, complexity)), rng=rng
+    )
+    field = 0.30 * radial_carrier + 0.25 * ambient_sweep + 0.45 * fluid_folds
+    return normalize_scalar_field(field)
+
+
+def escape_time_field(
+    rot_x: np.ndarray,
+    rot_y: np.ndarray,
+    kind: str,
+    complexity: int,
+    trap_weight: float,
+    rng: Any,
+) -> np.ndarray:
+    """Smoothed escape-time potential of a Mandelbrot or Julia set, blended with an orbit trap.
+
+    Julia sets pick c near the main cardioid or the period-2 bulb boundary.
+    """
+    z_grid = rot_x + 1j * rot_y
+    max_iter = max(16, 16 + complexity * 3)
+    escape_radius = 16.0
+    ln_r = np.log(escape_radius)
+
+    smooth_pot = np.zeros(z_grid.shape, dtype=np.float32)
+    trap = np.full(z_grid.shape, 1e6, dtype=np.float32)
+    mask = np.ones(z_grid.shape, dtype=bool)
+
+    if kind == "mandelbrot":
+        z = np.zeros_like(z_grid)
+        c = z_grid
+    else:
+        theta = rng.uniform(0.0, 2.0 * np.pi)
+        if rng.random() < 0.3:
+            c_bound = -1.0 + 0.25 * np.exp(1j * theta)
+        else:
+            c_bound = 0.5 * np.exp(1j * theta) - 0.25 * np.exp(2j * theta)
+        eps = rng.uniform(0.015, 0.04) * np.exp(1j * rng.uniform(0.0, 2.0 * np.pi))
+        c = c_bound + eps
+        z = z_grid.copy()
+
+    for i in range(max_iter):
+        z[mask] = z[mask] ** 2 + (c[mask] if isinstance(c, np.ndarray) else c)
+        abs_z = np.abs(z)
+
+        curr_trap = np.minimum(np.abs(z.real), np.abs(z.imag)) + 0.15 * abs_z
+        trap[mask] = np.minimum(trap[mask], curr_trap[mask])
+
+        escaped = abs_z > escape_radius
+        newly_escaped = escaped & mask
+        if np.any(newly_escaped):
+            smooth_pot[newly_escaped] = (
+                i + 1.0 - (np.log(np.log(abs_z[newly_escaped])) - np.log(ln_r)) / np.log(2.0)
+            )
+        mask = mask & (~escaped)
+        if not np.any(mask):
+            break
+
+    if np.any(mask):
+        final_abs = np.clip(np.abs(z[mask]), 0.0, escape_radius)
+        smooth_pot[mask] = max_iter - np.log1p(escape_radius - final_abs)
+
+    smooth_pot = scipy.ndimage.gaussian_filter(smooth_pot, sigma=1.8)
+    trap = scipy.ndimage.gaussian_filter(trap, sigma=1.5)
+
+    pot_norm = normalize_scalar_field(smooth_pot)
+    pot_smooth = normalize_scalar_field(1.0 / (1.0 + np.exp(-4.0 * (pot_norm - 0.5))))
+
+    trap_p90 = np.percentile(trap, 90)
+    trap_norm = np.clip(trap / max(1e-5, trap_p90), 0.0, 1.0)
+    trap_smooth = 1.0 - np.exp(-2.2 * trap_norm)
+
+    ambient_carrier = 0.5 + 0.5 * (np.sin(rot_x * 0.5) * np.cos(rot_y * 0.5))
+
+    return (
+        (1.0 - trap_weight * 0.5) * (0.45 * ambient_carrier + 0.55 * pot_smooth)
+        + trap_weight * 0.5 * trap_smooth
+    )
+
+
+def fractal_field(coords: Coords, *, kind: str, complexity: int, trap_weight: float, rng: Any) -> ScalarField:
     """kind "fluid": nested fBm domain warp over a radial carrier and a sweep.
     Otherwise an escape-time fractal (mandelbrot, or a Julia set) with an orbit trap.
 
     Needs fractal_camera, and the camera-frame positions in x, y.
     """
-    from engine.gradients.fractal import FractalFieldGradient
-
     cam = coords.camera
     if cam is None:
         raise ValueError("fractal_field needs fractal_camera before it")
@@ -196,11 +305,9 @@ def fractal_field(coords: Coords, *, kind: str, complexity: int, trap_weight: fl
     if kind == "fluid":
         cx, cy = cam.center
         rf = np.sqrt((coords.base_x - cx) ** 2 + (coords.base_y - cy) ** 2)
-        t = FractalFieldGradient._compute_fluid_field(
-            coords.base_x, coords.base_y, coords.x, coords.y, rf, cam.angle, cam.aspect, safe_complexity
+        t = fluid_fractal_field(
+            coords.base_x, coords.base_y, coords.x, coords.y, rf, cam.angle, cam.aspect, safe_complexity, rng
         )
     else:
-        t = FractalFieldGradient._compute_escape_time_field(
-            coords.x, coords.y, kind, safe_complexity, np.clip(float(trap_weight), 0.0, 1.0)
-        )
+        t = escape_time_field(coords.x, coords.y, kind, safe_complexity, np.clip(float(trap_weight), 0.0, 1.0), rng)
     return ScalarField(t)

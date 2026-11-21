@@ -1,9 +1,9 @@
 import random
-from typing import List, Tuple
+from typing import Any, List, Tuple
 import numpy as np
 import scipy.ndimage
 
-from engine.gradients.noise import pnoise2, snoise2
+from engine.gradients.noise import snoise2
 
 
 def normalize_scalar_field(field: np.ndarray) -> np.ndarray:
@@ -14,10 +14,10 @@ def normalize_scalar_field(field: np.ndarray) -> np.ndarray:
     return np.zeros_like(field, dtype=np.float32)
 
 
-def random_anchor_points(count: int, margin: float = 0.08) -> List[Tuple[float, float]]:
+def random_anchor_points(count: int, margin: float = 0.08, rng: Any = random) -> List[Tuple[float, float]]:
     """Generates normalized anchor coordinates placed within canvas margins."""
     return [
-        (random.uniform(margin, 1.0 - margin), random.uniform(margin, 1.0 - margin))
+        (rng.uniform(margin, 1.0 - margin), rng.uniform(margin, 1.0 - margin))
         for _ in range(count)
     ]
 
@@ -47,37 +47,20 @@ def warp_coordinates_perlin(
     complexity: int,
     warp_range: Tuple[float, float] = (0.2, 0.6),
     octaves: int = 3,
+    rng: Any = random,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Warps a normalized [0, 1]^2 coordinate grid using coarse-to-fine Perlin displacement."""
-    x = np.linspace(0, 1, width, dtype=np.float32)
-    y = np.linspace(0, 1, height, dtype=np.float32)
-    xv, yv = np.meshgrid(x, y)
+    from engine.stages.frame import full_resolution_grid
+    from engine.stages.warp import perlin_displacement
 
-    small_h = max(2, int(height * 0.1))
-    small_w = max(2, int(width * 0.1))
-
-    ox = random.uniform(0, 1000)
-    oy = random.uniform(0, 1000)
-    warp_strength = random.uniform(*warp_range)
-    scale = random.uniform(0.002, 0.006) * complexity
-
-    # Sample coordinates in float64, like the Python floats the per-point loop
-    # used to pass; pnoise2 rounds them to float32 as the C extension did.
-    nx = np.arange(small_w, dtype=np.float64) * scale + ox
-    ny = np.arange(small_h, dtype=np.float64) * scale + oy
-    nxv, nyv = np.meshgrid(nx, ny)
-    dx = pnoise2(nxv, nyv, octaves=octaves)
-    dy = pnoise2(nxv + 500, nyv + 500, octaves=octaves)
-
-    dx = scipy.ndimage.zoom(dx, (height / small_h, width / small_w), order=1)
-    dy = scipy.ndimage.zoom(dy, (height / small_h, width / small_w), order=1)
-    if dx.shape != xv.shape:
-        pad_h = max(0, xv.shape[0] - dx.shape[0])
-        pad_w = max(0, xv.shape[1] - dx.shape[1])
-        dx = np.pad(dx, ((0, pad_h), (0, pad_w)))[: xv.shape[0], : xv.shape[1]]
-        dy = np.pad(dy, ((0, pad_h), (0, pad_w)))[: yv.shape[0], : yv.shape[1]]
-
-    return xv + dx * warp_strength, yv + dy * warp_strength
+    coords = perlin_displacement(
+        full_resolution_grid(width=width, height=height),
+        strength_range=warp_range,
+        complexity=complexity,
+        octaves=octaves,
+        rng=rng,
+    )
+    return coords.x, coords.y
 
 
 def trig_fbm_field(
@@ -86,16 +69,17 @@ def trig_fbm_field(
     octaves: int = 3,
     lacunarity: float = 1.8,
     gain: float = 0.45,
+    rng: Any = random,
 ) -> np.ndarray:
     """Evaluates multi-octave rotated trigonometric fBm over 2D coordinate arrays."""
     val = np.zeros_like(x_grid)
     freq = 0.65
     amp = 1.0
     for _ in range(octaves):
-        theta = random.uniform(0, np.pi)
+        theta = rng.uniform(0, np.pi)
         rx = x_grid * np.cos(theta) - y_grid * np.sin(theta)
         ry = x_grid * np.sin(theta) + y_grid * np.cos(theta)
-        phase = random.uniform(0, 2 * np.pi)
+        phase = rng.uniform(0, 2 * np.pi)
         val += amp * (np.sin(rx * freq + phase) * np.cos(ry * freq + phase * 0.7))
         freq *= lacunarity
         amp *= gain
