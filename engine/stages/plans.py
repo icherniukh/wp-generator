@@ -43,9 +43,6 @@ Bind = Callable[[StageParams], Dict]
 @dataclass(frozen=True)
 class Plan:
     stages: Tuple[Stage, ...]
-    # Reseed the global generators from the seed before the first stage.
-    # fluid-wave and idw never did; they continue from the pipeline's state.
-    reseeds: bool = True
     # A single color renders as a solid fill before any stage runs.
     solid_if_single_color: bool = False
 
@@ -169,7 +166,7 @@ FLUID_WAVE = Plan((
     MAP,
     Stage("bicubic upscale", "resample", bicubic_upscale, ("image",), "image", _size),
     EXPORT_AS_IS,
-), reseeds=False)
+))
 
 
 # spline-wave and flow-field -------------------------------------------------
@@ -241,7 +238,7 @@ IDW = Plan((
     Stage("anchor points", "field", anchor_points, ("coords", "palette"), "field", _idw),
     Stage("blend in sRGB", "mapping", blend_srgb, ("field", "palette"), "image"),
     EXPORT_AS_IS,
-), reseeds=False)
+))
 
 
 # fractals ------------------------------------------------------------------
