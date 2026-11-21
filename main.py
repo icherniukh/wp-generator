@@ -10,6 +10,7 @@ import click
 
 from engine import __version__
 from engine.gradients import GRADIENT_REGISTRY
+from engine.stages import Trace
 from engine.pipeline import (
     DEVICE_RESOLUTIONS,
     RenderConfiguration,
@@ -71,10 +72,21 @@ def save_preview_image(result, output_path: str) -> None:
     print(f"  -> Preview saved to {preview_path}")
 
 
+def save_trace_image(trace, result, output_path: str) -> None:
+    """Writes the stage-by-stage contact sheet next to the wallpaper."""
+    from engine.stages.filmstrip import render_filmstrip
+
+    title = f"{result.engine}  preset={result.preset or '-'}  seed={result.seed}  {result.width}x{result.height}"
+    trace_path = os.path.splitext(output_path)[0] + "_trace.png"
+    render_filmstrip(trace, title=title).save(trace_path, "PNG")
+    print(f"  -> Trace saved to {trace_path}")
+
+
 def generate(args: SimpleNamespace, seed: int) -> str:
     """Renders a single wallpaper instance and writes it to disk."""
     config = build_render_configuration(args, seed)
-    result = WallpaperPipeline().render(config)
+    trace = Trace() if getattr(args, "trace", False) else None
+    result = WallpaperPipeline().render(config, trace=trace)
 
     if args.output is not None:
         output_path = args.output
@@ -96,6 +108,9 @@ def generate(args: SimpleNamespace, seed: int) -> str:
 
     if args.preview_fx:
         save_preview_image(result, output_path)
+
+    if trace is not None:
+        save_trace_image(trace, result, output_path)
 
     result.save(output_path)
     return output_path
@@ -158,6 +173,7 @@ def _available_presets() -> list:
 @click.option("--glass", is_flag=True, default=None, hidden=True, help="Apply frosted glass texture overlay.")
 @click.option("--aberration", "--chromatic-aberration", "chromatic_aberration", type=float, default=None, hidden=True, help="Chromatic aberration strength (0.0-0.1).")
 @click.option("--preview-fx", is_flag=True, default=None, hidden=True, help="Preview FX rendering layers.")
+@click.option("--trace", is_flag=True, default=None, hidden=True, help="Also save <output>_trace.png: every render stage with its inputs, outputs and parameters.")
 @click.option("--seed", type=int, default=None, hidden=True, help="Base seed for reproducibility.")
 @click.pass_context
 def main(ctx: click.Context, **kwargs: object) -> None:

@@ -74,9 +74,40 @@ def render_gradient(
     channel_offset: float = 0.0,
     seed: Optional[int] = None,
     legacy_idw: bool = False,
+    staged: bool = False,
+    trace: Optional[Any] = None,
 ) -> Image.Image:
-    """Dispatches gradient generation to the registered engine with explicit domain parameters."""
+    """Dispatches gradient generation to the registered engine with explicit domain parameters.
+
+    With staged=True (or a trace to fill), engines that have a stage plan render
+    through engine.stages instead; their output is identical.
+    """
     resolved_name = "idw" if legacy_idw else engine_type
+    if staged or trace is not None:
+        from engine.stages import has_staged_plan, render_staged
+
+        if has_staged_plan(resolved_name):
+            params = dict(
+                width=width,
+                height=height,
+                colors=colors,
+                complexity=complexity,
+                fluid_mode=fluid_mode,
+                warp_strength=warp_strength,
+                transverse_warp=transverse_warp,
+                ambient_weight=ambient_weight,
+                dispersion=dispersion,
+                fractal_type=fractal_type,
+                fractal_zoom=fractal_zoom,
+                fractal_center=fractal_center,
+                fractal_angle=fractal_angle,
+                phase_offset=phase_offset,
+                frequency=frequency,
+                trap_weight=trap_weight,
+                channel_offset=channel_offset,
+                seed=seed,
+            )
+            return render_staged(resolved_name, params, trace=trace)
     engine_cls = get_gradient_engine_class(resolved_name)
     engine = engine_cls(width=width, height=height)
 
