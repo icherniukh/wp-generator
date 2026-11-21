@@ -6,45 +6,67 @@ Generates abstract gradient wallpapers as PNG files, sized for your screen. Each
 
 ## Install
 
-The tool installs with [uv](https://docs.astral.sh/uv/), which also fetches a suitable Python (3.12+) if you don't have one. Installing compiles one C dependency (`noise`), so each platform needs a C compiler first.
+Download the ready-to-run build for your system. It needs no Python and nothing else installed. It's a command-line tool, so you run it from a terminal (Terminal on macOS, PowerShell on Windows).
+
+| System | Download |
+| :--- | :--- |
+| macOS, Apple Silicon (M1 and later) | [wp-generator-macos-arm64.zip](https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-macos-arm64.zip) |
+| Windows 10/11, x64 | [wp-generator-windows-x64.zip](https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-windows-x64.zip) |
+| Linux x64 (glibc 2.35+: Ubuntu 22.04, Debian 12, Fedora 36 or newer) | [wp-generator-linux-x64.tar.gz](https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-linux-x64.tar.gz) |
+
+Each archive holds a `wp-generator` folder. Keep the folder together: the executable inside it needs the files next to it. The commands below download it, unpack it, and put `wp-generator` on your `PATH`. Intel Macs aren't covered by a download; use the [uv install](#with-uv-any-system) instead.
 
 ### macOS
 
 ```bash
-xcode-select --install                                   # C compiler, if not installed yet
-curl -LsSf https://astral.sh/uv/install.sh | sh          # or: brew install uv
-uv tool install "wp-generator[macos] @ git+https://github.com/icherniukh/wp-generator"
+curl -L -o /tmp/wp-generator.zip https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-macos-arm64.zip
+mkdir -p ~/.local/opt ~/.local/bin
+ditto -x -k /tmp/wp-generator.zip ~/.local/opt
+ln -sf ~/.local/opt/wp-generator/wp-generator ~/.local/bin/wp-generator
 ```
 
-The `[macos]` extra enables `--sample` (pick a palette color from the screen). Without it, everything else works the same.
-
-### Linux
-
-```bash
-sudo apt install build-essential                         # Debian/Ubuntu; Fedora: sudo dnf install gcc
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install git+https://github.com/icherniukh/wp-generator
-```
+The macOS build is signed and notarized by Apple. If `~/.local/bin` isn't on your `PATH`, add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` and open a new terminal.
 
 ### Windows (PowerShell)
 
 ```powershell
-winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-winget install --id=astral-sh.uv -e
-uv tool install git+https://github.com/icherniukh/wp-generator
+$dest = "$env:LOCALAPPDATA\Programs"
+Invoke-WebRequest https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-windows-x64.zip -OutFile "$env:TEMP\wp-generator.zip"
+Expand-Archive "$env:TEMP\wp-generator.zip" -DestinationPath $dest -Force
+[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";$dest\wp-generator", "User")
 ```
 
-The first line installs the Microsoft C++ Build Tools. You can also install them from the [download page](https://visualstudio.microsoft.com/visual-cpp-build-tools/) by selecting "Desktop development with C++". Open a new terminal after installing uv so it is on `PATH`.
+Open a new PowerShell window afterwards so the `PATH` change applies. The Windows build isn't code-signed. If you downloaded the zip in a browser, Windows may show "Windows protected your PC" the first time: choose *More info → Run anyway*. You can also run `Get-ChildItem "$dest\wp-generator" -Recurse | Unblock-File` once.
+
+### Linux
+
+```bash
+mkdir -p ~/.local/opt ~/.local/bin
+curl -L https://github.com/icherniukh/wp-generator/releases/latest/download/wp-generator-linux-x64.tar.gz | tar -xz -C ~/.local/opt
+ln -sf ~/.local/opt/wp-generator/wp-generator ~/.local/bin/wp-generator
+```
 
 ### Check, update, remove
 
 ```bash
-wp-generator --version          # prints: wp-generator 0.1.0
-uv tool upgrade wp-generator    # update to the latest version
-uv tool uninstall wp-generator  # remove
+wp-generator --version   # prints: wp-generator 0.1.0
 ```
 
-If `wp-generator` is not found, run `uv tool update-shell` and open a new terminal.
+To update, run the same install commands again; they replace the folder. To remove, delete the `wp-generator` folder (`~/.local/opt/wp-generator`, or `%LOCALAPPDATA%\Programs\wp-generator` on Windows) and the `~/.local/bin/wp-generator` link.
+
+### With uv (any system)
+
+If you use [uv](https://docs.astral.sh/uv/), you can install the Python package instead. It runs on any OS and CPU, including Intel Macs. Installing compiles one C dependency (`noise`), so you need a C compiler: Xcode Command Line Tools (`xcode-select --install`) on macOS, `build-essential` on Linux, or the [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) ("Desktop development with C++") on Windows.
+
+```bash
+uv tool install git+https://github.com/icherniukh/wp-generator
+# macOS, with --sample (pick a palette color from the screen):
+uv tool install "wp-generator[macos] @ git+https://github.com/icherniukh/wp-generator"
+uv tool upgrade wp-generator     # update
+uv tool uninstall wp-generator   # remove
+```
+
+If `wp-generator` is not found afterwards, run `uv tool update-shell` and open a new terminal.
 
 ## Make a wallpaper
 
