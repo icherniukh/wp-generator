@@ -34,12 +34,13 @@ def render_staged(
     stage_params = StageParams(params)
     if trace is not None:
         trace.watch(stage_params)
-    if plan.reseeds:
-        with stage_params.reading_for("seed"):
-            seed = stage_params.get("seed")
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
+    # Reseed from the seed, so the engine's draws depend only on it and not on
+    # how many draws the pipeline made before.
+    with stage_params.reading_for("seed"):
+        seed = stage_params.get("seed")
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
 
     if plan.solid_if_single_color:
         with stage_params.reading_for("palette"):
