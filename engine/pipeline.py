@@ -26,7 +26,7 @@ from engine.metadata import (
 )
 from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
-from engine.stages import Composition, Trace
+from engine.stages import Composition, ScalarField, Trace
 from engine.stages.finish import finish_stages
 from engine.stages.runner import StageParams, run_stages
 from engine.stages.palette import make_palette
@@ -113,6 +113,10 @@ class RenderConfiguration:
     field_stage: Optional[str] = None
     mapping: Optional[str] = None
     stage_params: Optional[Dict[str, Dict[str, Any]]] = None
+    # Contours from the image's luminance ("image") or the engine's scalar
+    # field ("field"); under the glass and aberration ("frosted") or over ("sharp").
+    contour_source: Optional[str] = None
+    contour_placement: Optional[str] = None
     seed: Optional[int] = None
     capture_base_image: bool = False
 
@@ -144,6 +148,8 @@ class RenderResult:
     fractal_angle: Optional[float] = None
     contour_width: Optional[float] = None
     contour_mode: Optional[str] = None
+    contour_source: Optional[str] = None
+    contour_placement: Optional[str] = None
     glass: bool = False
     vignette: float = 0.0
     channel_offset: Optional[float] = None
@@ -289,6 +295,9 @@ class WallpaperPipeline:
         contour_width: float,
         contour_mode: str,
         glass: bool,
+        contour_source: str = "image",
+        contour_placement: str = "frosted",
+        field: Optional[Any] = None,
         chromatic_aberration: float,
         noise: float,
         vignette: float,
@@ -301,6 +310,8 @@ class WallpaperPipeline:
                 contour_levels=contour_levels,
                 contour_width=contour_width,
                 contour_mode=contour_mode,
+                contour_source=contour_source,
+                contour_placement=contour_placement,
                 glass=glass,
                 chromatic_aberration=chromatic_aberration,
                 noise=noise,
@@ -308,7 +319,7 @@ class WallpaperPipeline:
             )
         )
         stages = finish_stages(params)
-        state = run_stages(stages, params, rng=random, state={"final": image}, trace=trace)
+        state = run_stages(stages, params, rng=random, state={"final": image, "field": field}, trace=trace)
         return state["final"]
 
     def render(self, config: RenderConfiguration, trace: Optional[Trace] = None) -> RenderResult:
@@ -372,6 +383,12 @@ class WallpaperPipeline:
         contour_levels = resolve("contour_levels", 24)
         contour_width = resolve("contour_width", 1.4)
         contour_mode = resolve("contour_mode", "light")
+        contour_source = resolve("contour_source", "image")
+        contour_placement = resolve("contour_placement", "frosted")
+        if contour_source not in ("image", "field"):
+            raise PipelineConfigurationError(f"contour_source must be image or field, not {contour_source!r}.")
+        if contour_placement not in ("frosted", "sharp"):
+            raise PipelineConfigurationError(f"contour_placement must be frosted or sharp, not {contour_placement!r}.")
 
         fractal_type = resolve("fractal_type", "fluid")
         fractal_zoom = resolve("fractal_zoom", None)
@@ -411,6 +428,7 @@ class WallpaperPipeline:
             )
 
         records_before = len(trace.records) if trace is not None else 0
+        engine_state: Dict[str, Any] = {}
         image = render_gradient(
             engine_type,
             width=config.width,
@@ -434,7 +452,13 @@ class WallpaperPipeline:
             legacy_idw=config.legacy_idw,
             trace=trace,
             composition=composition or None,
+            keep_state=engine_state,
         )
+        field = engine_state.get("field")
+        if contour_source == "field" and not isinstance(field, ScalarField):
+            # Weight fields (rbf, flow-field, idw) and custom engines have no
+            # single value per pixel to draw isolines of; use the image.
+            contour_source = "image"
         if trace is not None and len(trace.records) == records_before:
             trace.add(
                 f"{engine_type} (custom engine, not split into stages)",
@@ -452,6 +476,9 @@ class WallpaperPipeline:
             contour_levels=contour_levels,
             contour_width=contour_width,
             contour_mode=contour_mode,
+            contour_source=contour_source,
+            contour_placement=contour_placement,
+            field=field,
             glass=glass_param,
             chromatic_aberration=chromatic_aberration,
             noise=noise,
@@ -478,6 +505,8 @@ class WallpaperPipeline:
             contour_levels=contour_levels,
             contour_width=contour_width,
             contour_mode=contour_mode,
+            contour_source=contour_source if contours else None,
+            contour_placement=contour_placement if contours else None,
             glass=glass_param,
             vignette=vignette,
             frequency=frequency,

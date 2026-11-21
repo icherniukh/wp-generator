@@ -175,6 +175,8 @@ def _available_presets() -> list:
 @click.option("--contour-levels", type=int, default=None, hidden=True, help="Number of elevation contour intervals.")
 @click.option("--contour-width", type=float, default=None, hidden=True, help="Pixel line thickness of contour lines.")
 @click.option("--contour-mode", type=click.Choice(["light", "dark", "accent"]), default=None, hidden=True, help="Contour line styling: 'light', 'dark', or 'accent'.")
+@click.option("--contour-source", type=click.Choice(["image", "field"]), default=None, hidden=True, help="Draw contours from the image's luminance (default) or the engine's field.")
+@click.option("--contour-placement", type=click.Choice(["frosted", "sharp"]), default=None, hidden=True, help="Contours under the glass and aberration (frosted, default) or over them (sharp).")
 @click.option("--noise", type=float, default=None, hidden=True, help="Grain/noise amount (0.0-1.0).")
 @click.option("--vignette", type=float, default=None, hidden=True, help="Subtle radial edge darkening (0.0-1.0).")
 @click.option("--glass", is_flag=True, default=None, hidden=True, help="Apply frosted glass texture overlay.")
