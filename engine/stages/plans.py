@@ -21,6 +21,7 @@ from engine.stages.fields import (
     fractal_field,
     noisy_ramp,
     orbiting_emitters,
+    patch_mesh,
     radial_emitters,
     smooth_ramp,
 )
@@ -241,6 +242,23 @@ IDW = Plan((
 ))
 
 
+# patch-mesh ----------------------------------------------------------------
+
+def patch_mesh_size(p: StageParams) -> Dict:
+    """Grid size from complexity: 3x2 vertices at 1, 4x3 at 4, 5x4 at 8."""
+    complexity = max(1, int(p["complexity"]))
+    return {"columns": 3 + complexity // 4, "rows": 2 + complexity // 4, "jitter": 0.3}
+
+
+PATCH_MESH = Plan((
+    PALETTE,
+    Stage("grid", "frame", sample_grid, (), "coords", _grid((0.0, 1.0))),
+    Stage("patch mesh", "field", patch_mesh, ("coords", "palette"), "field", patch_mesh_size),
+    MAP,
+    EXPORT,
+), solid_if_single_color=True)
+
+
 # fractals ------------------------------------------------------------------
 
 def _fractal_kind(engine: str) -> Callable[[StageParams], str]:
@@ -300,4 +318,5 @@ STAGED_PLANS: Dict[str, Plan] = {
     "fluid-fractal": _fractal_plan("fluid-fractal"),
     "escape-fractal": _fractal_plan("escape-fractal"),
     "idw": IDW,
+    "patch-mesh": PATCH_MESH,
 }

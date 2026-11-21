@@ -452,3 +452,71 @@ def fbm_noise(
     return _octave_noise(
         coords, scale=scale, octaves=octaves, fold=lambda n: n, gain=gain, lacunarity=lacunarity, rng=rng
     )
+
+
+def _image_unit_square(coords: Coords) -> Tuple[np.ndarray, np.ndarray]:
+    """Positions as 0..1 across the image's width and height, following any
+    rotation or zoom of the current coordinates (from their corners)."""
+    from engine.stages.warp import Frame
+
+    u, v = Frame(coords).from_xy(coords.x, coords.y)
+    corners = (0, -1)
+    umax = max(float(np.max(np.abs(u[np.ix_(corners, corners)]))), 1e-9)
+    vmax = max(float(np.max(np.abs(v[np.ix_(corners, corners)]))), 1e-9)
+    return (u / umax + 1.0) / 2.0, (v / vmax + 1.0) / 2.0
+
+
+def patch_mesh(
+    coords: Coords,
+    palette: Palette,
+    *,
+    columns: int = 4,
+    rows: int = 3,
+    jitter: float = 0.3,
+    rng: Any,
+) -> WeightField:
+    """A grid of colored control points blended by a smooth bicubic spline.
+
+    columns x rows vertices each take one palette color (every color appears at
+    least once when the grid has room). The colors pass through their vertices
+    and blend across each patch with continuous slope, so neighbouring colors
+    meet without the halos of point-distance weights. jitter moves the inner
+    vertices by up to that fraction of a cell; edge vertices slide only along
+    their edge, so the mesh still fills the image.
+    """
+    columns, rows = max(2, int(columns)), max(2, int(rows))
+    n = palette.size
+    count = columns * rows
+    slots = [i % n for i in range(count)]
+    # Shuffle with rng.uniform keys so the draw count does not depend on n.
+    keys = [rng.uniform(0.0, 1.0) for _ in range(count)]
+    order = [slot for _, slot in sorted(zip(keys, slots))]
+    vertex_colors = np.asarray(order).reshape(rows, columns)
+
+    offsets = np.zeros((2, rows, columns), dtype=np.float64)
+    for j in range(rows):
+        for i in range(columns):
+            du, dv = rng.uniform(-jitter, jitter), rng.uniform(-jitter, jitter)
+            offsets[0, j, i] = 0.0 if i in (0, columns - 1) else du
+            offsets[1, j, i] = 0.0 if j in (0, rows - 1) else dv
+
+    s, t = _image_unit_square(coords)
+    gx, gy = s * (columns - 1), t * (rows - 1)
+    sample = [gy.ravel(), gx.ravel()]
+    # Moving a vertex by d pulls its color along; sampling at p - d(p) is the
+    # first-order inverse of that move and holds for jitter below half a cell.
+    shift_x = scipy.ndimage.map_coordinates(offsets[0], sample, order=3, mode="nearest")
+    shift_y = scipy.ndimage.map_coordinates(offsets[1], sample, order=3, mode="nearest")
+    sample = [np.clip(gy.ravel() - shift_y, 0, rows - 1), np.clip(gx.ravel() - shift_x, 0, columns - 1)]
+
+    h, w = coords.shape
+    weights = np.zeros((n, h, w), dtype=np.float32)
+    for color in range(n):
+        one_hot = (vertex_colors == color).astype(np.float64)
+        if not one_hot.any():
+            continue
+        weights[color] = scipy.ndimage.map_coordinates(one_hot, sample, order=3, mode="nearest").reshape(h, w)
+    # The interpolating spline overshoots slightly next to sharp color changes.
+    weights = np.clip(weights, 0.0, None)
+    weights /= np.maximum(weights.sum(axis=0), 1e-6)
+    return WeightField(weights)
