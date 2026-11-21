@@ -115,6 +115,10 @@ class ImageMetadata:
             fractal_center=fractal_center,
             fractal_angle=params.get("fractal_angle"),
             legacy_idw=bool(params.get("legacy_idw", False)),
+            warps=params.get("warps"),
+            field_stage=params.get("field"),
+            mapping=params.get("mapping"),
+            stage_params=params.get("stage_params"),
             seed=self.seed,
         )
 
@@ -161,6 +165,10 @@ def build_image_metadata(result: Any, version: Optional[str] = None) -> ImageMet
         "fractal_zoom": getattr(result, "fractal_zoom", None),
         "fractal_center": getattr(result, "fractal_center", None),
         "fractal_angle": getattr(result, "fractal_angle", None),
+        "warps": getattr(result, "warps", None),
+        "field": getattr(result, "field_stage", None),
+        "mapping": getattr(result, "mapping", None),
+        "stage_params": getattr(result, "stage_params", None),
         "preset": getattr(result, "preset", None),
         "preset_version": getattr(result, "preset_version", None),
         "contrast": contrast_data,

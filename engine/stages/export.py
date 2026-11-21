@@ -14,5 +14,8 @@ from engine.stages.types import Coords, OklabImage, SrgbImage
 def to_srgb_image(image: Union[OklabImage, SrgbImage], coords: Coords, *, resize: bool = True) -> Image.Image:
     """Quantizes to 8-bit sRGB; with resize, then enlarges to the output size with Lanczos."""
     if isinstance(image, SrgbImage):
-        return Image.fromarray(np.clip(image.values, 0, 255).astype(np.uint8))
+        pil = Image.fromarray(np.clip(image.values, 0, 255).astype(np.uint8))
+        if resize and pil.size != coords.output_size:
+            pil = pil.resize(coords.output_size, Image.Resampling.LANCZOS)
+        return pil
     return oklab_image_to_pil(image.values, coords.output_size if resize else None)

@@ -52,3 +52,19 @@ def bicubic_upscale(image: OklabImage, *, width: int, height: int) -> OklabImage
     return OklabImage(
         scipy.ndimage.zoom(image.values, (height / rows, width / cols, 1), order=3, mode="nearest")
     )
+
+
+def bands(field: ScalarField, palette: Palette, *, cycles: float = 3.0, repeat: str = "mirror", phase: float = 0.0) -> OklabImage:
+    """Runs the palette cycles times across the field.
+
+    repeat "mirror" goes there and back (smooth bands); "repeat" jumps back to
+    the first color each cycle (hard edges).
+    """
+    t = field.t * float(cycles) + float(phase)
+    if repeat == "mirror":
+        t = 1.0 - np.abs(2.0 * (t % 1.0) - 1.0)
+    elif repeat == "repeat":
+        t = t % 1.0
+    else:
+        raise ValueError(f"repeat must be mirror or repeat, not {repeat!r}")
+    return OklabImage(interpolate_color_curve(t, palette.oklab))

@@ -11,6 +11,7 @@ import click
 from engine import __version__
 from engine.gradients import GRADIENT_REGISTRY
 from engine.stages import Trace
+from engine.stages import catalog
 from engine.pipeline import (
     DEVICE_RESOLUTIONS,
     RenderConfiguration,
@@ -49,6 +50,8 @@ def build_render_configuration(args: SimpleNamespace, seed: int) -> RenderConfig
         colors=parsed_colors,
         fractal_center=tuple(args.fractal_center) if args.fractal_center is not None else None,
         legacy_idw=bool(args.legacy_idw),
+        warps=list(args.warps) or None,
+        stage_params=catalog.parse_stage_params(args.stage_params) or None,
         seed=seed,
         capture_base_image=bool(args.preview_fx),
     )
@@ -163,6 +166,10 @@ def _available_presets() -> list:
 @click.option("--channel-offset", type=float, default=None, hidden=True, help="Decoupled Oklab lightness/chroma channel phase offset.")
 @click.option("--fluid-mode", type=click.Choice(["random", "spatial"]), default=None, hidden=True, help="Fluid mesh generation logic.")
 @click.option("--legacy-idw", is_flag=True, default=None, hidden=True, help="Use legacy IDW gradient engine instead of fluid mesh.")
+@click.option("--warp", "warps", multiple=True, type=click.Choice(["none", *catalog.WARPS]), hidden=True, help="Add a warp after the engine's own (repeat for more; 'none' first drops the engine's warps).")
+@click.option("--field", "field_stage", type=click.Choice(list(catalog.FIELDS)), default=None, hidden=True, help="Replace the engine's field.")
+@click.option("--mapping", type=click.Choice(list(catalog.MAPPINGS)), default=None, hidden=True, help="Replace the engine's color mapping.")
+@click.option("--stage-param", "stage_params", multiple=True, metavar="STAGE.KEY=VALUE", hidden=True, help="Set a stage argument, e.g. voronoi.mode=edges or twist.amount=3 (repeatable).")
 @click.option("--harmonize", type=click.Choice(["perceptual", "theory", "nothing", "none"]), default=None, hidden=True, help="Color harmonizer algorithm.")
 @click.option("--contours", "--contour", "contours", type=float, default=None, hidden=True, help="Topographic contour line intensity (0.0-1.0).")
 @click.option("--contour-levels", type=int, default=None, hidden=True, help="Number of elevation contour intervals.")
@@ -197,13 +204,21 @@ def main(ctx: click.Context, **kwargs: object) -> None:
     if args.seed is None:
         print(f"Base seed: {base_seed}  (pass --seed {base_seed} to reproduce)")
 
-    execute_batch(args, base_seed)
+    try:
+        execute_batch(args, base_seed)
+    except catalog.PlanCompositionError as error:
+        raise click.UsageError(str(error)) from None
 
 
 def _validate_cli_arguments(params: dict) -> None:
     """Validates parameter ranges and conflicts (exit code 2 on violation)."""
     if params.get("inspect_image"):
         return
+
+    try:
+        catalog.parse_stage_params(params.get("stage_params") or ())
+    except catalog.PlanCompositionError as error:
+        raise click.UsageError(str(error)) from None
 
     res = params.get("res")
     if res and (res[0] <= 0 or res[1] <= 0):

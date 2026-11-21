@@ -26,7 +26,7 @@ from engine.metadata import (
 )
 from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
-from engine.stages import Trace
+from engine.stages import Composition, Trace
 from engine.stages.finish import finish_stages
 from engine.stages.runner import StageParams, run_stages
 from engine.stages.palette import make_palette
@@ -106,6 +106,13 @@ class RenderConfiguration:
     fractal_center: Optional[Tuple[float, float]] = None
     fractal_angle: Optional[float] = None
     legacy_idw: bool = False
+    # Changes to the engine's stage plan (engine.stages.catalog): extra warps
+    # ("none" drops the engine's own), a replacement field or mapping, and
+    # per-stage argument overrides keyed by stage name.
+    warps: Optional[List[str]] = None
+    field_stage: Optional[str] = None
+    mapping: Optional[str] = None
+    stage_params: Optional[Dict[str, Dict[str, Any]]] = None
     seed: Optional[int] = None
     capture_base_image: bool = False
 
@@ -144,6 +151,10 @@ class RenderResult:
     harmonize: Optional[str] = None
     preset: Optional[str] = None
     preset_version: Optional[str] = None
+    warps: Optional[List[str]] = None
+    field_stage: Optional[str] = None
+    mapping: Optional[str] = None
+    stage_params: Optional[Dict[str, Dict[str, Any]]] = None
     base_image: Optional[Image.Image] = None
     palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
     metadata: Optional[ImageMetadata] = None
@@ -371,6 +382,14 @@ class WallpaperPipeline:
         trap_weight = resolve("trap_weight", lambda: PARAMETER_RANGES.sample("trap_weight"))
         channel_offset = resolve("channel_offset", 0.0)
 
+        warps = resolve("warps", None)
+        field_stage = resolve("field_stage", None)
+        mapping = resolve("mapping", None)
+        stage_params = resolve("stage_params", None)
+        composition = Composition(
+            warps=tuple(warps or ()), field=field_stage, mapping=mapping, stage_params=dict(stage_params or {})
+        )
+
         base_colors = self._resolve_palette(config, preset_data, complexity, active_seed)
         harmonize = resolve("harmonize", None)
         if harmonize not in (None, "none", "nothing", "theory", "perceptual"):
@@ -414,6 +433,7 @@ class WallpaperPipeline:
             seed=active_seed,
             legacy_idw=config.legacy_idw,
             trace=trace,
+            composition=composition or None,
         )
         if trace is not None and len(trace.records) == records_before:
             trace.add(
@@ -472,6 +492,10 @@ class WallpaperPipeline:
             fractal_angle=fractal_angle,
             preset=config.preset,
             preset_version=preset_version,
+            warps=list(warps) if warps else None,
+            field_stage=field_stage,
+            mapping=mapping,
+            stage_params=dict(stage_params) if stage_params else None,
             base_image=base_image,
             palette_contrast=evaluate_palette_contrast(final_colors),
         )

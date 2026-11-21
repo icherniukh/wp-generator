@@ -311,3 +311,101 @@ def fractal_field(coords: Coords, *, kind: str, complexity: int, trap_weight: fl
     else:
         t = escape_time_field(coords.x, coords.y, kind, safe_complexity, np.clip(float(trap_weight), 0.0, 1.0), rng)
     return ScalarField(t)
+
+
+def _polar(coords: Coords) -> Tuple[np.ndarray, np.ndarray]:
+    """Distance from the image center in half short sides, and angle."""
+    from engine.stages.warp import Frame
+
+    u, v = Frame(coords).from_xy(coords.x, coords.y)
+    return np.sqrt(u**2 + v**2), np.arctan2(v, u)
+
+
+def _mirror(t: np.ndarray) -> np.ndarray:
+    """Folds a repeating 0..1 value into 0..1..0, so palette ends meet without a seam."""
+    return 1.0 - np.abs(2.0 * (t % 1.0) - 1.0)
+
+
+def conic(coords: Coords, *, turns: float = 1.0, rng: Any) -> ScalarField:
+    """Sweeps the palette around the center, there and back turns times."""
+    _, theta = _polar(coords)
+    offset = rng.uniform(0.0, 1.0)
+    return ScalarField(_mirror(theta / (2 * np.pi) * turns + offset).astype(np.float32))
+
+
+def spiral(coords: Coords, *, turns: float = 1.0, tightness: float = 1.5, rng: Any) -> ScalarField:
+    """A conic sweep that advances with distance from the center."""
+    r, theta = _polar(coords)
+    offset = rng.uniform(0.0, 1.0)
+    return ScalarField(_mirror(theta / (2 * np.pi) * turns + r * tightness + offset).astype(np.float32))
+
+
+def radial(coords: Coords) -> ScalarField:
+    """Distance from the center, 0 there and 1 at the farthest corner."""
+    r, _ = _polar(coords)
+    return ScalarField(normalize_scalar_field(r))
+
+
+def voronoi(
+    coords: Coords, *, cells: int = 12, mode: str = "distance", jitter: float = 1.0, rng: Any
+) -> ScalarField:
+    """Cells around random seed points.
+
+    mode "distance": distance to the nearest point (soft bubbles, F1).
+    mode "edges": second-nearest minus nearest distance (cracks between cells, F2-F1).
+    mode "cells": one random value per cell (flat mosaic).
+    """
+    from scipy.spatial import cKDTree
+
+    # Seed points on the image's own frame, so cells stay in view after rotation or zoom.
+    x0, x1 = float(coords.x.min()), float(coords.x.max())
+    y0, y1 = float(coords.y.min()), float(coords.y.max())
+    count = max(2, int(cells))
+    # Jittered grid points keep cells similar in size; jitter=0 gives a regular grid.
+    aspect = (x1 - x0) / max(y1 - y0, 1e-9)
+    nx = max(1, int(round(np.sqrt(count * aspect))))
+    ny = max(1, int(round(count / nx)))
+    points = []
+    for j in range(ny):
+        for i in range(nx):
+            px = x0 + (i + 0.5 + jitter * rng.uniform(-0.5, 0.5)) * (x1 - x0) / nx
+            py = y0 + (j + 0.5 + jitter * rng.uniform(-0.5, 0.5)) * (y1 - y0) / ny
+            points.append((px, py))
+    values = [rng.uniform(0.0, 1.0) for _ in points]
+    tree = cKDTree(np.asarray(points))
+    query = np.column_stack([coords.x.ravel(), coords.y.ravel()])
+    dist, idx = tree.query(query, k=2)
+    if mode == "edges":
+        t = (dist[:, 1] - dist[:, 0]).reshape(coords.shape)
+    elif mode == "cells":
+        t = np.asarray(values, dtype=np.float32)[idx[:, 0]].reshape(coords.shape)
+        return ScalarField(t)
+    elif mode == "distance":
+        t = dist[:, 0].reshape(coords.shape)
+    else:
+        raise ValueError(f"voronoi mode must be distance, edges or cells, not {mode!r}")
+    return ScalarField(normalize_scalar_field(t.astype(np.float32)))
+
+
+def ridged_noise(
+    coords: Coords, *, scale: float = 1.5, octaves: int = 4, sharpness: float = 2.0, rng: Any
+) -> ScalarField:
+    """Ridged multifractal: each octave contributes (1 - |noise|)^sharpness, so
+    zero crossings of the noise become sharp crests, like mountain ridges."""
+    from engine.gradients.noise import snoise2
+
+    h, w = coords.shape
+    sample_h, sample_w = max(8, h // 2), max(8, w // 2)
+    sx = scipy.ndimage.zoom(coords.x.astype(np.float64), (sample_h / h, sample_w / w), order=1)
+    sy = scipy.ndimage.zoom(coords.y.astype(np.float64), (sample_h / h, sample_w / w), order=1)
+    ox, oy = rng.uniform(0, 1000), rng.uniform(0, 1000)
+    total = np.zeros_like(sx)
+    amp, freq, norm = 1.0, float(scale), 0.0
+    for _ in range(max(1, int(octaves))):
+        n = snoise2(sx * freq + ox, sy * freq + oy, octaves=1)
+        total += amp * (1.0 - np.abs(n)) ** sharpness
+        norm += amp
+        amp *= 0.5
+        freq *= 2.0
+    grid = scipy.ndimage.zoom(total / norm, (h / total.shape[0], w / total.shape[1]), order=3)[:h, :w]
+    return ScalarField(normalize_scalar_field(grid.astype(np.float32)))

@@ -79,3 +79,85 @@ def sine_warp(coords: Coords, *, amplitude: float = 0.18) -> Coords:
     xw = xv + amplitude * (np.sin(yv * 2.6 + 1.2) * np.cos(xv * 2.0))
     yw = yv + amplitude * (np.cos(xv * 2.6 + 0.8) * np.sin(yv * 2.0))
     return coords.moved(xw, yw, coords.displacement)
+
+
+class Frame:
+    """Image-proportional positions: centered, in half short sides, square pixels.
+
+    Built from the corners of the current x, y, so it holds on a plain grid, an
+    unequally scaled one (simplex spans -0.5..0.5 on both axes) and a rotated
+    or zoomed fractal camera alike. to_xy maps frame positions back.
+    """
+
+    def __init__(self, coords: Coords) -> None:
+        x, y = coords.x, coords.y
+        h, w = coords.shape
+        self.center = (
+            float(np.mean((x[0, 0], x[0, -1], x[-1, 0], x[-1, -1]))),
+            float(np.mean((y[0, 0], y[0, -1], y[-1, 0], y[-1, -1]))),
+        )
+        half = max(min(w, h) / 2.0, 1e-9)
+        # Basis: one frame unit along the image's width and height, in x, y units.
+        across = np.array([x[0, -1] - x[0, 0], y[0, -1] - y[0, 0]], dtype=np.float64) / max(w - 1, 1) * half
+        down = np.array([x[-1, 0] - x[0, 0], y[-1, 0] - y[0, 0]], dtype=np.float64) / max(h - 1, 1) * half
+        self.basis = np.column_stack([across, down])
+        if abs(np.linalg.det(self.basis)) < 1e-18:
+            self.basis = np.eye(2)
+        self.inverse = np.linalg.inv(self.basis)
+
+    def from_xy(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        dx, dy = x - self.center[0], y - self.center[1]
+        return self.inverse[0, 0] * dx + self.inverse[0, 1] * dy, self.inverse[1, 0] * dx + self.inverse[1, 1] * dy
+
+    def to_xy(self, u: np.ndarray, v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        b = self.basis
+        return self.center[0] + b[0, 0] * u + b[0, 1] * v, self.center[1] + b[1, 0] * u + b[1, 1] * v
+
+
+def _apply_in_frame(coords: Coords, move: Any) -> Coords:
+    frame = Frame(coords)
+    u, v = frame.from_xy(coords.x, coords.y)
+    nu, nv = move(u, v)
+    x, y = frame.to_xy(nu, nv)
+    return coords.moved(x.astype(coords.x.dtype), y.astype(coords.y.dtype), coords.displacement)
+
+
+def twist(coords: Coords, *, amount: float = 2.0, radius: float = 1.0) -> Coords:
+    """Swirls positions around the grid center: rotation of amount radians at
+    the center, fading to none at radius (in half short sides)."""
+
+    def move(u: np.ndarray, v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        r = np.sqrt(u**2 + v**2) / max(radius, 1e-6)
+        theta = amount * np.clip(1.0 - r, 0.0, 1.0) ** 2
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        return u * cos_t - v * sin_t, u * sin_t + v * cos_t
+
+    return _apply_in_frame(coords, move)
+
+
+def bulge(coords: Coords, *, amount: float = 0.5, radius: float = 1.0) -> Coords:
+    """Magnifies (amount > 0) or pinches (amount < 0) around the grid center,
+    like a lens, fading out at radius (in half short sides)."""
+
+    def move(u: np.ndarray, v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        r = np.sqrt(u**2 + v**2) / max(radius, 1e-6)
+        scale = 1.0 - amount * np.clip(1.0 - r, 0.0, 1.0) ** 2
+        return u * scale, v * scale
+
+    return _apply_in_frame(coords, move)
+
+
+def wave(
+    coords: Coords, *, amplitude: float = 0.08, waves: float = 3.0, angle: float = 0.0
+) -> Coords:
+    """Shifts positions sideways by a sine running along angle (radians).
+
+    amplitude is in half short sides; waves counts crests across the short side.
+    """
+    ux, uy = np.cos(angle), np.sin(angle)
+
+    def move(u: np.ndarray, v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        shift = amplitude * np.sin((u * ux + v * uy) * np.pi * waves / 2.0)
+        return u - uy * shift, v + ux * shift
+
+    return _apply_in_frame(coords, move)
