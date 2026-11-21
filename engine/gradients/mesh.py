@@ -15,11 +15,6 @@ from engine.gradients.spatial import (
     random_anchor_points,
 )
 
-try:
-    import noise
-except ImportError:
-    noise = None
-
 
 class FluidMeshGradient:
     def __init__(self, width: int = 5120, height: int = 2880) -> None:
@@ -86,15 +81,11 @@ class SimplexMeshGradient:
         angle = random.uniform(0, 2 * np.pi)
         t_base = xv * np.cos(angle) + yv * np.sin(angle)
 
-        if noise is not None:
-            ox = random.uniform(0, 1000)
-            oy = random.uniform(0, 1000)
-            noise_scale = 0.5 * (1.0 + complexity * 0.2)
-            t_noise = generate_noise_plane(h, w, scale=noise_scale, octaves=2, offset=(ox, oy))
-            t_values = t_base * 0.6 + t_noise * 1.5
-        else:
-            fold = np.sin(xv * np.pi) * np.cos(yv * np.pi) * 0.5
-            t_values = t_base + fold
+        ox = random.uniform(0, 1000)
+        oy = random.uniform(0, 1000)
+        noise_scale = 0.5 * (1.0 + complexity * 0.2)
+        t_noise = generate_noise_plane(h, w, scale=noise_scale, octaves=2, offset=(ox, oy))
+        t_values = t_base * 0.6 + t_noise * 1.5
 
         grid_oklab = interpolate_color_curve(normalize_scalar_field(t_values), colors_arr)
         return oklab_image_to_pil(grid_oklab, (self.width, self.height))
