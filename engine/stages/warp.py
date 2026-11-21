@@ -161,3 +161,38 @@ def wave(
         return u - uy * shift, v + ux * shift
 
     return _apply_in_frame(coords, move)
+
+
+def sphere(coords: Coords, *, amount: float = 1.0, radius: float = 1.0) -> Coords:
+    """Wraps the disc of radius (in half short sides) around a sphere seen head on.
+
+    A point at relative distance r inside the disc samples the surface at
+    asin(0.96 r) / asin(0.96), so the center swells and the rim compresses; amount
+    blends from no change (0) to the full sphere (1). Outside the disc nothing moves.
+    The 0.96 keeps the rim's compression finite (about 2.7x instead of
+    unbounded), which would otherwise alias into speckle.
+    """
+    rim = 0.96
+
+    def move(u: np.ndarray, v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        r = np.sqrt(u**2 + v**2) / max(radius, 1e-6)
+        inside = r < 1.0
+        target = np.where(inside, np.arcsin(rim * np.clip(r, 0.0, 1.0)) / np.arcsin(rim), r)
+        scale = np.where(r > 1e-9, (r + amount * (target - r)) / np.maximum(r, 1e-9), 1.0)
+        return u * scale, v * scale
+
+    return _apply_in_frame(coords, move)
+
+
+def lens(coords: Coords, *, amount: float = 0.3) -> Coords:
+    """Radial lens distortion over the whole image, r -> r * (1 + amount * r^2),
+    with r relative to the corner distance. amount > 0 pulls the corners inwards
+    (barrel); amount < 0 pushes them out (pincushion), and folds back below -1/3."""
+
+    def move(u: np.ndarray, v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        r2 = u**2 + v**2
+        corner2 = max(float(np.max(r2)), 1e-12)
+        scale = 1.0 + amount * r2 / corner2
+        return u * scale, v * scale
+
+    return _apply_in_frame(coords, move)
