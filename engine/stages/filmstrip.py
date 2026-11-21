@@ -10,10 +10,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 from engine.colors import oklab_to_rgb
 from engine.stages.runner import StageRecord, Trace
-from engine.stages.types import Coords, OklabImage, Palette, ScalarField, WeightField
+from engine.stages.types import Coords, OklabImage, Palette, ScalarField, SrgbImage, WeightField
 
 THUMB_W = 360
-TEXT_H = 120
+TEXT_H = 140
 PAD = 12
 COLUMNS = 4
 BG = (24, 24, 28)
@@ -108,8 +108,12 @@ def _describe(value: Any) -> str:
     if isinstance(value, Palette):
         return f"Palette  {value.size} colors"
     if isinstance(value, Coords):
-        warped = "warped" if value.displacement is not None or value.x is not value.base_x else "regular"
-        return f"Coords  {value.shape[1]}x{value.shape[0]} grid, {warped}"
+        warped = "moved" if value.x is not value.base_x else "as sampled"
+        text = f"Coords  {value.shape[1]}x{value.shape[0]} grid, {warped}"
+        if value.camera is not None:
+            cam = value.camera
+            text += f", zoom {cam.zoom:.2f} angle {cam.angle:.2f} center ({cam.center[0]:.2f}, {cam.center[1]:.2f})"
+        return text
     if isinstance(value, ScalarField):
         return f"ScalarField  {value.t.shape[1]}x{value.t.shape[0]}  t in [{value.t.min():.2f}, {value.t.max():.2f}]"
     if isinstance(value, WeightField):
@@ -118,6 +122,9 @@ def _describe(value: Any) -> str:
     if isinstance(value, OklabImage):
         h, w, _ = value.values.shape
         return f"OklabImage  {w}x{h} float"
+    if isinstance(value, SrgbImage):
+        h, w, _ = value.values.shape
+        return f"SrgbImage  {w}x{h} float"
     if isinstance(value, Image.Image):
         return f"Image  {value.size[0]}x{value.size[1]} {value.mode} 8-bit"
     return type(value).__name__
@@ -134,6 +141,8 @@ def _view(value: Any, palette: Optional[Palette], aspect: float) -> Image.Image:
         return _weights_view(value, palette, aspect)
     if isinstance(value, OklabImage):
         return _fit(Image.fromarray(_to_rgb_array(value.values)), aspect)
+    if isinstance(value, SrgbImage):
+        return _fit(Image.fromarray(np.clip(value.values, 0, 255).astype(np.uint8)), aspect)
     if isinstance(value, Image.Image):
         return _fit(value, aspect)
     return Image.new("RGB", (THUMB_W, int(THUMB_W / aspect)), BG)
@@ -203,8 +212,10 @@ def render_filmstrip(trace: Trace, title: str = "", aspect: Optional[float] = No
         flow = f"{', '.join(record.inputs) or '-'} -> {record.output_name}"
         draw.text((x, ty), flow, fill=MUTED, font=small)
         ty += 16
-        draw.text((x, ty), _describe(record.output), fill=FG, font=small)
-        ty += 18
+        for line in _wrap(_describe(record.output), small, THUMB_W, draw)[:2]:
+            draw.text((x, ty), line, fill=FG, font=small)
+            ty += 15
+        ty += 3
         if record.arguments:
             args = "  ".join(f"{k}={_fmt(v)}" for k, v in record.arguments.items() if k != "colors")
             for line in _wrap(args, small, THUMB_W, draw)[:3]:

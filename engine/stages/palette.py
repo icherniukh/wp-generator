@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Sequence
 
+import numpy as np
+
 from engine.gradients.interpolation import colors_to_oklab
 from engine.stages.types import Palette
 
 
 def make_palette(*, colors: Sequence[Sequence[float]]) -> Palette:
     rgb = tuple(tuple(int(v) for v in color[:3]) for color in colors)
-    return Palette(rgb=rgb, oklab=colors_to_oklab(colors))
+    return Palette(rgb=rgb, oklab=colors_to_oklab(colors), srgb=np.asarray(colors, dtype=np.float32))

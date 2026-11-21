@@ -31,6 +31,8 @@ GRADIENT_REGISTRY: Dict[str, Type[Any]] = {
     "idw": MeshGradient,
 }
 
+_BUILTIN_ENGINES: Dict[str, Type[Any]] = dict(GRADIENT_REGISTRY)
+
 _CUSTOM_ADAPTERS: Dict[Type[Any], Callable[..., Image.Image]] = {}
 
 
@@ -74,16 +76,19 @@ def render_gradient(
     channel_offset: float = 0.0,
     seed: Optional[int] = None,
     legacy_idw: bool = False,
-    staged: bool = False,
+    staged: bool = True,
     trace: Optional[Any] = None,
 ) -> Image.Image:
-    """Dispatches gradient generation to the registered engine with explicit domain parameters.
+    """Renders a gradient with the named engine.
 
-    With staged=True (or a trace to fill), engines that have a stage plan render
-    through engine.stages instead; their output is identical.
+    Built-in engines run through their stage plans in engine.stages, which can
+    fill a trace. staged=False runs the original engine classes instead (same
+    output; kept to verify the stage plans). Engines registered over a
+    built-in name, or under a new name, always run their own class.
     """
     resolved_name = "idw" if legacy_idw else engine_type
-    if staged or trace is not None:
+    builtin = resolved_name in _BUILTIN_ENGINES and GRADIENT_REGISTRY.get(resolved_name) is _BUILTIN_ENGINES[resolved_name]
+    if (staged or trace is not None) and builtin:
         from engine.stages import has_staged_plan, render_staged
 
         if has_staged_plan(resolved_name):
