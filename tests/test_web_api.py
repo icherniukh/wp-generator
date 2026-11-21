@@ -6,7 +6,17 @@ from fastapi.testclient import TestClient
 from web.app import RenderRequest, app
 
 
+def _pixels(png_bytes):
+    image = Image.open(io.BytesIO(png_bytes))
+    return image.size, image.mode, image.tobytes()
+
+
+
 class TestWebAPI(unittest.TestCase):
+    def assertSamePixels(self, a, b):
+        """PNG bytes embed a render timestamp, so compare the decoded images."""
+        self.assertEqual(_pixels(a), _pixels(b))
+
     def setUp(self):
         self.client = TestClient(app)
 
@@ -113,7 +123,7 @@ class TestWebAPI(unittest.TestCase):
         post_response = self.client.post("/api/render", json=parameters)
         self.assertEqual(get_response.status_code, 200)
         self.assertEqual(post_response.status_code, 200)
-        self.assertEqual(post_response.content, get_response.content)
+        self.assertSamePixels(post_response.content, get_response.content)
 
     def test_post_rejects_invalid_rbf_controls(self):
         for parameter, value in (("ambient_weight", -0.1), ("dispersion", 0.0)):
@@ -144,7 +154,7 @@ class TestWebAPI(unittest.TestCase):
         post_response = self.client.post("/api/render", json=parameters)
         self.assertEqual(get_response.status_code, 200)
         self.assertEqual(post_response.status_code, 200)
-        self.assertEqual(get_response.content, post_response.content)
+        self.assertSamePixels(get_response.content, post_response.content)
         self.assertEqual(get_response.headers["x-render-contrast-ratios"],
                          post_response.headers["x-render-contrast-ratios"])
 
@@ -282,7 +292,7 @@ class TestWebAPI(unittest.TestCase):
         post_res = self.client.post("/api/render", json=params)
         self.assertEqual(get_res.status_code, 200)
         self.assertEqual(post_res.status_code, 200)
-        self.assertEqual(get_res.content, post_res.content)
+        self.assertSamePixels(get_res.content, post_res.content)
 
 
 if __name__ == "__main__":
