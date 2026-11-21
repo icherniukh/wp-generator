@@ -180,11 +180,15 @@ def anchor_points(
             (rng.uniform(margin, 1.0 - margin), rng.uniform(margin, 1.0 - margin))
             for _ in range(num_colors)
         ]
-    distances = np.zeros((num_colors, h, w), dtype=np.float32)
+    # Distances in units of the image height, so anchors pull in circles on a
+    # wide screen; softness rounds the falloff off near each anchor instead of
+    # clamping it, which left a flat disc ringed by the next color.
+    width, height = coords.output_size
+    aspect = width / max(height, 1)
+    weights = np.zeros((num_colors, h, w), dtype=np.float32)
     for i, (px, py) in enumerate(points):
-        distances[i] = np.sqrt((coords.x - px) ** 2 + (coords.y - py) ** 2)
-    distances = np.maximum(distances, softness)
-    weights = 1.0 / (distances**power)
+        squared = ((coords.x - px) * aspect) ** 2 + (coords.y - py) ** 2
+        weights[i] = (squared + softness**2) ** (-power / 2.0)
     weights /= np.sum(weights, axis=0)
     return WeightField(weights)
 
