@@ -6,6 +6,7 @@ import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+import scipy.ndimage
 from PIL import Image, ImageDraw, ImageFont
 
 from engine.colors import oklab_to_rgb
@@ -66,12 +67,21 @@ def _palette_view(palette: Palette, aspect: float) -> Image.Image:
 
 
 def _coords_view(coords: Coords, aspect: float) -> Image.Image:
-    """Checkerboard sampled at the current positions, in units of the unwarped grid."""
+    """Checkerboard sampled at the current positions, in units of the unwarped grid.
+
+    Positions are interpolated up to thumbnail size first, so coarse grids
+    (a 12x4 control lattice) still draw a readable pattern.
+    """
+    thumb_h = max(1, int(round(THUMB_W / aspect)))
+    gh, gw = coords.shape
+    zoom = (thumb_h / gh, THUMB_W / gw)
+    x = scipy.ndimage.zoom(coords.x.astype(np.float64), zoom, order=1)
+    y = scipy.ndimage.zoom(coords.y.astype(np.float64), zoom, order=1)
     bx, by = coords.base_x, coords.base_y
     x0, x1 = float(bx.min()), float(bx.max())
     y0, y1 = float(by.min()), float(by.max())
-    cx = (coords.x - x0) / max(x1 - x0, 1e-9) * CHECKER_CELLS
-    cy = (coords.y - y0) / max(y1 - y0, 1e-9) * CHECKER_CELLS
+    cx = (x - x0) / max(x1 - x0, 1e-9) * CHECKER_CELLS
+    cy = (y - y0) / max(y1 - y0, 1e-9) * CHECKER_CELLS
     checker = (np.floor(cx) + np.floor(cy)) % 2
     gray = (70 + 120 * checker).astype(np.uint8)
     return _fit(Image.fromarray(gray, "L"), aspect)
@@ -231,7 +241,7 @@ def render_filmstrip(trace: Trace, title: str = "", aspect: Optional[float] = No
         fy = height - footer_h - PAD + 8
         valued = {k: v for k, v in unread.items() if v is not None}
         unset = [k for k, v in unread.items() if v is None]
-        draw.text((PAD, fy), "given a value but never read by the engine:", fill=WARN, font=mid)
+        draw.text((PAD, fy), "given a value but never read:", fill=WARN, font=mid)
         text = "  ".join(f"{k}={_fmt(v)}" for k, v in valued.items()) or "-"
         if unset:
             text += "      (also unread, unset: " + ", ".join(unset) + ")"

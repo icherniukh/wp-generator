@@ -77,8 +77,9 @@ def _no_args(_: StageParams) -> Dict[str, Any]:
 class Stage:
     """One step of a render.
 
-    fn receives the named inputs from the state plus the arguments bind() derives
-    from the render parameters, and its return value is stored as output.
+    fn receives the inputs from the state positionally, in the declared order,
+    plus the keyword arguments bind() derives from the render parameters; its
+    return value is stored under output.
     """
 
     name: str
@@ -111,7 +112,12 @@ class Trace:
     """What a render did, stage by stage."""
 
     records: List[StageRecord] = field(default_factory=list)
-    params: Optional[StageParams] = None
+    param_sets: List[StageParams] = field(default_factory=list)
+
+    def watch(self, params: StageParams) -> None:
+        """Includes params in the unread-parameter report."""
+        if not any(existing is params for existing in self.param_sets):
+            self.param_sets.append(params)
 
     def add(
         self,
@@ -130,12 +136,13 @@ class Trace:
         )
 
     def unread_params(self) -> Tuple[str, ...]:
-        return self.params.unread() if self.params is not None else ()
+        return tuple(self.unread_values())
 
     def unread_values(self) -> Dict[str, Any]:
-        if self.params is None:
-            return {}
-        return {key: self.params.get(key) for key in self.params.unread()}
+        values: Dict[str, Any] = {}
+        for params in self.param_sets:
+            values.update({key: params.get(key) for key in params.unread()})
+        return values
 
 
 def run_stages(
@@ -149,13 +156,13 @@ def run_stages(
     """Runs stages in order and returns the final state."""
     state = dict(state or {})
     if trace is not None:
-        trace.params = params
+        trace.watch(params)
     for stage in stages:
         with params.reading_for(stage.name):
             arguments = stage.bind(params)
-        inputs = {name: state[name] for name in stage.inputs}
+        inputs = [state[name] for name in stage.inputs]
         extra = {"rng": rng} if stage.uses_rng else {}
-        state[stage.output] = stage.fn(**inputs, **arguments, **extra)
+        state[stage.output] = stage.fn(*inputs, **arguments, **extra)
         if trace is not None:
             trace.records.append(
                 StageRecord(
