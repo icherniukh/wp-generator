@@ -44,7 +44,7 @@ def assets(tmp_path_factory):
 def test_guide_images_and_navigation_are_reproducible(assets):
     directory, manifest = assets
     guide = GuideReferences()
-    guide.feed((ROOT / "index.html").read_text())
+    guide.feed((ROOT / "index.html").read_text(encoding="utf-8"))
     assert guide.effects == set(FILTERS)
     for src in guide.images:
         name = src.removeprefix("docs/assets/")

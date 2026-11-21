@@ -128,7 +128,7 @@ class TestPresetEngine(unittest.TestCase):
         import json
         preset_dir = Path("presets")
         for preset_file in preset_dir.glob("*.json"):
-            with open(preset_file, "r") as f:
+            with open(preset_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.assertIn("version", data, f"Preset {preset_file.name} missing 'version'")
             parts = data["version"].split(".")

@@ -204,7 +204,7 @@ def build_assets(output_dir, width=800, height=450):
             draw.text((left, 448 + j * 28), line, font=ImageFont.load_default(size=16), fill="#b5adbf")
     draw.text((40, 560), "Explicit config > preset override > built-in default | PNG embeds the resolved render metadata", font=ImageFont.load_default(size=19), fill="#ececf1")
     save("pipeline.png", poster, {"call": "worked-example poster", "preset": "afterglow", "inputs": ["demo/run_palette.png", "demo/run_base.png", "demo/run_final.png"]})
-    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest
 
 
