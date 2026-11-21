@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 
-from engine.gradients.registry import GRADIENT_REGISTRY
+from engine.gradients.registry import GRADIENT_REGISTRY, render_gradient
 from engine.pipeline import RenderConfiguration, WallpaperPipeline
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "golden_renders.npz"
@@ -31,29 +31,84 @@ NO_FINISH: Dict[str, Any] = dict(
 
 @dataclass(frozen=True)
 class GoldenCase:
+    """A pipeline render, or with direct=True a bare render_gradient call."""
+
     name: str
     config: Dict[str, Any] = field(default_factory=dict)
+    direct: bool = False
 
     def build(self) -> RenderConfiguration:
         return RenderConfiguration(**self.config)
 
 
+def _engine_case(name: str, engine: str, width: int = 96, height: int = 60, **extra: Any) -> GoldenCase:
+    config = dict(
+        engine=engine,
+        colors=list(PALETTE),
+        complexity=4,
+        harmonize="none",
+        width=width,
+        height=height,
+        seed=SEED,
+        **NO_FINISH,
+    )
+    config.update(extra)
+    return GoldenCase(name, config)
+
+
 def golden_cases() -> List[GoldenCase]:
     cases: List[GoldenCase] = []
     for engine in sorted(GRADIENT_REGISTRY):
+        cases.append(_engine_case(f"engine/{engine}", engine))
+        # Every engine branch the stage plans reproduce: warp off, explicit
+        # values, and wide and portrait screens.
+        cases.append(_engine_case(f"engine/{engine}/no-warp", engine, warp_strength=0.0, transverse_warp=0.0))
+        cases.append(
+            _engine_case(
+                f"engine/{engine}/explicit",
+                engine,
+                complexity=6,
+                warp_strength=0.9,
+                transverse_warp=0.5,
+                ambient_weight=0.3,
+                dispersion=0.25,
+                frequency=1.7,
+                phase_offset=0.2,
+                channel_offset=0.1,
+                trap_weight=0.7,
+            )
+        )
+        cases.append(_engine_case(f"engine/{engine}/32x9", engine, width=128, height=36))
+        cases.append(_engine_case(f"engine/{engine}/portrait", engine, width=40, height=90))
+    for fractal_type in ("fluid", "julia", "mandelbrot", "orbit_trap"):
+        cases.append(_engine_case(f"engine/fractal/{fractal_type}", "fractal", fractal_type=fractal_type))
+    cases.append(
+        _engine_case(
+            "engine/fractal/camera",
+            "fractal",
+            fractal_type="fluid",
+            fractal_zoom=1.4,
+            fractal_center=(0.2, -0.1),
+            fractal_angle=0.7,
+        )
+    )
+    cases.append(
+        _engine_case(
+            "engine/escape-fractal/camera",
+            "escape-fractal",
+            fractal_type="mandelbrot",
+            fractal_zoom=12.0,
+            fractal_center=(-0.745, 0.11),
+            fractal_angle=0.3,
+        )
+    )
+    # A single color is a solid fill for some engines; the pipeline never passes one.
+    for engine in ("rbf", "topographic", "fractal"):
         cases.append(
             GoldenCase(
-                f"engine/{engine}",
-                dict(
-                    engine=engine,
-                    colors=list(PALETTE),
-                    complexity=4,
-                    harmonize="none",
-                    width=96,
-                    height=60,
-                    seed=SEED,
-                    **NO_FINISH,
-                ),
+                f"gradient/{engine}/single-color",
+                dict(engine=engine, colors=[(40, 90, 160)], width=32, height=20, seed=SEED),
+                direct=True,
             )
         )
     for fractal_type in ("julia", "mandelbrot", "orbit_trap"):
@@ -87,6 +142,12 @@ def golden_cases() -> List[GoldenCase]:
 
 
 def render_case(case: GoldenCase, pipeline: WallpaperPipeline | None = None) -> np.ndarray:
+    if case.direct:
+        cfg = dict(case.config)
+        image = render_gradient(
+            cfg.pop("engine"), width=cfg.pop("width"), height=cfg.pop("height"), colors=cfg.pop("colors"), **cfg
+        )
+        return np.asarray(image.convert("RGB"), dtype=np.uint8)
     pipeline = pipeline or WallpaperPipeline()
     return np.asarray(pipeline.render(case.build()).image.convert("RGB"), dtype=np.uint8)
 

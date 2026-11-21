@@ -78,7 +78,8 @@ PALETTE = Stage("palette", "palette", make_palette, (), "palette", _palette)
 MAP = Stage("map", "mapping", map_colors, ("field", "palette"), "image")
 EXPORT = Stage("export", "export", to_srgb_image, ("image", "coords"), "final")
 EXPORT_AS_IS = Stage("export", "export", to_srgb_image, ("image", "coords"), "final", _no_resize)
-ROTATE = Stage("rotate", "frame", rotate, ("coords",), "coords")
+# The engine classes for domain-warp and topographic accept a fixed angle.
+ROTATE = Stage("rotate", "frame", rotate, ("coords",), "coords", lambda p: {"angle": p.get("angle")})
 
 
 # domain-warp ---------------------------------------------------------------
@@ -225,10 +226,19 @@ TOPOGRAPHIC = Plan((
 
 # idw -----------------------------------------------------------------------
 
+def _idw(p: StageParams) -> Dict:
+    # The registry renders idw with power 2.5; MeshGradient can pass its own points, power and softness.
+    return {
+        "power": p.get("idw_power", 2.5),
+        "softness": p.get("idw_softness", 0.12),
+        "points": p.get("idw_points"),
+    }
+
+
 IDW = Plan((
     PALETTE,
     FULL_GRID,
-    Stage("anchor points", "field", anchor_points, ("coords", "palette"), "field", lambda p: {"power": 2.5}),
+    Stage("anchor points", "field", anchor_points, ("coords", "palette"), "field", _idw),
     Stage("blend in sRGB", "mapping", blend_srgb, ("field", "palette"), "image"),
     EXPORT_AS_IS,
 ), reseeds=False)

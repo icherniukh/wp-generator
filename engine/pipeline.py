@@ -17,7 +17,6 @@ from engine.colors import (
     hex_to_rgb,
     rgb_to_hex,
 )
-from engine.filters import WallpaperFilters
 from engine.gradients import render_gradient
 from engine.metadata import (
     ImageMetadata,
