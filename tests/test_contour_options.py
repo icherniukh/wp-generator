@@ -62,3 +62,16 @@ def test_contour_options_replay(extra):
     png, original = pipeline.render_png_bytes(_config(**extra))
     replayed = pipeline.render(extract_image_metadata(png).to_render_configuration())
     assert np.array_equal(np.asarray(original.image), np.asarray(replayed.image))
+
+
+def test_finish_pixel_sizes_scale_with_the_short_side():
+    from engine.stages.finish import GLASS, REFERENCE_SHORT_SIDE, _contours
+
+    base = dict(contours=0.5, contour_levels=24, contour_width=1.4, contour_mode="light")
+    at_reference = StageParams(dict(base, width=3024, height=REFERENCE_SHORT_SIDE))
+    assert GLASS.bind(at_reference)["blur_radius"] == 60
+    assert _contours(at_reference)["line_width"] == 1.4
+    half = StageParams(dict(base, width=1512, height=REFERENCE_SHORT_SIDE // 2))
+    assert GLASS.bind(half)["blur_radius"] == 30
+    assert _contours(half)["line_width"] == 0.7
+    assert GLASS.bind(StageParams(dict(base, width=40, height=20)))["blur_radius"] == 2
