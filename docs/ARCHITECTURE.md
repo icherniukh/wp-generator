@@ -52,6 +52,10 @@ and emitter variants remain distinct where their mathematics differs:
 `generate_noise_plane`, `warp_coordinates_perlin`, `trig_fbm_field`,
 `normalize_scalar_field`, `random_anchor_points`.
 
+The simplex and Perlin noise behind the first two lives in
+`engine/gradients/noise.py`: a vectorized numpy port of `snoise2`/`pnoise2`
+from the `noise` package (1.2.2), kept in float32 so seeds render as before.
+
 ### 3. Field-to-Color Mapping (`engine/gradients/interpolation.py`)
 
 `interpolate_color_curve` (Oklab PCHIP spline), `evaluate_decoupled_palette`

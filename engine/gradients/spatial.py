@@ -3,10 +3,7 @@ from typing import List, Tuple
 import numpy as np
 import scipy.ndimage
 
-try:
-    import noise
-except ImportError:
-    noise = None
+from engine.gradients.noise import pnoise2, snoise2
 
 
 def normalize_scalar_field(field: np.ndarray) -> np.ndarray:
@@ -32,21 +29,13 @@ def generate_noise_plane(
     octaves: int = 2,
     offset: Tuple[float, float] = (0.0, 0.0),
 ) -> np.ndarray:
-    """Generates a continuous 2D scalar noise plane via Simplex noise or sinusoidal harmonic fallback."""
-    if noise is None:
-        y = np.linspace(-1.0, 1.0, h, dtype=np.float32) * scale + offset[1]
-        x = np.linspace(-1.0, 1.0, w, dtype=np.float32) * scale + offset[0]
-        xv, yv = np.meshgrid(x, y)
-        return np.sin(xv * np.pi) * np.cos(yv * np.pi)
-
+    """Generates a continuous 2D scalar noise plane by upsampling a coarse Simplex noise grid."""
     sample_h = max(8, h // 4)
     sample_w = max(8, w // 4)
     y = np.linspace(-1.0, 1.0, sample_h, dtype=np.float32) * scale + offset[1]
     x = np.linspace(-1.0, 1.0, sample_w, dtype=np.float32) * scale + offset[0]
-    grid = np.zeros((sample_h, sample_w), dtype=np.float32)
-    for iy in range(sample_h):
-        for ix in range(sample_w):
-            grid[iy, ix] = noise.snoise2(x[ix], y[iy], octaves=octaves)
+    xv, yv = np.meshgrid(x, y)
+    grid = snoise2(xv, yv, octaves=octaves)
     zoom_y = h / sample_h
     zoom_x = w / sample_w
     return scipy.ndimage.zoom(grid, (zoom_y, zoom_x), order=3)[:h, :w]
@@ -60,9 +49,6 @@ def warp_coordinates_perlin(
     octaves: int = 3,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Warps a normalized [0, 1]^2 coordinate grid using coarse-to-fine Perlin displacement."""
-    if noise is None:
-        raise ImportError("The 'noise' package is required.")
-
     x = np.linspace(0, 1, width, dtype=np.float32)
     y = np.linspace(0, 1, height, dtype=np.float32)
     xv, yv = np.meshgrid(x, y)
@@ -75,13 +61,13 @@ def warp_coordinates_perlin(
     warp_strength = random.uniform(*warp_range)
     scale = random.uniform(0.002, 0.006) * complexity
 
-    dx = np.zeros((small_h, small_w), dtype=np.float32)
-    dy = np.zeros((small_h, small_w), dtype=np.float32)
-    for sy in range(small_h):
-        for sx in range(small_w):
-            nx, ny = sx * scale, sy * scale
-            dx[sy, sx] = noise.pnoise2(nx + ox, ny + oy, octaves=octaves)
-            dy[sy, sx] = noise.pnoise2(nx + ox + 500, ny + oy + 500, octaves=octaves)
+    # Sample coordinates in float64, like the Python floats the per-point loop
+    # used to pass; pnoise2 rounds them to float32 as the C extension did.
+    nx = np.arange(small_w, dtype=np.float64) * scale + ox
+    ny = np.arange(small_h, dtype=np.float64) * scale + oy
+    nxv, nyv = np.meshgrid(nx, ny)
+    dx = pnoise2(nxv, nyv, octaves=octaves)
+    dy = pnoise2(nxv + 500, nyv + 500, octaves=octaves)
 
     dx = scipy.ndimage.zoom(dx, (height / small_h, width / small_w), order=1)
     dy = scipy.ndimage.zoom(dy, (height / small_h, width / small_w), order=1)

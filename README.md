@@ -6,12 +6,11 @@ Generates abstract gradient wallpapers as PNG files, sized for your screen. Each
 
 ## Install
 
-The tool installs with [uv](https://docs.astral.sh/uv/), which also fetches a suitable Python (3.12+) if you don't have one. Installing compiles one C dependency (`noise`), so each platform needs a C compiler first.
+The tool installs with [uv](https://docs.astral.sh/uv/), which also fetches a suitable Python (3.12+) if you don't have one.
 
 ### macOS
 
 ```bash
-xcode-select --install                                   # C compiler, if not installed yet
 curl -LsSf https://astral.sh/uv/install.sh | sh          # or: brew install uv
 uv tool install "wp-generator[macos] @ git+https://github.com/icherniukh/wp-generator"
 ```
@@ -21,7 +20,6 @@ The `[macos]` extra enables `--sample` (pick a palette color from the screen). W
 ### Linux
 
 ```bash
-sudo apt install build-essential                         # Debian/Ubuntu; Fedora: sudo dnf install gcc
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install git+https://github.com/icherniukh/wp-generator
 ```
@@ -29,12 +27,11 @@ uv tool install git+https://github.com/icherniukh/wp-generator
 ### Windows (PowerShell)
 
 ```powershell
-winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 winget install --id=astral-sh.uv -e
 uv tool install git+https://github.com/icherniukh/wp-generator
 ```
 
-The first line installs the Microsoft C++ Build Tools. You can also install them from the [download page](https://visualstudio.microsoft.com/visual-cpp-build-tools/) by selecting "Desktop development with C++". Open a new terminal after installing uv so it is on `PATH`.
+Open a new terminal after installing uv so it is on `PATH`.
 
 ### Check, update, remove
 
