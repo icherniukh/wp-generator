@@ -4,6 +4,8 @@ from pathlib import Path
 import random
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from engine import resolve_preset_directory
+
 
 @dataclass
 class ParameterRangeSpec:
@@ -264,8 +266,7 @@ class ParameterRangeStore:
 
     def __init__(self, config_path: Optional[Union[str, Path]] = None) -> None:
         if config_path is None:
-            repo_root = Path(__file__).resolve().parent.parent
-            config_path = repo_root / "presets" / "parameter_ranges.json"
+            config_path = resolve_preset_directory() / "parameter_ranges.json"
         self.config_path = Path(config_path)
         self._specs: Dict[str, ParameterRangeSpec] = {
             spec.key: spec for spec in default_parameter_specs()

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+from engine import resolve_preset_directory
 from engine.colors import (
     ColorTheoryHarmonizer,
     PaletteContrast,
@@ -68,12 +69,6 @@ def parse_hex_color(hex_str: str) -> Tuple[int, int, int]:
         return hex_to_rgb(hex_str)
     except ValueError as exc:
         raise PipelineConfigurationError(str(exc)) from exc
-
-
-def resolve_preset_directory() -> Path:
-    """Locates the presets directory relative to the repository structure."""
-    base_dir = Path(__file__).resolve().parent.parent
-    return base_dir / "presets"
 
 
 @dataclass
