@@ -1,0 +1,53 @@
+name: README install
+
+# Runs the README's install commands verbatim against the latest GitHub Release,
+# then uses the installed command. Called by the release workflow after publishing.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, heading: "### macOS" }
+          - { os: ubuntu-22.04, heading: "### Linux" }
+          - { os: windows-latest, heading: "### Windows (PowerShell)" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run README install commands (macOS, Linux)
+        if: runner.os != 'Windows'
+        run: |
+          python3 packaging/readme_snippet.py "${{ matrix.heading }}" > "$RUNNER_TEMP/install.sh"
+          cat "$RUNNER_TEMP/install.sh"
+          bash -euxo pipefail "$RUNNER_TEMP/install.sh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Windows PowerShell 5.1 is what a stock Windows install opens.
+      - name: Run README install commands (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          python packaging/readme_snippet.py "${{ matrix.heading }}" | Set-Content "$env:RUNNER_TEMP\install.ps1"
+          Get-Content "$env:RUNNER_TEMP\install.ps1"
+          & "$env:RUNNER_TEMP\install.ps1"
+
+      - name: Use the installed command
+        shell: pwsh
+        run: |
+          if ($IsWindows) {
+            # A new terminal would pick up the user PATH the installer wrote.
+            $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $env:Path
+          }
+          $exe = (Get-Command wp-generator).Source
+          Write-Host "wp-generator resolves to $exe"
+          pwsh packaging/smoke-test.ps1 $exe
