@@ -98,7 +98,8 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         working-directory: ${{ runner.temp }}
-        run: "$(uv tool dir)/wp-generator/bin/python" -I -c "import engine.sampler"
+        run: |
+          "$(uv tool dir)/wp-generator/bin/python" -I -c "import engine.sampler"
 
       - name: Run from cmd
         if: runner.os == 'Windows'
