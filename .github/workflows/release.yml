@@ -1,0 +1,187 @@
+name: Release
+
+# Builds standalone executables for macOS (Apple Silicon), Linux and Windows.
+# Every run builds and tests them; a v* tag also publishes a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/**"
+      - ".github/workflows/release.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: macos-arm64, os: macos-latest, archive: zip }
+          # Oldest available image: the binary needs at least the build host's glibc.
+          - { target: linux-x64, os: ubuntu-22.04, archive: tar.gz }
+          - { target: windows-x64, os: windows-latest, archive: zip }
+    env:
+      ASSET: wp-generator-${{ matrix.target }}.${{ matrix.archive }}
+      SIGN_MACOS: ${{ startsWith(matrix.os, 'macos') && secrets.MACOS_CERTIFICATE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        shell: bash
+        env:
+          UV_PYTHON_PREFERENCE: only-system
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            uv sync --locked --no-dev --extra macos
+          else
+            uv sync --locked --no-dev
+          fi
+
+      - name: Build executable
+        run: uv run --no-sync --with pyinstaller pyinstaller packaging/wp-generator.spec --noconfirm
+
+      - name: Import signing certificate
+        if: env.SIGN_MACOS == 'true'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+
+      - name: Sign (macOS)
+        if: env.SIGN_MACOS == 'true'
+        run: packaging/macos-sign.sh dist/wp-generator "Developer ID Application"
+
+      - name: Smoke test
+        shell: pwsh
+        run: pwsh packaging/smoke-test.ps1 dist/wp-generator/wp-generator${{ runner.os == 'Windows' && '.exe' || '' }}
+
+      - name: Archive
+        shell: bash
+        run: |
+          cd dist
+          case "$RUNNER_OS" in
+            macOS)   ditto -c -k --keepParent wp-generator "../$ASSET" ;;
+            Linux)   tar -czf "../$ASSET" wp-generator ;;
+            Windows) 7z a -tzip "../$ASSET" wp-generator > /dev/null ;;
+          esac
+
+      - name: Notarize (macOS)
+        if: env.SIGN_MACOS == 'true'
+        env:
+          NOTARIZATION_KEY_P8: ${{ secrets.NOTARIZATION_KEY_P8 }}
+          NOTARIZATION_KEY_ID: ${{ secrets.NOTARIZATION_KEY_ID }}
+          NOTARIZATION_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey_${NOTARIZATION_KEY_ID}.p8"
+          printf '%s\n' "$NOTARIZATION_KEY_P8" > "$key"
+          trap 'rm -f "$key"' EXIT
+          auth=(--key "$key" --key-id "$NOTARIZATION_KEY_ID" --issuer "$NOTARIZATION_ISSUER_ID")
+          xcrun notarytool submit "$ASSET" "${auth[@]}" --wait --output-format json | tee notary.json
+          id=$(python3 -c "import json; print(json.load(open('notary.json'))['id'])")
+          status=$(python3 -c "import json; print(json.load(open('notary.json'))['status'])")
+          if [ "$status" != "Accepted" ]; then
+            xcrun notarytool log "$id" "${auth[@]}"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  # Downloads each archive on a clean runner, unpacks it and runs it, like a user would.
+  verify:
+    name: verify (${{ matrix.target }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: macos-arm64, os: macos-latest, archive: zip }
+          - { target: linux-x64, os: ubuntu-latest, archive: tar.gz }
+          - { target: windows-x64, os: windows-latest, archive: zip }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: packaging
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ runner.temp }}/download
+
+      - name: Unpack
+        shell: bash
+        working-directory: ${{ runner.temp }}/download
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   ditto -x -k *.zip . ;;          # same as Finder's Archive Utility
+            Linux)   tar -xzf *.tar.gz ;;
+            Windows) pwsh -c 'Expand-Archive *.zip -DestinationPath .' ;;
+          esac
+          ls -l wp-generator | head
+
+      - name: Check signature (macOS)
+        if: runner.os == 'macOS'
+        working-directory: ${{ runner.temp }}/download
+        run: codesign -dv wp-generator/wp-generator 2>&1 | grep -E "Authority|Signature|flags" || echo "not signed"
+
+      - name: Smoke test
+        shell: pwsh
+        run: pwsh packaging/smoke-test.ps1 "${{ runner.temp }}/download/wp-generator/wp-generator${{ runner.os == 'Windows' && '.exe' || '' }}"
+
+  release:
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Check tag matches version
+        run: |
+          version=$(uv run --no-project python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          engine=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' engine/__init__.py)
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$version" ] || [ "$tag" != "$engine" ]; then
+            echo "tag $GITHUB_REF_NAME, pyproject $version, engine $engine: these must match" >&2
+            exit 1
+          fi
+
+      - name: Build wheel and sdist
+        run: uv build -o assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: assets
+        run: sha256sum * > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
