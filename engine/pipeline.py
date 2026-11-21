@@ -27,6 +27,8 @@ from engine.metadata import (
 )
 from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
+from engine.stages import Trace, has_staged_plan
+from engine.stages.palette import make_palette
 
 DEVICE_RESOLUTIONS: Dict[str, Tuple[int, int]] = {
     # Apple MacBooks (14:9 aspect ratios)
@@ -278,8 +280,14 @@ class WallpaperPipeline:
         chromatic_aberration: float,
         noise: float,
         vignette: float,
+        trace: Optional[Trace] = None,
     ) -> Image.Image:
         """Applies configured post-processing filter overlays sequentially."""
+
+        def record(name: str, **arguments: Any) -> None:
+            if trace is not None:
+                trace.add(name, "finish", image, inputs=("image",), output_name="image", arguments=arguments)
+
         if contours > 0.0:
             image = WallpaperFilters.apply_contour_lines(
                 image,
@@ -288,20 +296,30 @@ class WallpaperPipeline:
                 intensity=contours,
                 mode=contour_mode,
             )
+            record("contours", contours=contours, contour_levels=contour_levels,
+                   contour_width=contour_width, contour_mode=contour_mode)
         if glass:
             image = WallpaperFilters.apply_frosted_glass(image, blur_radius=60, noise_amount=0.15)
+            record("glass", glass=glass, blur_radius=60, noise_amount=0.15)
         if chromatic_aberration > 0.0:
             image = WallpaperFilters.apply_chromatic_aberration(
                 image, strength=chromatic_aberration
             )
+            record("chromatic aberration", chromatic_aberration=chromatic_aberration)
         if noise > 0.0:
             image = WallpaperFilters.apply_film_grain(image, amount=noise)
+            record("film grain", noise=noise)
         if vignette > 0.0:
             image = WallpaperFilters.apply_vignette(image, strength=vignette)
+            record("vignette", vignette=vignette)
         return image
 
-    def render(self, config: RenderConfiguration) -> RenderResult:
-        """Executes the complete generation pipeline and returns an in-memory RenderResult."""
+    def render(self, config: RenderConfiguration, trace: Optional[Trace] = None) -> RenderResult:
+        """Executes the complete generation pipeline and returns an in-memory RenderResult.
+
+        With a trace, every step's output and parameters are recorded into it; the
+        image is the same as without one.
+        """
         if config.width <= 0 or config.height <= 0:
             raise PipelineConfigurationError("Dimensions must be positive integers.")
 
@@ -373,6 +391,19 @@ class WallpaperPipeline:
             raise PipelineConfigurationError(f"Unknown harmonizer '{harmonize}'.")
         colors_were_specified = bool(config.colors or config.preset)
         final_colors = self._harmonize_palette(base_colors, harmonize, preset_data, colors_were_specified)
+        if trace is not None:
+            trace.add(
+                "palette",
+                "palette",
+                make_palette(colors=final_colors),
+                output_name="palette",
+                arguments=dict(
+                    preset=config.preset,
+                    colors="given" if config.colors else "from preset" if config.preset else "random",
+                    harmonize=harmonize,
+                    before_harmonize=" ".join(rgb_to_hex(c) for c in base_colors),
+                ),
+            )
 
         image = render_gradient(
             engine_type,
@@ -395,7 +426,16 @@ class WallpaperPipeline:
             channel_offset=channel_offset,
             seed=active_seed,
             legacy_idw=config.legacy_idw,
+            trace=trace,
         )
+        if trace is not None and not has_staged_plan("idw" if config.legacy_idw else engine_type):
+            trace.add(
+                f"{engine_type} (not split into stages yet)",
+                "engine",
+                image,
+                output_name="image",
+                arguments=dict(engine=engine_type, complexity=complexity, warp_strength=warp_strength),
+            )
 
         base_image = image.copy() if config.capture_base_image else None
 
@@ -409,6 +449,7 @@ class WallpaperPipeline:
             chromatic_aberration=chromatic_aberration,
             noise=noise,
             vignette=vignette,
+            trace=trace,
         )
 
         result = RenderResult(
