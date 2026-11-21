@@ -41,15 +41,19 @@ One render per preset, grouped by style. Table columns keep the previews small; 
 
 ## Quickstart
 
-Requires Python 3.12+ and `uv`.
+Requires Python 3.12+ and `uv`. Works on macOS, Linux and Windows:
 
 ```bash
-git clone https://github.com/icherniukh/wp-generator && cd wp-generator
-./install.sh                      # installs deps, adds a global wp-generator command
+uv tool install git+https://github.com/icherniukh/wp-generator
 wp-generator --preset cupertino   # first wallpaper
 ```
 
-Or without installing:
+The `noise` dependency is compiled from source during install, so Windows needs
+[Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+("Desktop development with C++"). macOS and Linux need the usual compiler toolchain
+(Xcode Command Line Tools or `build-essential`).
+
+From a clone, `./install.sh` (macOS/Linux) adds a `wp-generator` wrapper that runs the checkout. Or without installing:
 
 ```bash
 uv sync
