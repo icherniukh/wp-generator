@@ -153,6 +153,7 @@ class WallpaperFilters:
         mode="light",
         index_interval=5,
         smoothing_radius=2.5,
+        elevation=None,
     ):
         """
         Applies vector-grade anti-aliased topographic elevation contour lines (isobars).
@@ -164,6 +165,7 @@ class WallpaperFilters:
         :param mode: 'light' (luminous isobars), 'dark' (ink isobars), or 'accent' (tinted from gradient).
         :param index_interval: Interval for bold major/index contours (e.g. 5 = every 5th line).
         :param smoothing_radius: Gaussian filter radius in pixels to prevent 8-bit quantization stepping.
+        :param elevation: Optional (height, width) array in [0, 1] to draw isolines of instead of luminance.
         """
         if intensity <= 0.0 or levels <= 0:
             return image.copy()
@@ -173,7 +175,10 @@ class WallpaperFilters:
         if channels < 3:
             return image.copy()
 
-        lum = (0.2126 * img_arr[..., 0] + 0.7152 * img_arr[..., 1] + 0.0722 * img_arr[..., 2]) / 255.0
+        if elevation is not None:
+            lum = np.asarray(elevation, dtype=np.float32)
+        else:
+            lum = (0.2126 * img_arr[..., 0] + 0.7152 * img_arr[..., 1] + 0.0722 * img_arr[..., 2]) / 255.0
         lum_smooth = (
             scipy.ndimage.gaussian_filter(lum, sigma=float(smoothing_radius))
             if smoothing_radius > 0.0

@@ -78,6 +78,7 @@ def render_gradient(
     legacy_idw: bool = False,
     trace: Optional[Any] = None,
     composition: Optional[Any] = None,
+    keep_state: Optional[Dict[str, Any]] = None,
 ) -> Image.Image:
     """Renders a gradient with the named engine.
 
@@ -114,7 +115,7 @@ def render_gradient(
             channel_offset=channel_offset,
             seed=seed,
         )
-        return render_staged(resolved_name, params, trace=trace, composition=composition)
+        return render_staged(resolved_name, params, trace=trace, composition=composition, keep_state=keep_state)
 
     if composition:
         raise ValueError(

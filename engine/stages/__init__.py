@@ -45,9 +45,11 @@ def render_staged(
     *,
     trace: Optional[Trace] = None,
     composition: Optional[Composition] = None,
+    keep_state: Optional[Dict[str, Any]] = None,
 ) -> Image.Image:
     """Renders engine from render_gradient-style params through its stage plan,
-    changed by composition if given."""
+    changed by composition if given. keep_state, if given, receives the final
+    render state (palette, coords, field, image, final)."""
     plan = STAGED_PLANS[engine]
     stages = plan.stages
     if composition:
@@ -79,6 +81,8 @@ def render_staged(
             return solid
 
     state = run_stages(stages, stage_params, rng=random, trace=trace)
+    if keep_state is not None:
+        keep_state.update(state)
     return state["final"]
 
 
