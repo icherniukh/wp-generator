@@ -3,7 +3,7 @@ import io
 from PIL import Image
 from fastapi.testclient import TestClient
 
-from web.app import app
+from web.app import RenderRequest, app
 
 
 class TestWebAPI(unittest.TestCase):
@@ -30,6 +30,7 @@ class TestWebAPI(unittest.TestCase):
         ids = [item["id"] for item in data]
         self.assertIn("nocturne", ids)
         self.assertIn("afterglow", ids)
+        self.assertNotIn("tectonic", ids)
         # Verify structure
         first = data[0]
         self.assertIn("name", first)
@@ -70,6 +71,26 @@ class TestWebAPI(unittest.TestCase):
     def test_render_unknown_preset_returns_404(self):
         response = self.client.get("/api/render?preset=non_existent_preset_xyz")
         self.assertEqual(response.status_code, 404)
+
+    def test_retired_preset_returns_404_for_get_and_post(self):
+        parameters = {"preset": "tectonic", "width": 80, "height": 60}
+        self.assertEqual(self.client.get("/api/render", params=parameters).status_code, 404)
+        self.assertEqual(self.client.post("/api/render", json=parameters).status_code, 404)
+
+    def test_dot_fields_are_not_exposed_in_request_or_openapi(self):
+        response = self.client.get("/openapi.json")
+        self.assertEqual(response.status_code, 200)
+        schema = response.json()
+        query_fields = {
+            parameter["name"]
+            for parameter in schema["paths"]["/api/render"]["get"]["parameters"]
+        }
+        body_fields = schema["components"]["schemas"]["RenderRequest"]["properties"]
+        for field in ("dots", "dots_spacing", "dots_mode"):
+            with self.subTest(field=field):
+                self.assertNotIn(field, RenderRequest.model_fields)
+                self.assertNotIn(field, body_fields)
+                self.assertNotIn(field, query_fields)
 
     def test_render_invalid_dimensions_returns_422(self):
         response = self.client.get("/api/render?width=5&height=100")
@@ -134,7 +155,8 @@ class TestWebAPI(unittest.TestCase):
 
     def test_render_with_contours_header(self):
         parameters = {
-            "preset": "tectonic",
+            "preset": "afterglow",
+            "engine": "topographic",
             "width": 100,
             "height": 80,
             "seed": 42,
@@ -213,6 +235,7 @@ class TestWebAPI(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn("text/html", res.headers["content-type"])
         self.assertIn("Effect &amp; Parameter Range Calibration Lab", res.text)
+        self.assertNotIn("dots", res.text)
 
     def test_parameter_ranges_get_update_and_reset(self):
         get_res = self.client.get("/api/parameter-ranges")
@@ -220,6 +243,11 @@ class TestWebAPI(unittest.TestCase):
         specs = {item["key"]: item for item in get_res.json()}
         self.assertIn("warp_strength", specs)
         self.assertIn("transverse_warp", specs)
+        retired_fields = {"dots", "dots_spacing", "dots_mode"}
+        self.assertTrue(retired_fields.isdisjoint(specs))
+        for spec in specs.values():
+            self.assertNotIn(spec["render_param"], retired_fields)
+            self.assertTrue(retired_fields.isdisjoint(spec.get("fixed_params", {})))
 
         try:
             put_res = self.client.put(

@@ -4,6 +4,8 @@ from pathlib import Path
 import random
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from engine import resolve_preset_directory
+
 
 @dataclass
 class ParameterRangeSpec:
@@ -243,20 +245,6 @@ def default_parameter_specs() -> List[ParameterRangeSpec]:
             fixed_params={"complexity": 4},
         ),
         ParameterRangeSpec(
-            key="dots",
-            label="Dot Matrix Intensity",
-            category="Post-Processing Filters",
-            description="Nothing-style halftone dot matrix overlay opacity.",
-            engine="simplex",
-            render_param="dots",
-            hard_min=0.0,
-            hard_max=1.0,
-            step=0.05,
-            selected_min=0.15,
-            selected_max=0.60,
-            fixed_params={"dots_spacing": 24, "complexity": 4},
-        ),
-        ParameterRangeSpec(
             key="contours",
             label="Topographic Contour Lines",
             category="Post-Processing Filters",
@@ -278,8 +266,7 @@ class ParameterRangeStore:
 
     def __init__(self, config_path: Optional[Union[str, Path]] = None) -> None:
         if config_path is None:
-            repo_root = Path(__file__).resolve().parent.parent
-            config_path = repo_root / "presets" / "parameter_ranges.json"
+            config_path = resolve_preset_directory() / "parameter_ranges.json"
         self.config_path = Path(config_path)
         self._specs: Dict[str, ParameterRangeSpec] = {
             spec.key: spec for spec in default_parameter_specs()

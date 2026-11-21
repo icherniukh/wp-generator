@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+from engine import resolve_preset_directory
 from engine.colors import (
     ColorTheoryHarmonizer,
     PaletteContrast,
@@ -70,12 +71,6 @@ def parse_hex_color(hex_str: str) -> Tuple[int, int, int]:
         raise PipelineConfigurationError(str(exc)) from exc
 
 
-def resolve_preset_directory() -> Path:
-    """Locates the presets directory relative to the repository structure."""
-    base_dir = Path(__file__).resolve().parent.parent
-    return base_dir / "presets"
-
-
 @dataclass
 class RenderConfiguration:
     width: int = 3024
@@ -89,9 +84,6 @@ class RenderConfiguration:
     harmonize: Optional[str] = None
     noise: Optional[float] = None
     vignette: Optional[float] = None
-    dots: Optional[float] = None
-    dots_spacing: Optional[int] = None
-    dots_mode: Optional[str] = None
     contours: Optional[float] = None
     contour_levels: Optional[int] = None
     contour_width: Optional[float] = None
@@ -140,9 +132,6 @@ class RenderResult:
     fractal_zoom: Optional[float] = None
     fractal_center: Optional[Tuple[float, float]] = None
     fractal_angle: Optional[float] = None
-    dots: float = 0.0
-    dots_spacing: Optional[int] = None
-    dots_mode: Optional[str] = None
     contour_width: Optional[float] = None
     contour_mode: Optional[str] = None
     glass: bool = False
@@ -281,9 +270,6 @@ class WallpaperPipeline:
         self,
         image: Image.Image,
         *,
-        dots: float,
-        dots_spacing: int,
-        dots_mode: str,
         contours: float,
         contour_levels: int,
         contour_width: float,
@@ -294,10 +280,6 @@ class WallpaperPipeline:
         vignette: float,
     ) -> Image.Image:
         """Applies configured post-processing filter overlays sequentially."""
-        if dots > 0.0:
-            image = WallpaperFilters.apply_dot_matrix(
-                image, spacing=dots_spacing, intensity=dots, mode=dots_mode
-            )
         if contours > 0.0:
             image = WallpaperFilters.apply_contour_lines(
                 image,
@@ -371,10 +353,6 @@ class WallpaperPipeline:
         )
         dispersion = resolve("dispersion", lambda: PARAMETER_RANGES.sample("dispersion"))
 
-        dots = resolve("dots", 0.0)
-        dots_spacing = resolve("dots_spacing", lambda: random.randint(8, 60))
-        dots_mode = resolve("dots_mode", lambda: random.choice(["size", "alpha"]))
-
         contours = resolve("contours", 0.0)
         contour_levels = resolve("contour_levels", 24)
         contour_width = resolve("contour_width", 1.4)
@@ -423,9 +401,6 @@ class WallpaperPipeline:
 
         image = self._apply_filters(
             image,
-            dots=dots,
-            dots_spacing=dots_spacing,
-            dots_mode=dots_mode,
             contours=contours,
             contour_levels=contour_levels,
             contour_width=contour_width,
@@ -455,9 +430,6 @@ class WallpaperPipeline:
             contour_levels=contour_levels,
             contour_width=contour_width,
             contour_mode=contour_mode,
-            dots=dots,
-            dots_spacing=dots_spacing,
-            dots_mode=dots_mode,
             glass=glass_param,
             vignette=vignette,
             frequency=frequency,

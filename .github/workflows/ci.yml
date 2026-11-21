@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run python -m pytest tests/ -q
+
+      - name: Smoke render
+        shell: bash
+        run: |
+          uv run python main.py --preset nocturne --res 320 200 --seed 1 --output smoke.png
+          uv run python main.py --metadata smoke.png
+
+  install:
+    name: install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build wheel
+        run: uv build --wheel -o dist
+
+      - name: Install as a uv tool
+        shell: bash
+        run: |
+          uv tool install dist/*.whl
+          uv tool dir --bin >> "$GITHUB_PATH"
+
+      # Everything below runs from outside the checkout, through the installed
+      # command, in PowerShell (the default shell for Windows users).
+      - name: Version
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          Get-Command wp-generator
+          wp-generator --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Render a wallpaper
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          wp-generator --preset nocturne --res 320 200 --seed 1 --output wall.png
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          wp-generator --metadata wall.png
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Parallel batch
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          wp-generator --preset afterglow --res 160 100 --count 2 --workers 2 --seed 5 --out-dir batch
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $count = (Get-ChildItem batch -Filter *.png).Count
+          if ($count -ne 2) { Write-Error "expected 2 images, got $count"; exit 1 }
+
+      - name: Run from cmd
+        if: runner.os == 'Windows'
+        shell: cmd
+        working-directory: ${{ runner.temp }}
+        run: wp-generator --version

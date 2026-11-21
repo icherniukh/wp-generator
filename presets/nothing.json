@@ -25,9 +25,6 @@
     }
   ],
   "overrides": {
-    "noise": { "type": "gaussian", "mu": 0.15, "sigma": 0.05, "clip": [0.1, 0.25] },
-    "dots_mode": "size",
-    "dots_spacing": { "type": "gaussian", "mu": 30, "sigma": 10, "clip": [10, 60] },
-    "dots": { "type": "gaussian", "mu": 0.8, "sigma": 0.1, "clip": [0.5, 1.0] }
+    "noise": { "type": "gaussian", "mu": 0.15, "sigma": 0.05, "clip": [0.1, 0.25] }
   }
 }

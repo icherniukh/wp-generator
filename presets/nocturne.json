@@ -25,7 +25,6 @@
     "noise": 0.065,
     "chromatic_aberration": 0.014,
     "vignette": 0.18,
-    "dots": 0.0,
     "glass": false
   }
 }

@@ -5,6 +5,7 @@ description = "Statistical procedural wallpaper generator"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "click>=8.0",
   "noise>=1.2.2",
   "numpy>=2.0",
   "pillow>=11.0",
@@ -29,3 +30,19 @@ dev = [
   "httpx>=0.27",
   "pytest>=8.0",
 ]
+
+[project.scripts]
+wp-generator = "engine.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+# Interim wheel layout until the src-layout move: main.py ships as engine/cli.py
+# and the repo-level presets/ ships inside the engine package.
+[tool.hatch.build.targets.wheel]
+packages = ["engine", "web"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"main.py" = "engine/cli.py"
+"presets" = "engine/presets"

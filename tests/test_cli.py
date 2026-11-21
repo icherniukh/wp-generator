@@ -68,6 +68,16 @@ class TestPresetAndOutputResolution(unittest.TestCase):
             with Image.open(out_file) as img:
                 self.assertEqual(img.size, (64, 48))
 
+    def test_retired_preset_and_dot_flags_are_rejected(self):
+        from click.testing import CliRunner
+        from main import main
+        runner = CliRunner()
+        for arguments in (["--preset", "tectonic"], ["--dots", "0.5"],
+                          ["--dots-mode", "size"], ["--dots-spacing", "24"]):
+            with self.subTest(arguments=arguments):
+                result = runner.invoke(main, arguments)
+                self.assertEqual(result.exit_code, 2, result.output)
+
     def test_cli_version_flag(self):
         from engine import __version__
         result = subprocess.run([

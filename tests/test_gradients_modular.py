@@ -51,6 +51,7 @@ class TestModularGradients(unittest.TestCase):
             pass
 
         register_gradient_engine("dummy-test", DummyEngine)
+        self.addCleanup(GRADIENT_REGISTRY.pop, "dummy-test", None)
         self.assertEqual(get_gradient_engine_class("dummy-test"), DummyEngine)
 
     def test_render_gradient_dispatches_cleanly(self):

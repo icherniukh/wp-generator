@@ -24,7 +24,6 @@
         "complexity": 5,
         "noise": 0.04,
         "vignette": 0.25,
-        "dots": 0.0,
         "glass": true
     }
 }

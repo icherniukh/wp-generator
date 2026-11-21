@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallpaper Generator — every primitive, demonstrated</title>
+<style>
+  :root {
+    --bg: #10131b; --card: #171b25; --line: #303443;
+    --txt: #f2eee9; --dim: #b5adbf; --acc: #ffba9c; --grn: #9dd9cc;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    line-height: 1.6; }
+  a { color: var(--acc); text-underline-offset: 4px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--acc); outline-offset: 5px; }
+  nav { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 28px 0; font-size: 14px; }
+  .comparison { margin: 28px 0 38px; }
+  .comparison h3 { margin-bottom: 6px; }
+  .comparison .pair { margin-top: 14px; }
+  .pair.palette-pair img { aspect-ratio: 8 / 1; object-fit: contain; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 24px 0; }
+  .swatches span { padding: 8px 12px; border-radius: 4px; color: #fff; font: 12px ui-monospace, monospace; }
+  details { margin: 14px 0; }
+  summary { cursor: pointer; color: var(--acc); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 120px; }
+  header.hero { padding: 96px 0 40px; }
+  .kicker { color: var(--acc); font-size: 13px; letter-spacing: 2px; margin: 0 0 12px; }
+  h1 { font-size: 52px; line-height: 1.05; margin: 0 0 16px; font-weight: 700; }
+  .lede { font-size: 19px; color: var(--dim); max-width: 700px; margin: 0; }
+  .hero-img { margin: 48px 0 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .hero-img img { display: block; width: 100%; }
+  section { margin-top: 88px; }
+  h2 { font-size: 30px; margin: 0 0 8px; }
+  h3.fam { font-size: 15px; letter-spacing: 2px; color: var(--acc); margin: 44px 0 14px; }
+  .sub { color: var(--dim); margin: 0 0 28px; max-width: 700px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; letter-spacing: 1.5px; }
+  td code, p code, li code, .sig { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; background: #1c1c26; padding: 2px 7px; border-radius: 6px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  figure.cell { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  figure.cell img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  figure.cell figcaption { padding: 10px 12px 12px; font-size: 13px; }
+  figure.cell figcaption b { display: block; font-size: 14px; }
+  figure.cell figcaption span { color: var(--dim); font-size: 12px; }
+  .eng { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 18px; }
+  .eng h3 { margin: 0 0 6px; font-size: 19px; }
+  .eng h4 { margin: 28px 0 6px; font-size: 17px; }
+  .eng h3 code { font-size: 15px; }
+  .plain { color: var(--dim); font-size: 15px; margin: 0 0 14px; max-width: 720px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 0 14px; }
+  .pair figure { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .pair img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  .pair figcaption { padding: 8px 12px 10px; font-size: 13px; color: var(--dim); }
+  .pair figcaption b { color: var(--txt); }
+  .params { font-size: 13.5px; margin: 0; }
+  .params b { color: var(--txt); }
+  .tag { display: inline-block; font-size: 11px; letter-spacing: 1px; padding: 2px 9px; border-radius: 20px; margin-right: 6px; }
+  .tag.r { background: #2a1a12; color: var(--acc); border: 1px solid #5a2e1e; }
+  .tag.f { background: #12241a; color: var(--grn); border: 1px solid #1f4d33; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 17px; }
+  .card p, .card ul { margin: 0; font-size: 14px; color: var(--dim); }
+  .card ul { padding-left: 18px; }
+  .demo { margin: 0 0 26px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .demo img { display: block; width: 100%; }
+  .demo figcaption { padding: 14px 20px 16px; font-size: 14px; color: var(--dim); }
+  .demo figcaption b { color: var(--txt); }
+  .wide img { width: 100%; border: 1px solid var(--line); border-radius: 14px; display: block; }
+  .flow { display: flex; align-items: stretch; gap: 0; margin: 8px 0 26px; }
+  .step { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; font-size: 14px; color: var(--dim); }
+  .step b { display: block; margin-bottom: 6px; font-size: 15px; color: var(--txt); }
+  .arrow { align-self: center; padding: 0 12px; color: var(--dim); font-size: 22px; }
+  footer { margin-top: 96px; border-top: 1px solid var(--line); padding-top: 24px; color: var(--dim); font-size: 13px; }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; overflow-x: auto; font-size: 13.5px; }
+  @media (max-width: 760px) { .grid4 { grid-template-columns: repeat(2, 1fr); } .cols, .pair { grid-template-columns: 1fr; } h1 { font-size: 36px; } .flow { flex-direction: column; gap: 12px; } .arrow { transform: rotate(90deg); align-self: center; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="kicker">FIELD MATH · PALETTE SCIENCE · FINISH PASSES</p>
+    <h1>A field guide to<br>procedural color.</h1>
+    <p class="lede">One palette. One seed. The math makes the difference. Explore the generators, compare each finish against its untouched input, then follow a real wallpaper from palette to PNG.</p>
+    <nav aria-label="Sections"><a href="#engines">Fields</a><a href="#support">Primitives</a><a href="#palettes">Palettes</a><a href="#finish">Before / after</a><a href="#composition">Pipeline</a><a href="#ideas">Next effects</a><a href="#run">Reproduce</a></nav>
+    <div class="swatches" aria-label="Comparison palette"><span style="background:#190E32">#190E32</span><span style="background:#A54399">#A54399</span><span style="background:#FF7768;color:#190E32">#FF7768</span><span style="background:#FFD49B;color:#190E32">#FFD49B</span></div>
+    <p class="sub">An <b>engine</b> is field math. A <b>preset</b> supplies palette distributions and optional overrides. Today, resolution is explicit config → preset override → built-in default; the fallback engine is <code>simplex</code>, not a random engine. The draft <code>engines/*.json</code> layer is not wired into rendering yet.</p>
+    <div class="hero-img"><img src="docs/assets/engine_primitives.png" alt="All twelve engines, same palette and seed"></div>
+  </header>
+
+  <section id="engines">
+    <h2>01 · Field engines</h2>
+    <p class="sub">Twelve registry keys, eleven classes, and some shared behavior. The hero grid uses one fixed scene (Julia for escape-fractal); the index below shows each card’s first setting. Every pair resets the seed and changes one active control. IDW compares color count instead. Bracketed ranges below are calibration selections, not universal CLI bounds; the fractal camera also has its own sampling rules. Aliases and shared wrappers are identified rather than counted as different algorithms.</p>
+
+    <h3 class="fam">INDEX — FIRST SETTING FROM EACH COMPARISON</h3>
+    <div class="grid4">
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/domain-warp_lo.png" alt="domain-warp"><figcaption><b>domain-warp</b><span>sweep + double warp</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/simplex_lo.png" alt="simplex"><figcaption><b>simplex</b><span>sweep + one noise layer</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/spline-wave_lo.png" alt="spline-wave"><figcaption><b>spline-wave</b><span>Perlin-warped sweep</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/fluid-wave_lo.png" alt="fluid-wave"><figcaption><b>fluid-wave</b><span>trig fold, upscaled</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/rbf_lo.png" alt="rbf"><figcaption><b>rbf</b><span>radial emitters</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/radial-basis_lo.png" alt="radial-basis"><figcaption><b>radial-basis</b><span>same class as rbf</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/flow-field_lo.png" alt="flow-field"><figcaption><b>flow-field</b><span>inverse-square point weights</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/idw_5col.png" alt="idw"><figcaption><b>idw</b><span>unwarped anchors</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/topographic_lo.png" alt="topographic"><figcaption><b>topographic</b><span>three-wave hills</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/fractal_lo.png" alt="fractal"><figcaption><b>fractal</b><span>iterated warp + carrier</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/fluid-fractal_lo.png" alt="fluid-fractal"><figcaption><b>fluid-fractal</b><span>nested f(p + q)</span></figcaption></figure>
+      <figure class="cell"><img loading="lazy" src="docs/assets/demo/eng/escape-fractal_lo.png" alt="escape-fractal"><figcaption><b>escape-fractal</b><span>orbit traps</span></figcaption></figure>
+    </div>
+
+    <h3 class="fam">DIRECTIONAL SWEEPS + WARPING</h3>
+
+    <div class="eng"><h3><code>domain-warp</code> — DomainWarpGradient</h3>
+      <p class="plain">Paint a straight gradient across a rotated canvas, then stir the coordinates with noise — twice, the second stir warped by the first. Turn the stir up and folds go turbulent.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/domain-warp_lo.png" alt="warp 0.1"><figcaption><b>warp_strength 0.1</b> — barely stirred sweep</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/domain-warp_hi.png" alt="warp 1.5"><figcaption><b>warp_strength 1.5</b> — folds breaking into turbulence</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · warp_strength [0.25–0.90] (lab limits 0–2.5) · transverse_warp [0.04–0.22], not exposed by the CLI; sampled unless set by config or preset.<br><span class="tag r">RANDOMIZED</span> sweep angle, noise offsets, warp fields. <span class="tag f">FIXED</span> the double-lookup structure.</p></div>
+
+    <div class="eng"><h3><code>simplex</code> — SimplexMeshGradient</h3>
+      <p class="plain">The simplest engine: one rotated sweep plus one layer of 2D Simplex noise. Complexity sets how many folds the noise is allowed, not how many colors.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/simplex_lo.png" alt="complexity 2"><figcaption><b>complexity 2</b> — broad calm bands</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/simplex_hi.png" alt="complexity 9"><figcaption><b>complexity 9</b> — busy, broken-up field</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · fluid_mode random|spatial (accepted, currently inert).<br><span class="tag r">RANDOMIZED</span> sweep angle, noise field. <span class="tag f">FIXED</span> single-noise-layer structure.</p></div>
+
+    <div class="eng"><h3><code>spline-wave</code> — SplineWaveGradient</h3>
+      <p class="plain">Warp the coordinates with Perlin noise first, then sweep across them and snap the result through a smoothstep for contrast. The warp decides how wavy the bands get.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/spline-wave_lo.png" alt="warp 0.1"><figcaption><b>warp_strength 0.1</b> — near-straight bands</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/spline-wave_hi.png" alt="warp 1.0"><figcaption><b>warp_strength 1.0</b> — bands folding over</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · warp_strength → spline_warp [0.12–0.42] (lab limits 0–1.2).<br><span class="tag r">RANDOMIZED</span> Perlin offsets, sweep angle. <span class="tag f">FIXED</span> sweep-then-contrast pipeline.</p></div>
+
+    <div class="eng"><h3><code>fluid-wave</code> — FluidMeshGradient</h3>
+      <p class="plain">A fixed sine-times-cosine fold on a rotated sweep, sampled on a coarse grid and bicubic-upscaled. Complexity changes the grid density, not blob placement. The sleek/nocturne workhorse.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/fluid-wave_lo.png" alt="complexity 4"><figcaption><b>complexity 4</b> — coarse control grid</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/fluid-wave_hi.png" alt="complexity 32"><figcaption><b>complexity 32</b> — denser grid (exaggerated for comparison)</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · fluid_mode random|spatial (accepted, inert; not used for this comparison).<br><span class="tag r">RANDOMIZED</span> sweep angle. <span class="tag f">FIXED</span> the trig fold + upscale smoothing.</p></div>
+
+    <h3 class="fam">2D SPATIAL POINT EMITTERS</h3>
+
+    <div class="eng"><h3><code>rbf</code> — RadialBasisGradient</h3>
+      <p class="plain">Scatter soft radial glows across a warped grid and melt them into each other over a dark anchor color. Dispersion is glow size: small values give distinct pools of color, large values flood the canvas.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/rbf_lo.png" alt="dispersion 0.15"><figcaption><b>dispersion 0.15</b> — tight, distinct emitters</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/rbf_hi.png" alt="dispersion 0.9"><figcaption><b>dispersion 0.9</b> — emitters flooded together</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · warp_strength → rbf_warp [0.20–0.95] (direct dispatcher fallback 1.0; pipeline samples the range) · ambient_weight [0.08–0.28] · dispersion [0.24–0.55] (lab limits 0.08–1.20).<br><span class="tag r">RANDOMIZED</span> emitter positions, warp grid, per-run. <span class="tag f">FIXED</span> smoothstep falloff shape.</p>
+
+      <h4>Background anchoring — <code>radial-basis</code> is an RBF alias</h4>
+      <p class="plain">Literally the same code as <code>rbf</code> — an alias key from the prototype era. Shown here through its other headline knob: the background anchor fighting the emitters.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/radial-basis_lo.png" alt="ambient 0.05"><figcaption><b>ambient_weight 0.05</b> — emitters dominate</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/radial-basis_hi.png" alt="ambient 0.6"><figcaption><b>ambient_weight 0.6</b> — anchor floods back in</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> identical to <code>rbf</code>. <span class="tag f">FIXED</span> everything structural — only the sampled values differ run to run.</p></div>
+
+    <div class="eng"><h3><code>flow-field</code> — FlowFieldGradient</h3>
+      <p class="plain">Point emitters whose weights fall off with inverse square distance, evaluated over a Perlin-warped grid. The warp bends their blended color territories; the algorithm does not generate rings.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/flow-field_lo.png" alt="warp 0.1"><figcaption><b>warp_strength 0.1</b> — softly blended point territories</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/flow-field_hi.png" alt="warp 1.0"><figcaption><b>warp_strength 1.0</b> — warped color territories</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · fluid_mode random|spatial (inert, as everywhere) · warp_strength → flow_warp [0.18–0.55] (lab limits 0–1.5).<br><span class="tag r">RANDOMIZED</span> emitter positions, warp offsets. <span class="tag f">FIXED</span> the 1/d² falloff law.</p></div>
+
+    <div class="eng"><h3><code>idw</code> — MeshGradient (legacy)</h3>
+      <p class="plain">Inverse-distance blending around randomly placed interior anchors, without coordinate warping. More colors add more anchor territories. The same seed makes placement reproducible; it is not a randomness-free engine.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/idw_2col.png" alt="two colors"><figcaption><b>2 colors</b> — one clean divide</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/idw_5col.png" alt="five colors"><figcaption><b>5 colors</b> — five territories, same math</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> palette count; p=2.5 and softness=0.12 fixed by the dispatcher. Select with <code>--engine idw</code> or <code>--legacy-idw</code>. <span class="tag r">RANDOMIZED</span> interior anchors. <span class="tag f">FIXED</span> softened distance falloff.</p></div>
+
+    <h3 class="fam">HARMONIC ELEVATION</h3>
+
+    <div class="eng"><h3><code>topographic</code> — TopographicGradient</h3>
+      <p class="plain">Three interfering sine waves make hills, Simplex noise roughens them, and the palette paints elevation like a hiking map. More warp = more rugged terrain.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/topographic_lo.png" alt="warp 0.2"><figcaption><b>warp_strength 0.2</b> — rolling hills</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/topographic_hi.png" alt="warp 1.5"><figcaption><b>warp_strength 1.5</b> — rugged, broken terrain</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · warp_strength → topo_warp [0.25–0.95] (lab limits 0–2.5; generator fallback 0.85).<br><span class="tag r">RANDOMIZED</span> rotation angle, noise offsets (wave phases are fixed). <span class="tag f">FIXED</span> the three-wave interference pattern.</p></div>
+
+    <h3 class="fam">FRACTAL FIELDS — ONE CORE, FLUID AND ESCAPE-TIME MODES</h3>
+
+    <div class="eng"><h3><code>fractal</code> — FractalFieldGradient</h3>
+      <p class="plain">Zoom a camera into iterated trigonometric warping — each octave folds the last one's output. Zoom out for macro sweeps, zoom in for intricate detail.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/fractal_lo.png" alt="zoom 0.5"><figcaption><b>fractal_zoom 0.5</b> — macro sweep</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/fractal_hi.png" alt="zoom 1.8"><figcaption><b>fractal_zoom 1.8</b> — intricate detail</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> complexity [2–6] · zoom [0.45–1.85] (lab limits 0.25–3.5) · center · angle · phase_offset · frequency [0.65–1.45] · trap_weight [0.20–0.55] · channel_offset.<br><span class="tag r">RANDOMIZED</span> fold phases per octave. <span class="tag f">FIXED</span> iteration structure. Unset cameras sample macro/medium/detail zoom tiers and off-screen, corner, or centered focal points; these comparisons pin the camera.</p>
+
+      <h4>Fluid mode — <code>fluid-fractal</code> wrapper</h4>
+      <p class="plain">A dedicated wrapper around the same fluid branch used by <code>fractal --fractal-type fluid</code>, not a separate nesting algorithm. Frequency changes the carrier field. With identical arguments these two keys produce identical images.</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/fluid-fractal_lo.png" alt="frequency 0.7"><figcaption><b>frequency 0.7</b> — slow color cycles</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/fluid-fractal_hi.png" alt="frequency 2.0"><figcaption><b>frequency 2.0</b> — rapid banding</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> fluid controls shared with <code>fractal</code>; no trap_weight argument.<br><span class="tag r">RANDOMIZED</span> fluid-field phases and unspecified camera. <span class="tag f">FIXED</span> shared fluid algorithm.</p>
+
+      <h4>Escape-time modes — <code>escape-fractal</code> wrapper</h4>
+      <p class="plain">True complex dynamics: iterate z² + c and paint how fast points escape, with geometric orbit traps carving structure into the field. Trap weight blends smooth escape glow against trap geometry (Julia mode shown).</p>
+      <div class="pair">
+        <figure><img loading="lazy" src="docs/assets/demo/eng/escape-fractal_lo.png" alt="trap 0.05"><figcaption><b>trap_weight 0.05</b> — smooth escape glow</figcaption></figure>
+        <figure><img loading="lazy" src="docs/assets/demo/eng/escape-fractal_hi.png" alt="trap 0.8"><figcaption><b>trap_weight 0.8</b> — trap geometry dominates</figcaption></figure>
+      </div>
+      <p class="params"><b>Knobs:</b> fractal set (julia / mandelbrot) · trap_weight [0.20–0.55] (lab limits 0–1) · zoom · center · phase_offset · frequency · channel_offset.<br><span class="tag r">RANDOMIZED</span> orbit seeds, escape sampling. <span class="tag f">FIXED</span> the z² + c iteration.</p></div>
+  </section>
+
+  <section id="support">
+    <h2>02 · Support primitives</h2>
+    <p class="sub"><code>engine/gradients/spatial.py</code> — the shared math engines call into. Offsets and seeds re-roll every run; the algorithms don't change.</p>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/spatial_noise.png" alt="Simplex noise plane"><figcaption><b>generate_noise_plane(h, w, scale=1.5, octaves=2)</b> — multi-octave 2D Simplex scalar field, 4× bicubic-upscaled from a coarse grid. Used by Simplex, domain-warp, and topographic fields; Perlin-warped and trig-fBm engines use other primitives. <span class="tag r">RANDOMIZED</span> offsets supplied by callers (this example pins them). <span class="tag f">FIXED</span> octave count, upscale factor.</figcaption></figure>
+    <div class="comparison"><h3>Coordinate warp</h3><p class="plain"><code>warp_coordinates_perlin(width, height, complexity=5, warp_range=(0.5, 0.5))</code>. The same palette maps x before and after displacement. Offsets and noise scale are seeded; the warp strength is pinned.</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/spatial_warp_before.png" alt="straight x-coordinate sweep"><figcaption><b>Before</b> — straight x-coordinate sweep</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/spatial_warp_after.png" alt="Perlin-displaced x coordinates"><figcaption><b>After</b> — Perlin-displaced x coordinates</figcaption></figure></div></div>
+    <div class="comparison"><h3>Field normalization</h3><p class="plain"><code>normalize_scalar_field(field)</code> remaps the same compressed trig-fBm field to [0, 1]. Palette and field structure stay fixed; only the value range changes. The noise field is seeded, normalization itself is deterministic.</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/spatial_normalize_before.png" alt="compressed scalar range"><figcaption><b>Before</b> — compressed scalar range</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/spatial_normalize_after.png" alt="full normalized range"><figcaption><b>After</b> — full normalized range</figcaption></figure></div></div>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/spatial_anchors.png" alt="Random emitter anchors"><figcaption><b>random_anchor_points(count, margin=0.08)</b> — margin-bounded random emitter coordinates. <span class="tag r">RANDOMIZED</span> every run. Sibling <b>trig_fbm_field(x_grid, y_grid, octaves=3)</b> builds rotated trigonometric fBm on coordinate grids you pass in.</figcaption></figure>
+
+    <h2 style="margin-top:64px">03 · Field-to-color mapping</h2>
+    <p class="sub"><code>engine/gradients/interpolation.py</code> — turning scalar fields into color.</p>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/interp_curve.png" alt="PCHIP color curve"><figcaption><b>interpolate_color_curve(t, colors_oklab)</b> — maps a scalar field t ∈ [0, 1] through a monotonic cubic PCHIP spline in Oklab. The strip is one palette swept end to end. <span class="tag f">FIXED</span> pure mapping.</figcaption></figure>
+    <div class="comparison"><h3>Decoupled palette mapping</h3><p class="plain"><code>evaluate_decoupled_palette</code> takes separate lightness and chroma/hue fields. Before: both follow x. After: lightness still follows x, chroma/hue follows y. Pure mapping, no randomization.</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/interp_decoupled_before.png" alt="coupled lightness and chroma"><figcaption><b>Before</b> — coupled lightness and chroma</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/interp_decoupled_after.png" alt="independent lightness and chroma fields"><figcaption><b>After</b> — independent lightness and chroma fields</figcaption></figure></div></div>
+  </section>
+
+  <section id="palettes">
+    <h2>04 · Palette primitives</h2>
+    <p class="sub">Preset recipes shown at seed 7, before harmonization. Curated families cycle deterministically by seed; other recipes sample within their distributions. These swatches show preset behavior, distinct from the curated comparison palette used for fields and finishes.</p>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_balanced.png" alt="balanced palette"><figcaption><b>balanced</b> — HLS · 2–5 colors · dark anchor, vivid independent accents · default engine <code>simplex</code></figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_cupertino.png" alt="cupertino palette"><figcaption><b>cupertino</b> — bimodal anchor (70% dark / 30% light), relative-hue accents · default engine <code>simplex</code></figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_cyberpunk.png" alt="cyberpunk palette"><figcaption><b>cyberpunk</b> — bimodal anchor, trichromatic neon accents, harmonize none · default engine <code>simplex</code></figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_ink.png" alt="ink palette"><figcaption><b>ink</b> — HLS near-blacks · default engine <code>simplex</code></figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_nothing.png" alt="nothing palette"><figcaption><b>nothing</b> — muted anchor, mid/bright vivid accent · default engine <code>simplex</code> (grain provides the finish)</figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_pastel.png" alt="pastel palette"><figcaption><b>pastel</b> — near-white anchor, desaturated accents · default engine <code>simplex</code></figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_sleek.png" alt="sleek palette"><figcaption><b>sleek</b> — dark anchor, neon accents · <code>fluid-wave</code> fixed</figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_nocturne.png" alt="nocturne palette"><figcaption><b>nocturne</b> — tinted anchor, accents +150° · <code>fluid-wave</code> fixed</figcaption></figure>
+
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_fractal.png" alt="fractal palette"><figcaption><b>fractal</b> — curated family (its recipe structure is dead config) · <code>fractal</code> fixed</figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/pal_afterglow.png" alt="afterglow palette"><figcaption><b>afterglow</b> — curated triad, no sampled structure · <code>idw</code> fixed</figcaption></figure>
+    <div class="cols">
+      <div class="card"><h3>Generators</h3><ul>
+        <li><code>PresetEngine.generate_palette</code> — anchor + relative-hue accents</li>
+        <li><code>sample_distribution</code> — uniform / uniform_int / gaussian+clip / beta+scale / bimodal / relative; fixed shapes, sampled values</li>
+        <li>Curated <code>palette_families</code> — fixed hex lists, cycling by seed (family selected deterministically by seed)</li>
+        <li><code>_sample_dynamic_palette</code> — HLS fallback with no preset</li>
+      </ul></div>
+      <div class="card"><h3>Harmonizers (<code>engine/colors.py</code>)</h3><ul>
+        <li><code>harmonize(mode="perceptual")</code> — clamps L to [0.12, 0.90], C to [0, 0.25]; hue preserved</li>
+        <li><code>harmonize(mode="triadic" …)</code> — Python API only; CLI modes are perceptual, theory, nothing, none</li>
+        <li><code>adjust_for_nothing</code> — forces low-chroma tones near-neutral (C ≤ 0.015)</li>
+      </ul></div>
+    </div>
+    <p class="sub" style="margin-top:22px">One curated input palette for all three comparisons. <code>perceptual</code> preserves hue; <code>theory</code> uses the preset’s harmony mode (analogous by default). With no preset, no custom colors, and no explicit harmonizer, the pipeline chooses perceptual harmonization with probability 2/3.</p>
+    <div class="comparison"><h3>Perceptual bounds</h3><div class="pair palette-pair"><figure><img loading="lazy" src="docs/assets/demo/harm_raw.png" alt="raw palette"><figcaption><b>Before</b> — raw palette</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/harm_perceptual.png" alt="lightness / chroma bounded, gamut mapped"><figcaption><b>After</b> — lightness / chroma bounded, gamut mapped</figcaption></figure></div></div>
+    <div class="comparison"><h3>Triadic harmony <span class="tag f">PYTHON API</span></h3><div class="pair palette-pair"><figure><img loading="lazy" src="docs/assets/demo/harm_raw.png" alt="same raw palette"><figcaption><b>Before</b> — same raw palette</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/harm_triadic.png" alt="0 / 120 / 240 degree chord"><figcaption><b>After</b> — 0 / 120 / 240 degree chord</figcaption></figure></div></div>
+    <div class="comparison"><h3>Nothing-style harmonizer</h3><div class="pair palette-pair"><figure><img loading="lazy" src="docs/assets/demo/harm_raw.png" alt="same raw palette"><figcaption><b>Before</b> — same raw palette</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/harm_nothing.png" alt="muted neutrals and vivid accents"><figcaption><b>After</b> — muted neutrals and vivid accents</figcaption></figure></div></div>
+  </section>
+
+  <section id="finish">
+    <h2>05 · Finish passes, before / after</h2>
+    <p class="sub">Six implemented primitives, each applied alone to exactly the same unfiltered image. Five are wired in order: contours → glass → aberration → grain → vignette. <code>--preview-fx</code> compares the base with the entire enabled stack, not a single isolated effect. Parameters below are explicit demonstration settings, not claims about sampled defaults.</p>
+
+    <div class="comparison" data-effect="contours"><h3>Contour isobars</h3><p class="plain"><code>apply_contour_lines(levels=24, line_width=1.4, intensity=0.85, mode="light")</code>. Lines follow smoothed image luminance, not the generator’s original elevation field. Default intensity 0 (off).</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_contours.png" alt="contour isobars only"><figcaption><b>After</b> — contour isobars only</figcaption></figure></div></div>
+    <div class="comparison" data-effect="glass"><h3>Frosted glass</h3><p class="plain"><code>apply_frosted_glass(blur_radius=60, noise_amount=0.15)</code>. Blur plus seeded screen-blended frost. Pipeline glass is a boolean (default off), with these two values hardcoded—not independently sampled knobs.</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_glass.png" alt="frosted glass only"><figcaption><b>After</b> — frosted glass only</figcaption></figure></div></div>
+    <div class="comparison" data-effect="aberration"><h3>Chromatic aberration</h3><p class="plain"><code>apply_chromatic_aberration(strength=0.06, mode="radial")</code>. Red and blue shift in opposite directions; green stays put. Exaggerated here for visibility. Default strength 0 (off).</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_aberration.png" alt="chromatic aberration only"><figcaption><b>After</b> — chromatic aberration only</figcaption></figure></div></div>
+    <div class="comparison" data-effect="grain"><h3>Film grain</h3><p class="plain"><code>apply_film_grain(amount=0.10)</code>. Seeded fine noise plus coarse clumps, weighted toward midtones. The pipeline samples the noise range when no override exists; this intentionally stronger example reveals the texture.</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_grain.png" alt="film grain only"><figcaption><b>After</b> — film grain only</figcaption></figure></div><details><summary>Inspect texture — same crop, enlarged 3× without smoothing</summary><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_grain_before_detail.png" alt="base detail"><figcaption><b>Before</b> — base detail</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_grain_after_detail.png" alt="texture detail"><figcaption><b>After</b> — texture detail</figcaption></figure></div></details></div>
+    <div class="comparison" data-effect="vignette"><h3>Vignette</h3><p class="plain"><code>apply_vignette(strength=0.55)</code>. A deterministic radial edge falloff, stronger here for visibility. Default strength 0 (off).</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_vignette.png" alt="vignette only"><figcaption><b>After</b> — vignette only</figcaption></figure></div></div>
+    <div class="comparison" data-effect="dither"><h3>Bounded monochromatic dither</h3><p class="plain"><code>apply_dither(amount=0.05)</code>. Seeded bounded noise with shadow/highlight roll-off. <b>Python API only: defined, but not wired into the pipeline or CLI.</b></p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_dither.png" alt="bounded monochromatic dither only"><figcaption><b>After</b> — bounded monochromatic dither only</figcaption></figure></div><details><summary>Inspect texture — same crop, enlarged 3× without smoothing</summary><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_dither_before_detail.png" alt="base detail"><figcaption><b>Before</b> — base detail</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_dither_after_detail.png" alt="texture detail"><figcaption><b>After</b> — texture detail</figcaption></figure></div></details></div>
+    <details><summary>More controls: contour density</summary><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/eng/contours_8.png" alt="8 contour levels"><figcaption><b>Before</b> — 8 contour levels</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/eng/contours_28.png" alt="28 contour levels"><figcaption><b>After</b> — 28 contour levels</figcaption></figure></div></details>
+  </section>
+
+  <section id="composition">
+    <h2>06 · Composition: one full run</h2>
+    <p class="sub">How a preset uses the primitives to produce an output — afterglow, seed 7. Then the general rule every call follows.</p>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/run_palette.png" alt="Afterglow sampled palette"><figcaption><b>1 · Palette</b> — the actual three-color family selected by afterglow, seed 7.</figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/run_base.png" alt="Afterglow base field"><figcaption><b>2 · Field</b> — softened inverse-distance blending around interior anchors. No finish yet.</figcaption></figure>
+    <figure class="demo"><img loading="lazy" src="docs/assets/demo/run_final.png" alt="Afterglow finished"><figcaption><b>3 · Finish</b> — fine grain 0.02 and vignette 0.08, without a graphic overlay. Embedded metadata records engine, seed, and resolved parameters.</figcaption></figure>
+    <div class="wide"><img loading="lazy" src="docs/assets/pipeline.png" alt="Pipeline poster"></div>
+    <p style="margin-top:22px"></p>
+    <div class="cols">
+      <div class="card"><h3>Preset = sampling program</h3><p>A named JSON recipe: palette distributions, optional engine pin, optional finish values. Ten exist; four pin an engine, six fall back to <code>simplex</code>.</p></div>
+      <div class="card"><h3>Engine = field math + knobs</h3><p>A registered generator class. Twelve keys, four families. Unset knobs use a mix of sampled ranges and fixed defaults. The <code>/calibrate</code> lab tunes ranges, but not every range is consumed by rendering.</p></div>
+    </div>
+    <p class="sub" style="margin-top:18px">A call is one path: pick engine (flag → preset pin → simplex) → resolve every knob (explicit flag → preset override → built-in default or sampling) → render field through palette → apply finish in fixed order → PNG with embedded metadata.</p>
+  </section>
+
+  <section id="ideas">
+    <h2>Next direction: moiré interference</h2>
+    <p class="sub">The only retained effects candidate; <b>not implemented</b>. Inspired by <a href="https://21st.dev/@n1m4mz/components/moire-field">Moiré Field on 21st.dev</a>, whose description layers “two identical ring rulings.” A static adaptation could combine slightly offset fine wave fields into larger interference bands, with restrained contrast so the gradient stays primary. Supersampling would control accidental aliasing. This is a proposed image-making technique, not a copied React component; source code and live previews have not been audited.</p>
+  </section>
+
+  <section id="run">
+    <h2>Reproduce the guide</h2>
+    <p class="sub">No build system or browser dependencies for the page. Examples are generated by the real Python primitives, using explicit settings and seed 7. <a href="docs/assets/manifest.json">The asset manifest</a> records inputs and recipes; <a href="tools/render_showcase.py">the render script</a> supplies the complete construction.</p>
+<pre>uv sync
+uv run python -m tools.render_showcase
+uv run python -m http.server 8080 --bind 127.0.0.1
+# Open http://127.0.0.1:8080/
+
+# A wallpaper through the normal CLI:
+uv run python main.py --preset afterglow --seed 7 --res 800 450 --output output/afterglow.png</pre>
+  </section>
+
+  <footer>All examples are real primitive output or labeled diagrams assembled from that output. Rebuild them with the script above. Sources: <code>presets/</code>, <code>engine/</code>, <code>docs/ARCHITECTURE.md</code>.</footer>
+
+</div>
+</body>
+</html>

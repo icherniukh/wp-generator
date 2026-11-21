@@ -101,7 +101,7 @@ class TestPresetEngine(unittest.TestCase):
         data = self.engine.load_preset("nocturne")
         self.assertEqual(data["color_space"], "oklch")
         self.assertEqual(data["overrides"]["engine"], "fluid-wave")
-        self.assertEqual(data["overrides"]["dots"], 0.0)
+        self.assertNotIn("dots", data["overrides"])
         self.assertEqual(data["overrides"]["glass"], False)
         colors = self.engine.generate_palette(data, count=3)
         self.assertEqual(len(colors), 3)
@@ -128,7 +128,7 @@ class TestPresetEngine(unittest.TestCase):
         import json
         preset_dir = Path("presets")
         for preset_file in preset_dir.glob("*.json"):
-            with open(preset_file, "r") as f:
+            with open(preset_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.assertIn("version", data, f"Preset {preset_file.name} missing 'version'")
             parts = data["version"].split(".")

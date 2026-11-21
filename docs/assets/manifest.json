@@ -1,0 +1,1098 @@
+{
+  "demo/eng/domain-warp_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "domain-warp",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.1,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/domain-warp_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "domain-warp",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 1.5,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/simplex_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "simplex",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 2,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/simplex_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "simplex",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 9,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/spline-wave_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "spline-wave",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.1,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/spline-wave_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "spline-wave",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 1.0,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/fluid-wave_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "fluid-wave",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 4,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/fluid-wave_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "fluid-wave",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 32,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/rbf_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "rbf",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.15,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/rbf_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "rbf",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.9,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/radial-basis_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "radial-basis",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.05,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/radial-basis_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "radial-basis",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.6,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/flow-field_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "flow-field",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.1,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/flow-field_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "flow-field",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 1.0,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/topographic_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "topographic",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.2,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/topographic_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "topographic",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 1.5,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/fractal_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "fractal",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.5,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/fractal_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "fractal",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 1.8,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/fluid-fractal_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "fluid-fractal",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 0.7,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/fluid-fractal_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "fluid-fractal",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 2.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/escape-fractal_lo.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "escape-fractal",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "julia",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.05,
+    "channel_offset": 0.0
+  },
+  "demo/eng/escape-fractal_hi.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "escape-fractal",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "julia",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.8,
+    "channel_offset": 0.0
+  },
+  "demo/eng/idw_2col.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "idw",
+    "colors": [
+      "#190e32",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/eng/idw_5col.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "idw",
+    "colors": [
+      "#190e32",
+      "#683a8d",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.35,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "engine_primitives.png": {
+    "seed": 7,
+    "call": "registry overview",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ],
+    "escape_fractal_type": "julia"
+  },
+  "demo/fx_base.png": {
+    "seed": 7,
+    "call": "render_gradient",
+    "engine": "topographic",
+    "colors": [
+      "#190e32",
+      "#a54399",
+      "#ff7768",
+      "#ffd49b"
+    ],
+    "width": 800,
+    "height": 450,
+    "complexity": 5,
+    "warp_strength": 0.6,
+    "transverse_warp": 0.08,
+    "ambient_weight": 0.15,
+    "dispersion": 0.35,
+    "fractal_type": "fluid",
+    "fractal_zoom": 0.85,
+    "fractal_center": [
+      0.65,
+      -0.3
+    ],
+    "fractal_angle": 0.4,
+    "frequency": 1.0,
+    "trap_weight": 0.35,
+    "channel_offset": 0.0
+  },
+  "demo/fx_contours.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_contour_lines",
+    "kwargs": {
+      "levels": 24,
+      "line_width": 1.4,
+      "intensity": 0.85,
+      "mode": "light"
+    }
+  },
+  "demo/fx_glass.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_frosted_glass",
+    "kwargs": {
+      "blur_radius": 60,
+      "noise_amount": 0.15
+    }
+  },
+  "demo/fx_aberration.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_chromatic_aberration",
+    "kwargs": {
+      "strength": 0.06,
+      "mode": "radial"
+    }
+  },
+  "demo/fx_grain.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_film_grain",
+    "kwargs": {
+      "amount": 0.1
+    }
+  },
+  "demo/fx_grain_before_detail.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "crop": [
+      266,
+      150,
+      533,
+      300
+    ],
+    "resize": "nearest"
+  },
+  "demo/fx_grain_after_detail.png": {
+    "seed": 7,
+    "input": "demo/fx_grain.png",
+    "crop": [
+      266,
+      150,
+      533,
+      300
+    ],
+    "resize": "nearest"
+  },
+  "demo/fx_vignette.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_vignette",
+    "kwargs": {
+      "strength": 0.55
+    }
+  },
+  "demo/fx_dither.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_dither",
+    "kwargs": {
+      "amount": 0.05
+    }
+  },
+  "demo/fx_dither_before_detail.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "crop": [
+      266,
+      150,
+      533,
+      300
+    ],
+    "resize": "nearest"
+  },
+  "demo/fx_dither_after_detail.png": {
+    "seed": 7,
+    "input": "demo/fx_dither.png",
+    "crop": [
+      266,
+      150,
+      533,
+      300
+    ],
+    "resize": "nearest"
+  },
+  "demo/eng/contours_8.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_contour_lines",
+    "kwargs": {
+      "levels": 8,
+      "intensity": 0.85
+    }
+  },
+  "demo/eng/contours_28.png": {
+    "seed": 7,
+    "input": "demo/fx_base.png",
+    "call": "apply_contour_lines",
+    "kwargs": {
+      "levels": 28,
+      "intensity": 0.85
+    }
+  },
+  "demo/pal_afterglow.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "afterglow",
+    "family_index": 7
+  },
+  "demo/pal_balanced.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "balanced",
+    "family_index": 7
+  },
+  "demo/pal_cupertino.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "cupertino",
+    "family_index": 7
+  },
+  "demo/pal_cyberpunk.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "cyberpunk",
+    "family_index": 7
+  },
+  "demo/pal_fractal.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "fractal",
+    "family_index": 7
+  },
+  "demo/pal_ink.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "ink",
+    "family_index": 7
+  },
+  "demo/pal_nocturne.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "nocturne",
+    "family_index": 7
+  },
+  "demo/pal_nothing.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "nothing",
+    "family_index": 7
+  },
+  "demo/pal_pastel.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "pastel",
+    "family_index": 7
+  },
+  "demo/pal_sleek.png": {
+    "seed": 7,
+    "call": "PresetEngine.generate_palette",
+    "preset": "sleek",
+    "family_index": 7
+  },
+  "demo/harm_raw.png": {
+    "seed": 7,
+    "colors": [
+      "#080b16",
+      "#69808e",
+      "#ff655b",
+      "#ffebc4"
+    ]
+  },
+  "demo/harm_perceptual.png": {
+    "seed": 7,
+    "input": "demo/harm_raw.png",
+    "call": "ColorTheoryHarmonizer.harmonize",
+    "mode": "perceptual"
+  },
+  "demo/harm_triadic.png": {
+    "seed": 7,
+    "input": "demo/harm_raw.png",
+    "call": "ColorTheoryHarmonizer.harmonize",
+    "mode": "triadic"
+  },
+  "demo/harm_nothing.png": {
+    "seed": 7,
+    "input": "demo/harm_raw.png",
+    "call": "StyleHarmonizer.adjust_for_nothing",
+    "mode": "nothing"
+  },
+  "demo/spatial_noise.png": {
+    "seed": 7,
+    "call": "generate_noise_plane",
+    "scale": 1.5,
+    "octaves": 2,
+    "offset": [
+      13,
+      29
+    ],
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ],
+    "display": "normalized then palette-mapped"
+  },
+  "demo/spatial_warp_before.png": {
+    "seed": 7,
+    "call": "warp_coordinates_perlin",
+    "complexity": 5,
+    "warp_range": [
+      0.5,
+      0.5
+    ],
+    "display": "before x-coordinate through palette",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ]
+  },
+  "demo/spatial_warp_after.png": {
+    "seed": 7,
+    "call": "warp_coordinates_perlin",
+    "complexity": 5,
+    "warp_range": [
+      0.5,
+      0.5
+    ],
+    "display": "after x-coordinate through palette",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ]
+  },
+  "demo/spatial_normalize_before.png": {
+    "seed": 7,
+    "call": "normalize_scalar_field",
+    "input": "trig_fbm_field(x*4, y*4)*0.25+0.4",
+    "display": "before",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ]
+  },
+  "demo/spatial_normalize_after.png": {
+    "seed": 7,
+    "call": "normalize_scalar_field",
+    "input": "trig_fbm_field(x*4, y*4)*0.25+0.4",
+    "display": "after",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ]
+  },
+  "demo/spatial_anchors.png": {
+    "seed": 7,
+    "call": "random_anchor_points",
+    "count": 8,
+    "margin": 0.08
+  },
+  "demo/interp_curve.png": {
+    "seed": 7,
+    "call": "interpolate_color_curve",
+    "field": "horizontal 0..1",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ]
+  },
+  "demo/interp_decoupled_before.png": {
+    "seed": 7,
+    "call": "evaluate_decoupled_palette",
+    "lightness": "x",
+    "chroma": "x",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ]
+  },
+  "demo/interp_decoupled_after.png": {
+    "seed": 7,
+    "call": "evaluate_decoupled_palette",
+    "lightness": "x",
+    "chroma": "y",
+    "palette": [
+      "#190E32",
+      "#A54399",
+      "#FF7768",
+      "#FFD49B"
+    ]
+  },
+  "demo/run_palette.png": {
+    "seed": 7,
+    "preset": "afterglow",
+    "colors": [
+      "#25295f",
+      "#d08a27",
+      "#e56f83"
+    ]
+  },
+  "demo/run_base.png": {
+    "seed": 7,
+    "preset": "afterglow",
+    "stage": "before finish"
+  },
+  "demo/run_final.png": {
+    "seed": 7,
+    "call": "WallpaperPipeline.render",
+    "preset": "afterglow",
+    "parameters": {
+      "engine": "idw",
+      "seed": 7,
+      "width": 800,
+      "height": 450,
+      "colors": [
+        "#25295f",
+        "#d08a27",
+        "#e56f83"
+      ],
+      "complexity": 4,
+      "noise": 0.02,
+      "chromatic_aberration": 0.0,
+      "warp_strength": 0.8661,
+      "transverse_warp": 0.1111,
+      "ambient_weight": 0.0897,
+      "dispersion": 0.4946,
+      "contours": 0.0,
+      "contour_levels": 24,
+      "contour_width": 1.4,
+      "contour_mode": "light",
+      "glass": false,
+      "vignette": 0.08,
+      "frequency": 0.7253,
+      "phase_offset": 0.0,
+      "trap_weight": 0.404,
+      "channel_offset": 0.0,
+      "fluid_mode": "random",
+      "harmonize": "none",
+      "fractal_type": "fluid",
+      "preset": "afterglow",
+      "preset_version": "1.0.0",
+      "contrast": {
+        "ratios": [
+          4.71,
+          4.44
+        ],
+        "threshold": 4.5,
+        "passes": false
+      }
+    }
+  },
+  "pipeline.png": {
+    "seed": 7,
+    "call": "worked-example poster",
+    "preset": "afterglow",
+    "inputs": [
+      "demo/run_palette.png",
+      "demo/run_base.png",
+      "demo/run_final.png"
+    ]
+  }
+}

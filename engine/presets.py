@@ -41,7 +41,7 @@ class PresetEngine:
         path = os.path.join(self.preset_dir, f"{preset_id}.json")
         if not os.path.exists(path):
             raise FileNotFoundError(f"Preset file not found: {path}")
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def get_preset_version(self, preset_data: Dict[str, Any]) -> str:

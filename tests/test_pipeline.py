@@ -86,13 +86,12 @@ class TestWallpaperPipeline(unittest.TestCase):
             height=80,
             seed=42,
             noise=0.1,
-            dots=0.5,
             capture_base_image=True,
         )
         res = self.pipeline.render(cfg)
         self.assertIsNotNone(res.base_image)
         self.assertEqual(res.base_image.size, (100, 80))
-        # Ensure filtered and base image differ due to applied noise and dots
+        # Ensure filtered and base image differ due to applied grain
         self.assertFalse(np.array_equal(np.array(res.image), np.array(res.base_image)))
 
     def test_chromatic_aberration_configured_in_pipeline(self):
@@ -224,17 +223,21 @@ class TestWallpaperPipeline(unittest.TestCase):
         self.assertEqual(res.contour_levels, 16)
         self.assertEqual(res.image.size, (120, 80))
 
-    def test_tectonic_preset_loads_and_renders(self):
-        cfg = RenderConfiguration(
-            preset="tectonic",
-            width=120,
-            height=80,
-            seed=42,
-        )
-        res = self.pipeline.render(cfg)
-        self.assertEqual(res.engine, "topographic")
-        self.assertEqual(res.contours, 0.85)
-        self.assertEqual(res.image.size, (120, 80))
+    def test_retired_preset_is_not_selectable(self):
+        self.assertNotIn("tectonic", [p["id"] for p in self.pipeline.list_presets()])
+        with self.assertRaises(PresetNotFoundError):
+            self.pipeline.render(RenderConfiguration(
+                preset="tectonic", width=120, height=80, seed=42,
+            ))
+
+    def test_dot_matrix_is_absent_from_render_configuration_and_metadata(self):
+        from dataclasses import fields
+        retired = {"dots", "dots_spacing", "dots_mode"}
+        self.assertTrue(retired.isdisjoint(f.name for f in fields(RenderConfiguration)))
+        result = self.pipeline.render(RenderConfiguration(
+            preset="nothing", width=80, height=60, seed=42,
+        ))
+        self.assertTrue(retired.isdisjoint(result.metadata.parameters))
 
     def test_fractal_engine_in_pipeline(self):
         cfg = RenderConfiguration(
