@@ -614,6 +614,83 @@ def blob_layers(
     return WeightField(composite_over(alphas, colors, base, n), background=base)
 
 
+def _stroke_path(
+    start: Tuple[float, float], angle: float, length: float, bend: float, wobble: float, points: int = 24
+) -> np.ndarray:
+    """A smooth curve of length (about) from start along angle, as (points, 2).
+
+    A cubic Bezier whose two inner control points are pushed sideways, bend and
+    wobble in lengths, in opposite directions for an S shape."""
+    direction = np.array([np.cos(angle), np.sin(angle)])
+    side = np.array([-direction[1], direction[0]])
+    p0 = np.asarray(start, dtype=np.float64) - direction * length / 2.0
+    p3 = p0 + direction * length
+    p1 = p0 + direction * length / 3.0 + side * bend * length
+    p2 = p0 + direction * 2.0 * length / 3.0 + side * wobble * length
+    t = np.linspace(0.0, 1.0, points)[:, None]
+    return (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t**2 * p2 + t**3 * p3
+
+
+def _capsule_distance(
+    u: np.ndarray, v: np.ndarray, path: np.ndarray, radii: np.ndarray
+) -> np.ndarray:
+    """Distance to the polyline in units of the local radius (radii per path
+    point, interpolated along it): 1 on the outline of a tapering capsule chain."""
+    best = np.full(u.shape, np.inf, dtype=np.float32)
+    for (ax, ay), (bx, by), ra, rb in zip(path[:-1], path[1:], radii[:-1], radii[1:]):
+        abx, aby = bx - ax, by - ay
+        along = np.clip(((u - ax) * abx + (v - ay) * aby) / max(abx * abx + aby * aby, 1e-12), 0.0, 1.0)
+        dist = np.hypot(u - (ax + along * abx), v - (ay + along * aby))
+        best = np.minimum(best, dist / (ra + along * (rb - ra)))
+    return best
+
+
+def strokes(
+    coords: Coords,
+    palette: Palette,
+    *,
+    strokes: int = 5,
+    width: float = 0.9,
+    blur: float = 0.5,
+    rng: Any,
+) -> WeightField:
+    """A few thick, heavily blurred strokes stacked over the darkest color, like
+    smeared paint: a liquid-gradient base.
+
+    Each stroke is a smooth curve running across the image, drawn as a capsule
+    chain of radius width / 2 (in half short sides) that thins toward its ends,
+    with a Gaussian edge of sigma blur (in radii). Strokes share a flow
+    direction, within about 40 degrees, each with its own color from the palette
+    (every color but the darkest appears when there are enough strokes), and
+    each covers what is under it, as with blob_layers.
+    """
+    n = palette.size
+    count = max(1, int(strokes))
+    lightness = np.asarray(palette.oklab)[:, 0]
+    base = int(np.argmin(lightness))
+    others = [i for i in range(n) if i != base] or [base]
+
+    # A fixed number of draws per stroke, independent of the palette size.
+    flow = rng.uniform(0.0, np.pi)
+    keys = [rng.uniform(0.0, 1.0) for _ in range(count)]
+    layout = [
+        (rng.uniform(-0.9, 0.9), rng.uniform(-0.9, 0.9), rng.uniform(-0.6, 0.6), rng.uniform(3.0, 4.2),
+         rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), rng.uniform(0.75, 1.25), rng.uniform(0.75, 1.0))
+        for _ in range(count)
+    ]
+    slots = [others[i % len(others)] for i in range(count)]
+    colors = [slot for _, slot in sorted(zip(keys, slots))]
+
+    u, v, umax, vmax = _frame_extent(coords)
+    taper = 0.55 + 0.45 * np.sin(np.linspace(0.0, 1.0, 24) * np.pi)
+    alphas = []
+    for (cu, cv, turn, length, bend, wobble, thickness, opacity) in layout:
+        path = _stroke_path((cu * umax, cv * vmax), flow + turn, length, bend, wobble)
+        radii = max(float(width), 1e-3) / 2.0 * thickness * taper
+        alphas.append(opacity * _blurred_ellipse(_capsule_distance(u, v, path, radii), blur))
+    return WeightField(composite_over(alphas, colors, base, n), background=base)
+
+
 BLEND_MODES = ("add", "multiply", "screen", "difference", "overlay", "min", "max")
 
 

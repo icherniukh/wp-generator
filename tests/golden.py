@@ -128,6 +128,11 @@ def golden_cases() -> List[GoldenCase]:
                 ),
             )
         )
+    # Catalogue stages composed onto an engine's plan.
+    cases.append(_engine_case("catalog/warp/liquify", "simplex", warps=["liquify"]))
+    cases.append(_engine_case("catalog/warp/liquify/blobs", "blobs", warps=["liquify"]))
+    cases.append(_engine_case("catalog/field/strokes", "simplex", field_stage="strokes"))
+    cases.append(_engine_case("catalog/field/strokes/liquify", "simplex", field_stage="strokes", warps=["liquify"]))
     # Presets keep their own sampled parameters and finish, so filters are covered too.
     for preset_path in sorted((Path(__file__).parent.parent / "presets").glob("*.json")):
         if preset_path.name == "parameter_ranges.json":

@@ -267,6 +267,11 @@ def blob_count(p: StageParams) -> Dict:
     return {"blobs": 3 + max(1, int(p["complexity"])) // 3, "blur": 0.5}
 
 
+def stroke_count(p: StageParams) -> Dict:
+    """3 strokes at complexity 1, 4 at 3, 6 at 9."""
+    return {"strokes": 3 + max(1, int(p["complexity"])) // 3, "width": 0.9, "blur": 0.5}
+
+
 BLOBS = Plan((
     PALETTE,
     Stage("grid", "frame", sample_grid, (), "coords", _grid((0.0, 1.0))),
