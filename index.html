@@ -89,12 +89,12 @@
     <nav aria-label="Sections"><a href="#engines">Fields</a><a href="#support">Primitives</a><a href="#palettes">Palettes</a><a href="#finish">Before / after</a><a href="#composition">Pipeline</a><a href="#ideas">Next effects</a><a href="#run">Reproduce</a></nav>
     <div class="swatches" aria-label="Comparison palette"><span style="background:#190E32">#190E32</span><span style="background:#A54399">#A54399</span><span style="background:#FF7768;color:#190E32">#FF7768</span><span style="background:#FFD49B;color:#190E32">#FFD49B</span></div>
     <p class="sub">An <b>engine</b> is field math. A <b>preset</b> supplies palette distributions and optional overrides. Today, resolution is explicit config → preset override → built-in default; the fallback engine is <code>simplex</code>, not a random engine. The draft <code>engines/*.json</code> layer is not wired into rendering yet.</p>
-    <div class="hero-img"><img src="docs/assets/engine_primitives.png" alt="All twelve engines, same palette and seed"></div>
+    <div class="hero-img"><img src="docs/assets/engine_primitives.png" alt="Twelve of the fifteen registered engine names, same palette and seed"></div>
   </header>
 
   <section id="engines">
     <h2>01 · Field engines</h2>
-    <p class="sub">Twelve registry keys, eleven classes, and some shared behavior. The hero grid uses one fixed scene (Julia for escape-fractal); the index below shows each card’s first setting. Every pair resets the seed and changes one active control. IDW compares color count instead. Bracketed ranges below are calibration selections, not universal CLI bounds; the fractal camera also has its own sampling rules. Aliases and shared wrappers are identified rather than counted as different algorithms.</p>
+    <p class="sub">Fifteen registry keys, fourteen classes, and some shared behavior. The hero grid shows twelve of the keys (not <code>patch-mesh</code>, <code>blobs</code>, <code>shapes</code>) in one fixed scene (Julia for escape-fractal); the index below shows each card’s first setting. Every pair resets the seed and changes one active control. IDW compares color count instead. Bracketed ranges below are calibration selections, not universal CLI bounds; the fractal camera also has its own sampling rules. Aliases and shared wrappers are identified rather than counted as different algorithms.</p>
 
     <h3 class="fam">INDEX — FIRST SETTING FROM EACH COMPARISON</h3>
     <div class="grid4">
@@ -266,7 +266,7 @@
 
   <section id="finish">
     <h2>05 · Finish passes, before / after</h2>
-    <p class="sub">Six implemented primitives, each applied alone to exactly the same unfiltered image. Five are wired in order: contours → glass → aberration → grain → vignette. <code>--preview-fx</code> compares the base with the entire enabled stack, not a single isolated effect. Parameters below are explicit demonstration settings, not claims about sampled defaults.</p>
+    <p class="sub">Six filter primitives, each applied alone to exactly the same unfiltered image. Five are wired. The finish runs in this order: frosted contours → glass → shading → bloom → aberration → sharp contours → halftone → grain → vignette. Shading (<code>--shading</code>), bloom (<code>--bloom</code>) and halftone (<code>--halftone dots|cmyk|lines|dither|pixel</code>) are finish stages with no pair here. <code>--preview-fx</code> compares the base with the entire enabled stack, not a single isolated effect. Parameters below are explicit demonstration settings, not claims about sampled defaults.</p>
 
     <div class="comparison" data-effect="contours"><h3>Contour isobars</h3><p class="plain"><code>apply_contour_lines(levels=24, line_width=1.4, intensity=0.85, mode="light")</code>. Lines follow smoothed image luminance, not the generator’s original elevation field. Default intensity 0 (off).</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_contours.png" alt="contour isobars only"><figcaption><b>After</b> — contour isobars only</figcaption></figure></div></div>
     <div class="comparison" data-effect="glass"><h3>Frosted glass</h3><p class="plain"><code>apply_frosted_glass(blur_radius=60, noise_amount=0.15)</code>. Blur plus seeded screen-blended frost. Pipeline glass is a boolean (default off), with these two values hardcoded—not independently sampled knobs.</p><div class="pair "><figure><img loading="lazy" src="docs/assets/demo/fx_base.png" alt="unfiltered topographic field"><figcaption><b>Before</b> — unfiltered topographic field</figcaption></figure><figure><img loading="lazy" src="docs/assets/demo/fx_glass.png" alt="frosted glass only"><figcaption><b>After</b> — frosted glass only</figcaption></figure></div></div>
@@ -286,8 +286,8 @@
     <div class="wide"><img loading="lazy" src="docs/assets/pipeline.png" alt="Pipeline poster"></div>
     <p style="margin-top:22px"></p>
     <div class="cols">
-      <div class="card"><h3>Preset = sampling program</h3><p>A named JSON recipe: palette distributions, optional engine pin, optional finish values. Ten exist; four pin an engine, six fall back to <code>simplex</code>.</p></div>
-      <div class="card"><h3>Engine = field math + knobs</h3><p>A registered generator class. Twelve keys, four families. Unset knobs use a mix of sampled ranges and fixed defaults. The <code>/calibrate</code> lab tunes ranges, but not every range is consumed by rendering.</p></div>
+      <div class="card"><h3>Preset = sampling program</h3><p>A named JSON recipe: palette distributions, optional engine pin, optional finish values. Sixteen exist; ten pin an engine, six fall back to <code>simplex</code>.</p></div>
+      <div class="card"><h3>Engine = field math + knobs</h3><p>A registered generator class. Fifteen keys (fourteen engines and the <code>radial-basis</code> alias), five families. Unset knobs use a mix of sampled ranges and fixed defaults. The <code>/calibrate</code> lab tunes ranges, but not every range is consumed by rendering.</p></div>
     </div>
     <p class="sub" style="margin-top:18px">A call is one path: pick engine (flag → preset pin → simplex) → resolve every knob (explicit flag → preset override → built-in default or sampling) → render field through palette → apply finish in fixed order → PNG with embedded metadata.</p>
   </section>
