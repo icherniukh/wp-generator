@@ -19,9 +19,12 @@ consumed by the pipeline.
    `flow-field` → `flow_warp`, `spline-wave` → `spline_warp`, else
    `warp_strength`).
 3. Builds the palette (`_resolve_palette` → `_harmonize_palette`).
-4. Renders the field via `render_gradient` from the registry.
-5. Applies finish filters, embeds `ImageMetadata`
-   (`build_image_metadata`), writes PNG.
+4. Renders the field via `render_gradient` from the registry. Each engine runs
+   a stage plan (`engine/stages/plans.py`); a `Composition` (`--warp`,
+   `--field`, `--blend`, `--mapping`, `--field-grain`, `--stage-param`) changes
+   that plan.
+5. Applies the finish stages (`finish_stages`, `engine/stages/finish.py`),
+   embeds `ImageMetadata` (`build_image_metadata`), writes PNG.
 
 `random.seed` / `np.random.seed` on the active seed make every run reproducible.
 
@@ -29,11 +32,11 @@ consumed by the pipeline.
 
 All rendered with one palette and one seed, so the grid shows math, not color luck:
 
-![All 12 engines, same palette, same seed](assets/engine_primitives.png)
+![Twelve of the 15 registered names (not patch-mesh, blobs, shapes), same palette, same seed](assets/engine_primitives.png)
 
-### 1. Base Canvas Generators (`engine/gradients/`, 11 classes, 12 registry keys)
+### 1. Base Canvas Generators (`engine/gradients/`, 14 classes, 15 registry keys)
 
-Grouped by mathematical family, not presented as twelve independent algorithms.
+Grouped by mathematical family: 14 engines plus the `radial-basis` alias, not 15 independent algorithms.
 `radial-basis` is an exact alias of `rbf`. The three fractal classes share one
 core; the wrappers restrict its mode to fluid or escape-time dynamics. Sweep
 and emitter variants remain distinct where their mathematics differs:
@@ -42,6 +45,7 @@ and emitter variants remain distinct where their mathematics differs:
 | :--- | :--- | :--- |
 | Directional sweeps + warping | `DomainWarpGradient` (field.py), `SimplexMeshGradient` (mesh.py), `SplineWaveGradient` (spline.py), `FluidMeshGradient` (mesh.py) | `domain-warp`, `simplex`, `spline-wave`, `fluid-wave` |
 | 2D spatial point emitters | `RadialBasisGradient` (field.py), `FlowFieldGradient` (field.py), `MeshGradient` (mesh.py, legacy IDW) | `rbf`, `radial-basis`, `flow-field`, `idw` |
+| Control points and layers | `PatchMeshGradient`, `BlobLayersGradient`, `ShapesGradient` (mesh.py) | `patch-mesh`, `blobs`, `shapes` |
 | Harmonic elevation | `TopographicGradient` (field.py) | `topographic` |
 | Fractal fields | `FractalFieldGradient` + `FluidFractalGradient` + `EscapeTimeFractalGradient` (fractal.py) | `fractal`, `fluid-fractal`, `escape-fractal` |
 
@@ -79,22 +83,40 @@ validation helpers (`colors_to_oklab`, `oklab_image_to_pil`,
   (see `clamp_oklch`). Contrast reporting via `relative_luminance` /
   `contrast_ratio`.
 
-### 5. Finish Effects (`engine/filters.py`, `WallpaperFilters`)
+### 5. Finish Effects (`engine/stages/finish.py`)
 
-Five wired into the pipeline in order: `apply_contour_lines`,
-`apply_frosted_glass`, `apply_chromatic_aberration`, `apply_film_grain`,
-`apply_vignette`. Grouped by purpose: texture (grain/dither), optical finishes
-(glass/aberration/vignette), and optional graphic contours. `apply_dither` exists but is currently
-unwired. `--preview-fx` renders the raw mesh beside the finished image to
-isolate the finish layer.
+`finish_stages` returns the enabled effects in a fixed order: frosted contours,
+glass, shading, bloom, chromatic aberration, sharp contours, halftone, film
+grain, vignette. Contours go first (frosted) or after the aberration (sharp,
+`--contour-placement`); `--contour-source field` draws them from the engine's
+field. Each stage runs only when its own option is set (`--contours`, `--glass`,
+`--shading`, `--bloom`, `--aberration`, `--halftone`, `--noise`, `--vignette`).
+
+- `WallpaperFilters` (`engine/filters.py`) implements contours, frosted glass,
+  chromatic aberration, film grain and vignette. `apply_dither` exists there but
+  is unwired.
+- `shade` (height-field lighting) and `bloom` (glow in linear light, optional
+  light rays) live in `finish.py`.
+- `halftone` (`engine/stages/halftone.py`) prints the image as `dots`, `cmyk`,
+  `lines`, an 8x8 Bayer `dither` or a `pixel` mosaic. It runs before the grain so
+  the grain is not printed into dots.
+
+`--stage-param STAGE.KEY=VALUE` overrides a finish stage's arguments (keys
+`contours`, `glass`, `chromatic-aberration`, `shading`, `bloom`, `halftone`,
+`film-grain`, `vignette`; e.g. `bloom.rays=0.6`, `halftone.cell=14`). It never
+enables a stage. Pixel-size arguments are given for a 1964 px short side and
+scale with the image. Field grain (`--field-grain`) is not a finish stage: it
+adds noise to the field before color mapping. `--preview-fx` renders the raw mesh
+beside the finished image to isolate the finish layer.
 
 ## Configuration Layers (Current)
 
 Four overlapping layers own "what runs and with what bounds" — this overlap
 is the known problem the refactor addresses:
 
-1. `presets/*.json` — OKLCH/HLS distributions + engine overrides (10 presets;
-   4 pin an engine: fluid-wave ×2, fractal, idw).
+1. `presets/*.json` — OKLCH/HLS distributions + engine overrides (16 presets;
+   10 pin an engine: blobs ×2, fluid-wave ×2, simplex ×2, fractal, idw,
+   patch-mesh, shapes).
 2. `engine/presets.py` — distribution sampler + override extractor.
 3. `engine/parameter_ranges.py` — `ParameterRangeStore` (`load`, `save`,
    `reset_defaults`, `update_ranges`, `get`) backing the `/calibrate` sliders.
