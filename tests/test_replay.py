@@ -6,7 +6,7 @@ import pytest
 from engine.metadata import extract_image_metadata
 from engine.pipeline import RenderConfiguration, WallpaperPipeline
 
-PRESETS = ["afterglow", "aura", "balanced", "cupertino", "cyberpunk", "fractal", "holo", "ink", "mesh", "nocturne", "nothing", "pastel", "sleek"]
+PRESETS = ["afterglow", "aura", "balanced", "cupertino", "cyberpunk", "fractal", "gel", "holo", "ink", "liquid", "mesh", "nocturne", "nothing", "pastel", "poster", "sleek"]
 
 
 @pytest.mark.parametrize("preset", PRESETS)

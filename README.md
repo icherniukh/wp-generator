@@ -106,6 +106,13 @@ One render per preset, grouped by style. Table columns keep the previews small; 
 | ![Aura preset](samples/aura.png) | ![Mesh preset](samples/mesh.png) | ![Holo preset](samples/holo.png) |
 | Blurred color blobs over a dark base, grain | Vivid color grid blended bicubically | Pastel holographic foil in mirrored bands |
 
+### Poster, Liquid and Gel
+
+| Poster | Liquid | Gel |
+| :---: | :---: | :---: |
+| ![Poster preset](samples/poster.png) | ![Liquid preset](samples/liquid.png) | ![Gel preset](samples/gel.png) |
+| Hard-edged Bauhaus shapes in a bold print palette, light grain | Smeared, melting paint with grain in the colors | Glossy 3D glass with highlights tinted by the colors beneath |
+
 ### Experimental
 
 | Fractal |
@@ -119,7 +126,7 @@ Every wallpaper is three operations:
 
 1. **Palette** — 2–5 harmonious OKLCH colors: a dark grounding anchor plus luminous accents, sampled from the preset's distributions (or your `--colors`, or the screen sampler).
 2. **Field** — a procedural engine maps 2D coordinates through a mathematical field (domain warping, radial emitters, topography, fractals) and paints it through the palette.
-3. **Finish** — optional surface effects: film grain, vignette, optional contour isobars, frosted glass, chromatic aberration.
+3. **Finish** — optional surface effects: film grain, vignette, optional contour isobars, frosted glass, height-field shading, chromatic aberration.
 
 Explore the [visual field guide](index.html) for controlled before/after comparisons and a real palette → field → finish walkthrough. The [architecture reference](docs/ARCHITECTURE.md) documents implementation and configuration.
 
@@ -128,8 +135,8 @@ flowchart LR
     CLI["CLI (Click)\n--preset --engine --colors …"] --> CFG["RenderConfiguration\nengine · seed · colors · params"]
     WEB["Web API (FastAPI)\n+ /calibrate lab"] --> CFG
     CFG --> PAL["Palette\nOKLCH anchor + accents"]
-    PAL --> ENG["Field engine\n14 registered variants"]
-    ENG --> FX["Finish (filters)\ngrain · vignette · glass · aberration …"]
+    PAL --> ENG["Field engine\n15 registered names"]
+    ENG --> FX["Finish (filters)\ngrain · vignette · glass · shading · aberration …"]
     FX --> OUT["PNG + embedded render metadata"]
     OUT --> CAL["/calibrate\nsliders + previews"]
     CAL -.->|"tune ranges"| CFG
@@ -146,7 +153,22 @@ wp-generator --sample                              # grab a color from the scree
 wp-generator --metadata wallpaper.png             # inspect an existing render
 ```
 
-Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--preset`, `--colors` (repeat per color), `--sample`, `--metadata`/`--inspect`, `--json`. Everything else is an advanced engine/filter override, hidden from `--help` — run `--help-all` for the full list (`--seed`, `--res`, `--engine`, `--complexity`, `--fluid-mode`, `--harmonize`, `--noise`, `--contours`, `--glass`, and the fractal family).
+Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--preset`, `--colors` (repeat per color), `--sample`, `--metadata`/`--inspect`, `--json`. Everything else is an advanced engine/filter override, hidden from `--help` — run `--help-all` for the full list (`--seed`, `--res`, `--engine`, `--complexity`, `--fluid-mode`, `--harmonize`, `--noise`, `--contours`, `--glass`, `--shading`, `--field-grain`, the stage options below, and the fractal family).
+
+### Stage options
+
+Each engine runs a plan of stages: warps, a field, a color mapping. These hidden flags change the plan; `--help-all` lists every choice.
+
+| Flag | Effect |
+| :--- | :--- |
+| `--warp NAME` | Add a warp after the engine's own (repeat for several; `none` drops the engine's own). Includes `noise`, `twist`, `lens` and `liquify`, a curl-noise smear that stirs the pattern like liquid. |
+| `--field NAME` | Replace the engine's field, e.g. `conic`, `voronoi`, `shapes` (hard-edged poster shapes) or `strokes` (thick blurred strokes). |
+| `--blend FIELD[:MODE]` | Combine a second field with the engine's, e.g. `radial:screen`. |
+| `--mapping NAME` | Replace the color mapping: `ramp`, `bands`, `cycles` or `srgb-blend`. |
+| `--field-grain 0-1` | Noise on the field before color mapping, so the grain takes the palette's own colors instead of film grain's grey. |
+| `--stage-param STAGE.KEY=VALUE` | Set one argument of a stage, e.g. `strokes.width=1.1` or `shading.tint=0.8`. Reaches finish stages too (`shading`, `glass`, `film-grain`, `vignette`, `contours`, `chromatic-aberration`); it never switches a stage on. |
+
+Presets set the same keys in their `overrides` (`engine`, `warps`, `field_stage`, `blend`, `mapping`, `field_grain`, `stage_params`, `shading`, `noise`, `grain_*`); see `presets/poster.json`, `liquid.json` and `gel.json`.
 
 ### Device Presets (`--device`)
 
@@ -178,35 +200,43 @@ Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--pres
 | `sleek` | Luminous neon accents on dark anchor with frosted glass texture |
 | `nocturne` | Deep richly-tinted grounding anchors paired with luminous twilight and ember accents |
 | `fractal` | Volumetric dynamical Julia sets and fluid domain-warped folds |
+| `aura` | Blurred color blobs over a dark base, with grain |
+| `mesh` | Vivid color grid blended bicubically |
+| `holo` | Pastel holographic foil in mirrored bands |
+| `poster` | Hard-edged Bauhaus shapes in a bold print palette |
+| `liquid` | Smeared, melting paint pulled through a liquify warp |
+| `gel` | Glossy 3D glass with tinted highlights |
 
 Presets live in `presets/*.json` as OKLCH/HLS sampling distributions plus optional engine overrides and harmonization bounds. Any engine or filter flag on the CLI overrides the sampled value for that run.
 
 ## Engines
 
-Fourteen registered field variants in five mathematical families (`engine/gradients/`):
+Fifteen registered engine names in five mathematical families (`engine/gradients/`):
 
 | Family | Engines |
 | :--- | :--- |
 | Directional sweeps + warping | `domain-warp`, `simplex`, `spline-wave`, `fluid-wave` |
 | 2D point emitters | `rbf`, `radial-basis`, `flow-field`, `idw` |
-| Control points and layers | `patch-mesh`, `blobs` |
+| Control points and layers | `patch-mesh`, `blobs`, `shapes` |
 | Harmonic elevation | `topographic` |
 | Fractal fields | `fractal`, `fluid-fractal`, `escape-fractal` |
 
-Select with `--engine`. `radial-basis` is an alias of `rbf`. The fractal names share a core: `fluid-fractal` fixes fluid mode, while `escape-fractal` selects Julia/Mandelbrot dynamics. The other sweep and point-emitter variants use different mathematics; grouping them does not make them interchangeable. Presets without an engine pin fall back to `simplex`.
+Select with `--engine`. `radial-basis` is an alias of `rbf`. The fractal names share a core: `fluid-fractal` fixes fluid mode, while `escape-fractal` selects Julia/Mandelbrot dynamics. The other sweep and point-emitter variants use different mathematics; grouping them does not make them interchangeable. `shapes` stacks hard-edged circles, bars, arcs and rectangles on a full-resolution grid; `blobs`, `patch-mesh` and `shapes` paint from palette weights rather than a scalar field. Presets without an engine pin fall back to `simplex`.
 
 ## Filters
 
 | Filter | Effect |
 | :--- | :--- |
-| Film grain | Two-scale grain with midtone weighting (`--noise`) |
+| Film grain | Two-scale grain with midtone weighting (`--noise`); `--grain-size` (1-8), `--grain-color mono\|color` and `--grain-blend add\|overlay\|soft-light\|multiply` shape it |
+| Field grain | Noise on the field before color mapping, in the palette's own colors (`--field-grain`) |
 | Vignette | Radial edge darkening (`--vignette`) |
 | Contour isobars | Vector topographic lines, light/dark/accent (`--contours`, `--contour-levels`, `--contour-width`, `--contour-mode`) |
 | Frosted glass | Diffusion blur + frost noise (`--glass`) |
+| Height-field shading | Lights the image as a relief for a glossy 3D glass or embossed look (`--shading`; `shading.tint` mixes the highlight toward the local color) |
 | Chromatic aberration | Radial lens dispersion (`--aberration`) |
 | Dither | Bounded monochromatic dither (defined, currently unwired) |
 
-Use `--preview-fx` to compare the unfiltered base against the entire enabled finish stack (base left, finished render right). It does not isolate individual effects; the visual guide demonstrates those separately. Finish effects fall into three groups: texture (grain/dither), optical treatment (glass/aberration/vignette), and optional graphic contours.
+Use `--preview-fx` to compare the unfiltered base against the entire enabled finish stack (base left, finished render right). It does not isolate individual effects; the visual guide demonstrates those separately. Finish effects fall into three groups: texture (grain/dither), optical treatment (glass/shading/aberration/vignette), and optional graphic contours.
 
 ## Web API
 
