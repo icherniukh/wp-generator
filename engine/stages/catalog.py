@@ -355,7 +355,8 @@ def compose(
             # The engine's own mapping cannot color this field; fall back to the plain ramp/blend.
             result[mapping_indexes[0]] = MAPPINGS["ramp"].stage
 
-    if field_stage.fn in _FULL_RESOLUTION:
+    # Only a field chosen here needs it; a plan whose own field is full resolution already samples so.
+    if field and field_stage.fn in _FULL_RESOLUTION:
         result = _at_full_resolution(result, field_stage.name)
 
     available = {feature for s in result[:field_index] for feature in _provides(s)}
