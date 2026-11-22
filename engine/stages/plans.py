@@ -24,6 +24,7 @@ from engine.stages.fields import (
     orbiting_emitters,
     patch_mesh,
     radial_emitters,
+    shapes,
     smooth_ramp,
 )
 from engine.stages.frame import (
@@ -272,10 +273,28 @@ def stroke_count(p: StageParams) -> Dict:
     return {"strokes": 3 + max(1, int(p["complexity"])) // 3, "width": 0.9, "blur": 0.5}
 
 
+def shape_layers(p: StageParams) -> Dict:
+    """5 shapes at complexity 1, 6 at 4, 9 at 10, with hard edges (hardness 0.97)."""
+    return {"count": min(9, 4 + max(1, int(p["complexity"])) // 2), "hardness": 0.97}
+
+
 BLOBS = Plan((
     PALETTE,
     Stage("grid", "frame", sample_grid, (), "coords", _grid((0.0, 1.0))),
     Stage("blob layers", "field", blob_layers, ("coords", "palette"), "field", blob_count),
+    MAP,
+    EXPORT,
+), solid_if_single_color=True)
+
+
+# shapes --------------------------------------------------------------------
+
+# Hard edges need one grid sample per output pixel: a coarser grid enlarged by
+# the export would blur the edge and ring around it, so this grid is full size.
+SHAPES = Plan((
+    PALETTE,
+    Stage("grid", "frame", sample_grid, (), "coords", lambda p: {**_grid((0.0, 1.0))(p), "scale": 1.0}),
+    Stage("shapes", "field", shapes, ("coords", "palette"), "field", shape_layers),
     MAP,
     EXPORT,
 ), solid_if_single_color=True)
@@ -342,4 +361,5 @@ STAGED_PLANS: Dict[str, Plan] = {
     "idw": IDW,
     "patch-mesh": PATCH_MESH,
     "blobs": BLOBS,
+    "shapes": SHAPES,
 }
