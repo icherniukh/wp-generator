@@ -136,6 +136,11 @@ def golden_cases() -> List[GoldenCase]:
     cases.append(_engine_case("catalog/warp/liquify/blobs", "blobs", warps=["liquify"]))
     cases.append(_engine_case("catalog/field/strokes", "simplex", field_stage="strokes"))
     cases.append(_engine_case("catalog/field/strokes/liquify", "simplex", field_stage="strokes", warps=["liquify"]))
+    # Noise on the field before mapping: a scalar field, weight fields, a coarse lattice
+    # and a blended field.
+    for engine in ("simplex", "blobs", "fluid-wave", "fractal"):
+        cases.append(_engine_case(f"field-grain/{engine}", engine, field_grain=0.15))
+    cases.append(_engine_case("field-grain/blend", "simplex", field_stage="conic", blend="radial:difference", field_grain=0.1))
     # Shapes put hard edges on a full-resolution grid, however the plan samples.
     cases.append(_engine_case("catalog/field/shapes", "simplex", field_stage="shapes"))
     cases.append(_engine_case("catalog/warp/liquify/shapes", "shapes", warps=["liquify"]))

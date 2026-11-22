@@ -12,6 +12,9 @@ field or the mapping, add warps, and override any stage's arguments:
     --blend conic:difference     compute a second field and combine it with the
                                  first (modes: add, multiply, screen, difference,
                                  overlay, min, max; default screen)
+    --field-grain 0.15           noise on the field before color mapping, so the
+                                 grain takes the palette's colors (see
+                                 fields.field_grain)
     --stage-param twist.amount=3 set an argument of a stage (catalogue name or
                                  plan stage name with spaces as dashes); finish
                                  stages too, e.g. shading.light_angle=45
@@ -266,6 +269,38 @@ def _blend_stages(blend: str, field_stage: Stage, kind: str) -> Tuple[Stage, Sta
     return second, combine
 
 
+def _palette_repeats(arguments: Mapping[str, Any]) -> float:
+    """How many times a mapping runs the palette over the field (bands cycles,
+    cosine-cycles frequency), at least 1: noise on the field moves that many
+    times farther along the palette, so field grain divides its amount by it."""
+    return max(1.0, float(arguments.get("cycles", arguments.get("frequency", 1.0))))
+
+
+def _with_field_grain(stages: List[Stage], amount: float) -> Tuple[List[Stage], Dict[str, Stage]]:
+    """Inserts the field grain stage before the mapping, after the field and any
+    blend, and points the mapping at its output. The grain goes to "grained_field",
+    not "field", so contours and shading keep reading the clean field.
+
+    The stage's amount is divided by the mapping's palette repeats (see
+    _palette_repeats), so a strength of 0.15 is 15% of one run of the palette
+    whatever the mapping. The mapping is only known once stage-param overrides
+    are applied, so the returned holder is filled in by compose() at the end."""
+    index = next(i for i, s in enumerate(stages) if s.phase == "mapping")
+    # Plans that enlarge the mapped colors with bicubic_upscale (fluid-wave) use a spline
+    # whose alignment differs from PIL's; the grain must enlarge the field the same way.
+    resize = "spline" if any(s.fn is mapping.bicubic_upscale for s in stages) else "bicubic"
+    holder: Dict[str, Stage] = {}
+
+    def bind(p: StageParams) -> Dict[str, Any]:
+        mapped = holder.get("mapping")
+        repeats = _palette_repeats(mapped.bind(p)) if mapped is not None else 1.0
+        return {"amount": amount / repeats, "resize": resize}
+
+    grain = Stage("field grain", "field", fields.field_grain, ("field", "coords"), "grained_field", bind)
+    mapped = replace(stages[index], inputs=tuple("grained_field" if n == "field" else n for n in stages[index].inputs))
+    return [*stages[:index], grain, mapped, *stages[index + 1:]], holder
+
+
 def compose(
     stages: Sequence[Stage],
     *,
@@ -274,6 +309,7 @@ def compose(
     mapping_name: Optional[str] = None,
     stage_params: Optional[Mapping[str, Mapping[str, Any]]] = None,
     blend: Optional[str] = None,
+    field_grain: float = 0.0,
 ) -> Tuple[Stage, ...]:
     """The plan's stages with the requested replacements, checked for fit."""
     result: List[Stage] = list(stages)
@@ -319,7 +355,8 @@ def compose(
             # The engine's own mapping cannot color this field; fall back to the plain ramp/blend.
             result[mapping_indexes[0]] = MAPPINGS["ramp"].stage
 
-    if field_stage.fn in _FULL_RESOLUTION:
+    # Only a field chosen here needs it; a plan whose own field is full resolution already samples so.
+    if field and field_stage.fn in _FULL_RESOLUTION:
         result = _at_full_resolution(result, field_stage.name)
 
     available = {feature for s in result[:field_index] for feature in _provides(s)}
@@ -329,6 +366,10 @@ def compose(
         blend_stages = _blend_stages(blend, field_stage, kind)
         _check_requires(blend_stages[0], available)
         result[field_index + 1:field_index + 1] = blend_stages
+
+    grain_holder: Optional[Dict[str, Stage]] = None
+    if field_grain and field_grain > 0.0:
+        result, grain_holder = _with_field_grain(result, float(field_grain))
 
     if any(s.fn is mapping.blend_srgb for s in result) and any(s.phase == "resample" for s in result):
         raise PlanCompositionError("srgb-blend cannot be enlarged afterwards; pick another mapping")
@@ -345,4 +386,6 @@ def compose(
         result = [
             _with_overrides(s, stage_params[slug(s.name)]) if slug(s.name) in stage_params else s for s in result
         ]
+    if grain_holder is not None:
+        grain_holder["mapping"] = next(s for s in result if s.phase == "mapping")
     return tuple(result)

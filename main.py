@@ -169,6 +169,7 @@ def _available_presets() -> list:
 @click.option("--warp", "warps", multiple=True, type=click.Choice(["none", *catalog.WARPS]), hidden=True, help="Add a warp after the engine's own (repeat for more; 'none' first drops the engine's warps).")
 @click.option("--field", "field_stage", type=click.Choice(list(catalog.FIELDS)), default=None, hidden=True, help="Replace the engine's field.")
 @click.option("--blend", default=None, hidden=True, metavar="FIELD[:MODE]", help="Combine a second field with the engine's, e.g. conic:difference (modes: add, multiply, screen, difference, overlay, min, max).")
+@click.option("--field-grain", type=float, default=None, hidden=True, help="Noise added to the field before color mapping, so the grain takes the palette's own colors (0.0-1.0; 0 is off).")
 @click.option("--mapping", type=click.Choice(list(catalog.MAPPINGS)), default=None, hidden=True, help="Replace the engine's color mapping.")
 @click.option("--stage-param", "stage_params", multiple=True, metavar="STAGE.KEY=VALUE", hidden=True, help="Set a stage argument, e.g. voronoi.mode=edges or twist.amount=3 (repeatable).")
 @click.option("--harmonize", type=click.Choice(["perceptual", "theory", "nothing", "none"]), default=None, hidden=True, help="Color harmonizer algorithm.")
@@ -248,6 +249,7 @@ def _validate_cli_arguments(params: dict) -> None:
         ("--noise", params.get("noise"), 0.0, 1.0),
         ("--vignette", params.get("vignette"), 0.0, 1.0),
         ("--shading", params.get("shading"), 0.0, 1.0),
+        ("--field-grain", params.get("field_grain"), 0.0, 1.0),
         ("--aberration", params.get("chromatic_aberration"), 0.0, 0.1),
         ("--ambient-weight", params.get("ambient_weight"), 0.0, 1.0),
         ("--phase-offset", params.get("phase_offset"), 0.0, 1.0),

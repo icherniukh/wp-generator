@@ -36,9 +36,13 @@ class Composition:
     stage_params: Dict[str, Dict[str, Any]] = dataclasses.field(default_factory=dict)
     # "FIELD[:MODE]": a second field combined with the first (catalog.parse_blend).
     blend: Optional[str] = None
+    # Noise added to the field before color mapping; 0 leaves the plan as it is.
+    field_grain: float = 0.0
 
     def __bool__(self) -> bool:
-        return bool(self.warps or self.field or self.mapping or self.stage_params or self.blend)
+        return bool(
+            self.warps or self.field or self.mapping or self.stage_params or self.blend or self.field_grain
+        )
 
 
 def render_staged(
@@ -64,6 +68,7 @@ def render_staged(
             mapping_name=composition.mapping,
             stage_params=composition.stage_params,
             blend=composition.blend,
+            field_grain=composition.field_grain,
         )
     stage_params = StageParams(params)
     if trace is not None:
