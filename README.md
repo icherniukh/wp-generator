@@ -265,6 +265,8 @@ uv run python main.py --preset cupertino      # run from the checkout
 ./install.sh                                  # macOS/Linux: global wp-generator wrapper that runs this checkout
 ```
 
+Compare option variants on shared seeds and palettes with `uv run python tools/compare.py --variant 'preset=aura' --variant 'preset=aura,noise=0,field_grain=0.15' --seeds 1,2,3 --out sheet.png` (`--crop`, `--diff`, `--help` for the rest).
+
 ## Testing
 
 ```bash
