@@ -185,6 +185,7 @@ def _available_presets() -> list:
 @click.option("--grain-blend", type=click.Choice(["add", "overlay", "soft-light", "multiply"]), default=None, hidden=True, help="How the grain is applied: add (default), overlay, soft-light or multiply.")
 @click.option("--vignette", type=float, default=None, hidden=True, help="Subtle radial edge darkening (0.0-1.0).")
 @click.option("--shading", type=float, default=None, hidden=True, help="Height-field lighting, a 3D glass or relief look (0.0-1.0).")
+@click.option("--halftone", type=click.Choice(["dots", "cmyk", "lines", "dither", "pixel"]), default=None, hidden=True, help="Print the finished image as a screen: dots, cmyk, lines, dither or pixel.")
 @click.option("--glass", is_flag=True, default=None, hidden=True, help="Apply frosted glass texture overlay.")
 @click.option("--aberration", "--chromatic-aberration", "chromatic_aberration", type=float, default=None, hidden=True, help="Chromatic aberration strength (0.0-0.1).")
 @click.option("--preview-fx", is_flag=True, default=None, hidden=True, help="Preview FX rendering layers.")

@@ -29,6 +29,7 @@ from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
 from engine.stages import Composition, ScalarField, Trace
 from engine.stages.finish import check_finish_stage_params, finish_stages, split_stage_params
+from engine.stages.halftone import MODES as HALFTONE_MODES
 from engine.stages.runner import StageParams, run_stages
 from engine.stages.palette import make_palette
 
@@ -89,6 +90,8 @@ class RenderConfiguration:
     noise: Optional[float] = None
     vignette: Optional[float] = None
     shading: Optional[float] = None
+    # Prints the finished image as a screen: dots, cmyk, lines, dither or pixel (None is off).
+    halftone: Optional[str] = None
     contours: Optional[float] = None
     contour_levels: Optional[int] = None
     contour_width: Optional[float] = None
@@ -166,6 +169,7 @@ class RenderResult:
     glass: bool = False
     vignette: float = 0.0
     shading: float = 0.0
+    halftone: Optional[str] = None
     channel_offset: Optional[float] = None
     fluid_mode: Optional[str] = None
     harmonize: Optional[str] = None
@@ -321,6 +325,7 @@ class WallpaperPipeline:
         grain_blend: str = "add",
         vignette: float,
         shading: float = 0.0,
+        halftone: Optional[str] = None,
         stage_params: Optional[Dict[str, Dict[str, Any]]] = None,
         trace: Optional[Trace] = None,
     ) -> Image.Image:
@@ -341,6 +346,7 @@ class WallpaperPipeline:
                 grain_blend=grain_blend,
                 vignette=vignette,
                 shading=shading,
+                halftone=halftone,
                 stage_params=stage_params,
                 width=image.width,
                 height=image.height,
@@ -392,6 +398,9 @@ class WallpaperPipeline:
         fluid_mode = resolve("fluid_mode", "random")
         vignette = resolve("vignette", 0.0)
         shading = resolve("shading", 0.0)
+        halftone = resolve("halftone", None)
+        if halftone is not None and halftone not in HALFTONE_MODES:
+            raise PipelineConfigurationError(f"halftone must be one of {', '.join(HALFTONE_MODES)}, not {halftone!r}.")
         engine_type = resolve("engine", "simplex")
 
         warp_key_map = {
@@ -539,6 +548,7 @@ class WallpaperPipeline:
             grain_blend=grain_blend,
             vignette=vignette,
             shading=shading,
+            halftone=halftone,
             stage_params=stage_params,
             trace=trace,
         )
@@ -570,6 +580,7 @@ class WallpaperPipeline:
             glass=glass_param,
             vignette=vignette,
             shading=shading,
+            halftone=halftone,
             frequency=frequency,
             phase_offset=phase_offset,
             trap_weight=trap_weight,

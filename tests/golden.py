@@ -105,6 +105,15 @@ def golden_cases() -> List[GoldenCase]:
     # Height-field shading from a scalar field and from a weight field's lightness.
     cases.append(_engine_case("shading/simplex", "simplex", width=120, height=80, shading=0.6))
     cases.append(_engine_case("shading/blobs", "blobs", width=120, height=80, shading=0.6))
+    # Halftone screens. The size is large enough that the cell (given for the reference
+    # image) is above its two pixel floor.
+    for mode in ("dots", "cmyk", "dither"):
+        cases.append(
+            _engine_case(
+                f"halftone/{mode}", "simplex", width=240, height=160, halftone=mode,
+                stage_params={"halftone": {"cell": 60.0}},
+            )
+        )
     # A single color is a solid fill for some engines; the pipeline never passes one.
     for engine in ("rbf", "topographic", "fractal"):
         cases.append(
