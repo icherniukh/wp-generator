@@ -102,6 +102,9 @@ def golden_cases() -> List[GoldenCase]:
             fractal_angle=0.3,
         )
     )
+    # Height-field shading from a scalar field and from a weight field's lightness.
+    cases.append(_engine_case("shading/simplex", "simplex", width=120, height=80, shading=0.6))
+    cases.append(_engine_case("shading/blobs", "blobs", width=120, height=80, shading=0.6))
     # A single color is a solid fill for some engines; the pipeline never passes one.
     for engine in ("rbf", "topographic", "fractal"):
         cases.append(

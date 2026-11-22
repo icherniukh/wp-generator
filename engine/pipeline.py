@@ -87,6 +87,7 @@ class RenderConfiguration:
     harmonize: Optional[str] = None
     noise: Optional[float] = None
     vignette: Optional[float] = None
+    shading: Optional[float] = None
     contours: Optional[float] = None
     contour_levels: Optional[int] = None
     contour_width: Optional[float] = None
@@ -153,6 +154,7 @@ class RenderResult:
     contour_placement: Optional[str] = None
     glass: bool = False
     vignette: float = 0.0
+    shading: float = 0.0
     channel_offset: Optional[float] = None
     fluid_mode: Optional[str] = None
     harmonize: Optional[str] = None
@@ -303,6 +305,7 @@ class WallpaperPipeline:
         chromatic_aberration: float,
         noise: float,
         vignette: float,
+        shading: float = 0.0,
         trace: Optional[Trace] = None,
     ) -> Image.Image:
         """Applies the enabled finish effects in their fixed order (engine.stages.finish)."""
@@ -318,6 +321,7 @@ class WallpaperPipeline:
                 chromatic_aberration=chromatic_aberration,
                 noise=noise,
                 vignette=vignette,
+                shading=shading,
                 width=image.width,
                 height=image.height,
             )
@@ -367,6 +371,7 @@ class WallpaperPipeline:
         chromatic_aberration = resolve("chromatic_aberration", 0.0)
         fluid_mode = resolve("fluid_mode", "random")
         vignette = resolve("vignette", 0.0)
+        shading = resolve("shading", 0.0)
         engine_type = resolve("engine", "simplex")
 
         warp_key_map = {
@@ -495,6 +500,7 @@ class WallpaperPipeline:
             chromatic_aberration=chromatic_aberration,
             noise=noise,
             vignette=vignette,
+            shading=shading,
             trace=trace,
         )
 
@@ -521,6 +527,7 @@ class WallpaperPipeline:
             contour_placement=contour_placement if contours else None,
             glass=glass_param,
             vignette=vignette,
+            shading=shading,
             frequency=frequency,
             phase_offset=phase_offset,
             trap_weight=trap_weight,

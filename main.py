@@ -180,6 +180,7 @@ def _available_presets() -> list:
 @click.option("--contour-placement", type=click.Choice(["frosted", "sharp"]), default=None, hidden=True, help="Contours under the glass and aberration (frosted, default) or over them (sharp).")
 @click.option("--noise", type=float, default=None, hidden=True, help="Grain/noise amount (0.0-1.0).")
 @click.option("--vignette", type=float, default=None, hidden=True, help="Subtle radial edge darkening (0.0-1.0).")
+@click.option("--shading", type=float, default=None, hidden=True, help="Height-field lighting, a 3D glass or relief look (0.0-1.0).")
 @click.option("--glass", is_flag=True, default=None, hidden=True, help="Apply frosted glass texture overlay.")
 @click.option("--aberration", "--chromatic-aberration", "chromatic_aberration", type=float, default=None, hidden=True, help="Chromatic aberration strength (0.0-0.1).")
 @click.option("--preview-fx", is_flag=True, default=None, hidden=True, help="Preview FX rendering layers.")
@@ -243,6 +244,7 @@ def _validate_cli_arguments(params: dict) -> None:
         ("--contours", params.get("contours"), 0.0, 1.0),
         ("--noise", params.get("noise"), 0.0, 1.0),
         ("--vignette", params.get("vignette"), 0.0, 1.0),
+        ("--shading", params.get("shading"), 0.0, 1.0),
         ("--aberration", params.get("chromatic_aberration"), 0.0, 0.1),
         ("--ambient-weight", params.get("ambient_weight"), 0.0, 1.0),
         ("--phase-offset", params.get("phase_offset"), 0.0, 1.0),

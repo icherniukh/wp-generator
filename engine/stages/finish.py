@@ -11,14 +11,16 @@ field, and sit under the glass and aberration (frosted, default) or over them
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+import scipy.ndimage
 from PIL import Image
 
+from engine.colors import rgb_to_oklab
 from engine.filters import WallpaperFilters
 from engine.stages.runner import Stage, StageParams
-from engine.stages.types import ScalarField
+from engine.stages.types import Field, ScalarField
 
 
 # The default device (MacBook Pro 14", 3024 x 1964), where the pixel sizes below were tuned.
@@ -101,6 +103,90 @@ def vignette(image: Image.Image, *, strength: float) -> Image.Image:
     return WallpaperFilters.apply_vignette(image, strength=strength)
 
 
+# The steepest surface tilt shade() allows, as rise over run (2.5 is about 68 degrees).
+MAX_SLOPE = 2.5
+
+
+def shade(
+    final: Image.Image,
+    field: Optional[Field],
+    *,
+    strength: float,
+    depth: float,
+    light_angle: float,
+    light_elevation: float,
+    specular: float,
+    shininess: float,
+    rim: float,
+    refraction: float,
+    smoothing: float = 0.0,
+) -> Image.Image:
+    """Lights the image as a relief, for a glossy 3D glass or embossed look.
+
+    The height is the engine's scalar field, or the image's Oklab lightness
+    when the field is a weight field (or absent); it is smoothed with a
+    Gaussian of sigma `smoothing` pixels. Normals come from the height gradient
+    times `depth`, measured per short side of the image, so the relief does not
+    depend on the resolution. Lambert diffuse is normalized so a flat surface is
+    unchanged, the Blinn-Phong highlight is zero on a flat surface, and a
+    Schlick-Fresnel rim brightens steep slopes. light_angle (degrees,
+    counterclockwise from the right) and light_elevation (degrees above the
+    image plane) set the light. With refraction > 0 the image is sampled that
+    many pixels along the normal first, like a lens. Deterministic; no RNG.
+    """
+    rgb = np.asarray(final.convert("RGB"), dtype=np.float32)
+    h, w = rgb.shape[:2]
+
+    if isinstance(field, ScalarField):
+        height = field_elevation(field, final.size)
+    else:
+        height = rgb_to_oklab(rgb)[..., 0].astype(np.float32)
+    if smoothing > 0.0:
+        height = scipy.ndimage.gaussian_filter(height, smoothing, mode="nearest")
+
+    gy, gx = np.gradient(height)
+    slope = depth * min(w, h)
+    nx, ny = -gx * slope, -gy * slope
+    # Soft-limit the tilt: an edge in the height is a near-vertical wall whose rim
+    # and highlight would otherwise saturate and break into 8-bit noise.
+    steepness = np.hypot(nx, ny)
+    limit = np.tanh(steepness / MAX_SLOPE) * MAX_SLOPE / np.maximum(steepness, 1e-6)
+    nx, ny = nx * limit, ny * limit
+    inverse_length = 1.0 / np.sqrt(nx * nx + ny * ny + 1.0)
+    nx, ny, nz = nx * inverse_length, ny * inverse_length, inverse_length
+
+    base = rgb
+    if refraction > 0.0:
+        y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+        coordinates = np.array([y + ny * refraction, x + nx * refraction])
+        base = np.stack(
+            [scipy.ndimage.map_coordinates(rgb[..., c], coordinates, order=1, mode="nearest") for c in range(3)],
+            axis=-1,
+        )
+
+    azimuth, elevation = np.radians(light_angle), np.radians(light_elevation)
+    lx = np.cos(azimuth) * np.cos(elevation)
+    ly = -np.sin(azimuth) * np.cos(elevation)  # image y grows downward
+    lz = np.sin(elevation)
+
+    diffuse = np.clip(nx * lx + ny * ly + nz * lz, 0.0, 1.0) / max(lz, 1e-3)
+
+    # Half vector between the light and the viewer (looking along z). The
+    # highlight is the Blinn-Phong lobe minus its flat-surface value, scaled so
+    # the peak is 1: a flat field has no highlight.
+    hx, hy, hz = lx, ly, lz + 1.0
+    half_length = np.sqrt(hx * hx + hy * hy + hz * hz)
+    hx, hy, hz = hx / half_length, hy / half_length, hz / half_length
+    facing = nx * hx + ny * hy + nz * hz
+    flat = hz**shininess
+    highlight = np.clip((np.clip(facing, 0.0, 1.0) ** shininess - flat) / max(1.0 - flat, 1e-6), 0.0, 1.0)
+    fresnel = (1.0 - nz) ** 5
+
+    shine = (specular * highlight + rim * fresnel)[..., None] * 255.0
+    out = base * (1.0 - strength + strength * diffuse[..., None]) + strength * shine
+    return Image.fromarray(np.clip(out + 0.5, 0, 255).astype(np.uint8))
+
+
 def _contours(p: StageParams) -> Dict:
     scale = size_scale(p)
     return {
@@ -126,6 +212,28 @@ GRAIN = Stage("film grain", "finish", film_grain, ("final",), "final", lambda p:
 VIGNETTE = Stage("vignette", "finish", vignette, ("final",), "final", lambda p: {"strength": p["vignette"]})
 
 
+def _shade(p: StageParams) -> Dict:
+    # Pixel sizes are for REFERENCE_SHORT_SIDE and scale with the image; depth is
+    # per short side, so it needs no scaling. The smoothing is wide because the
+    # height of a weight-field image is its lightness, whose 8-bit noise and
+    # dark-level steps would otherwise show as grain in the highlights.
+    scale = size_scale(p)
+    return {
+        "strength": p["shading"],
+        "depth": 3.5,
+        "light_angle": 135.0,
+        "light_elevation": 50.0,
+        "specular": 0.45,
+        "shininess": 10.0,
+        "rim": 1.0,
+        "refraction": 12.0 * scale,
+        "smoothing": 30.0 * scale,
+    }
+
+
+SHADE = Stage("shading", "finish", shade, ("final", "field"), "final", _shade)
+
+
 def finish_stages(p: StageParams) -> Tuple[Stage, ...]:
     """The enabled effects, in their fixed order.
 
@@ -142,6 +250,8 @@ def finish_stages(p: StageParams) -> Tuple[Stage, ...]:
             stages.append(contours)
         if p["glass"]:
             stages.append(GLASS)
+        if p.get("shading", 0.0) > 0.0:
+            stages.append(SHADE)
         if p["chromatic_aberration"] > 0.0:
             stages.append(ABERRATION)
         if contours is not None and sharp:
