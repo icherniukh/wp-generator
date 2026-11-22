@@ -187,6 +187,19 @@ def golden_cases() -> List[GoldenCase]:
             stage_params={"fractal-shapes": {"fade": 0.9, "hardness": 0.3}},
         )
     )
+    # Fractal glow: a low-resolution grid and a wide fade, so the field is smooth. A crisp
+    # escape-time boundary is chaotic and flips whole pixels across platforms; a fade of
+    # a fifth of the short side keeps each value within a few levels of a neighbour's, and
+    # the field treats a lone sample that flips between escaped and not as a neighbour of the
+    # boundary. Mandelbrot is left to tests/test_fractal_glow.py: its slow escapes still flip.
+    cases.append(
+        _engine_case(
+            "catalog/field/fractal-glow",
+            "simplex",
+            field_stage="fractal-glow",
+            stage_params={"fractal-glow": {"fade": 0.2}},
+        )
+    )
     # Film grain options; grain_size is covered in tests/test_grain_controls.py, since it
     # scales with the image and this size is too small for it to change anything.
     for grain_name, grain in (

@@ -402,8 +402,11 @@ def _octave_noise(
 
     h, w = coords.shape
     sample_h, sample_w = max(8, h // 2), max(8, w // 2)
-    sx = scipy.ndimage.zoom(coords.x.astype(np.float64), (sample_h / h, sample_w / w), order=1)
-    sy = scipy.ndimage.zoom(coords.y.astype(np.float64), (sample_h / h, sample_w / w), order=1)
+    # mode="nearest" matters: the default "constant" returns 0 for a last sample that
+    # float rounding puts a hair past the edge, which put the noise at position 0 there
+    # and smeared a band along the bottom (or right) edge in about one grid size in eight.
+    sx = scipy.ndimage.zoom(coords.x.astype(np.float64), (sample_h / h, sample_w / w), order=1, mode="nearest")
+    sy = scipy.ndimage.zoom(coords.y.astype(np.float64), (sample_h / h, sample_w / w), order=1, mode="nearest")
     ox, oy = rng.uniform(0, 1000), rng.uniform(0, 1000)
     total = np.zeros_like(sx)
     amp, freq, norm = 1.0, float(scale), 0.0
@@ -413,7 +416,7 @@ def _octave_noise(
         norm += amp
         amp *= gain
         freq *= lacunarity
-    grid = scipy.ndimage.zoom(total / norm, (h / total.shape[0], w / total.shape[1]), order=3)[:h, :w]
+    grid = scipy.ndimage.zoom(total / norm, (h / total.shape[0], w / total.shape[1]), order=3, mode="nearest")[:h, :w]
     return ScalarField(normalize_scalar_field(grid.astype(np.float32)))
 
 
@@ -1033,6 +1036,139 @@ def fractal_shapes(
         region *= 1.0 - alpha
         region[others[shape["cycle"]]] += alpha
     return WeightField(weights, background=base)
+
+
+# Julia constants whose sets are connected or dendritic and fill a frame with fine filaments.
+GLOW_JULIA_CONSTANTS = (
+    (-0.8, 0.156), (-0.7269, 0.1889), (0.285, 0.01), (-0.4, 0.6), (-0.835, -0.2321),
+    (-0.70176, -0.3842), (0.355, 0.355), (-0.1, 0.651),
+)
+GLOW_KINDS = ("julia", "mandelbrot")
+_GLOW_BAILOUT = 1.0e3
+_GLOW_COMPACT_EVERY = 4
+_GLOW_SHARPNESS = 0.8  # < 1 gives the glow a sharp bright core and a long soft tail
+
+
+def _distance_estimate(
+    z0: np.ndarray, c: np.ndarray, *, mandelbrot: bool, iterations: int
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Escape-time orbit with derivative, for every point at once.
+
+    Returns the distance estimate 0.5 |z| ln|z| / |dz| to the set boundary (in the
+    complex plane), the smooth iteration count, and a mask of points that escaped
+    within the budget. Escaped points leave the working arrays every few steps; the
+    estimate and the smooth count do not change with extra squarings, so the delay
+    only costs time. float64 throughout."""
+    shape = z0.shape
+    z = z0.ravel().astype(np.complex128)
+    cc = np.broadcast_to(c, shape).ravel().astype(np.complex128)
+    dz = np.full(z.shape, 1.0 if not mandelbrot else 0.0, dtype=np.complex128)
+    index = np.arange(z.size)
+    distance = np.zeros(z.size)
+    smooth = np.zeros(z.size)
+    escaped = np.zeros(z.size, dtype=bool)
+    bailout2 = _GLOW_BAILOUT**2
+    with np.errstate(all="ignore"):
+        for step in range(1, iterations + 1):
+            dz = 2.0 * z * dz + 1.0 if mandelbrot else 2.0 * z * dz
+            z = z * z + cc
+            if step % _GLOW_COMPACT_EVERY and step != iterations:
+                continue
+            r2 = z.real * z.real + z.imag * z.imag
+            out = r2 > bailout2
+            if out.any():
+                hit = index[out]
+                zo, dzo = z[out], dz[out]
+                mag = np.abs(zo)
+                distance[hit] = 0.5 * mag * np.log(mag) / np.maximum(np.abs(dzo), 1e-300)
+                smooth[hit] = step + 1.0 - np.log2(np.log(mag))
+                escaped[hit] = True
+                keep = ~out
+                z, dz, cc, index = z[keep], dz[keep], cc[keep], index[keep]
+                if z.size == 0:
+                    break
+    return distance.reshape(shape), smooth.reshape(shape), escaped.reshape(shape)
+
+
+def fractal_glow(
+    coords: Coords,
+    *,
+    kind: str = "julia",
+    zoom: float = 1.0,
+    center: Optional[Sequence[float]] = None,
+    c: Optional[Sequence[float]] = None,
+    fade: float = 0.005,
+    iterations: int = 200,
+    interior: float = 0.0,
+    rng: Any,
+) -> ScalarField:
+    """A neon fractal: 1.0 on the boundary of a Julia or Mandelbrot set, falling
+    to 0 over a soft band around it.
+
+    The value is exp(-(d / width)^0.8), d the distance estimate to the boundary and
+    width fade times the short side of the image, so the filaments are crisp at any
+    resolution and the fade scales with the image. Pair it with a palette that
+    starts dark and the field maps to a dark ground with bright filaments (bloom
+    then lights the band). It is computed on its own view of the plane, not on the
+    fractal camera, one sample per output pixel (see catalog.compose).
+
+    kind: "julia" (constant c; a curated one is drawn unless c is given) or
+    "mandelbrot". zoom magnifies the view (1 shows a Julia set filling the frame
+    with some of it cut by the edge); center is the view's middle in the complex
+    plane (drawn near the origin for Julia, or near the cardioid for Mandelbrot,
+    when unset). The view also turns by a random angle. Inside the set the glow
+    continues symmetrically, with the distance measured in pixels. interior in 0..1
+    multiplies the glow outside the set by the smooth iteration count's own bands,
+    for stripes in the fade band; 0 leaves the plain glow. Always draws the same
+    number of random values, so setting any parameter does not shift the others.
+    """
+    if kind not in GLOW_KINDS:
+        raise ValueError(f"fractal-glow kind must be one of {', '.join(GLOW_KINDS)}, not {kind!r}")
+    mandelbrot = kind == "mandelbrot"
+    draws = [rng.uniform(0.0, 1.0) for _ in range(6)]
+    constant = GLOW_JULIA_CONSTANTS[min(int(draws[0] * len(GLOW_JULIA_CONSTANTS)), len(GLOW_JULIA_CONSTANTS) - 1)]
+    c_value = complex(*c) if c is not None else complex(*constant)
+    angle = draws[1] * 2.0 * np.pi
+    zoom = max(float(zoom), 1e-3)
+    if center is not None:
+        mid = complex(*center)
+    elif mandelbrot:
+        mid = complex(-0.55 + 0.3 * (draws[2] - 0.5), 0.5 * (draws[3] - 0.5))
+    else:
+        mid = complex(0.5 * (draws[2] - 0.5), 0.5 * (draws[3] - 0.5))
+    # Complex units per half short side: a Julia set (radius about 1.5) overhangs a 16:9 frame a little.
+    span = (0.95 if mandelbrot else 0.75) * (1.0 + 0.2 * (draws[4] - 0.5)) / zoom
+
+    u, v, _, _ = _frame_extent(coords)
+    h, w = coords.shape
+    spin = np.exp(1j * angle)
+    p = mid + spin * span * (u.astype(np.float64) + 1j * v.astype(np.float64))
+    distance, smooth, escaped = _distance_estimate(
+        np.zeros_like(p) if mandelbrot else p, p if mandelbrot else c_value, mandelbrot=mandelbrot,
+        iterations=max(1, int(iterations)),
+    )
+
+    width = max(float(fade), 1e-4) * 2.0 * span  # the fade, in complex units
+    pixel = 2.0 * span / max(min(w, h), 1)
+    # The profile has no cusp at the boundary (a third of a pixel of softening, rescaled
+    # so the peak stays 1): a sample that flips between escaped and not, or a distance
+    # that shifts by rounding, then moves the value by a small amount, not a jump.
+    soft = 0.35 * pixel
+
+    def profile(d: np.ndarray) -> np.ndarray:
+        reach = np.sqrt(d * d + soft * soft) / width
+        return np.exp(-(reach**_GLOW_SHARPNESS - (soft / width) ** _GLOW_SHARPNESS))
+
+    glow = np.where(escaped, profile(distance), 0.0)
+    if not escaped.all() and escaped.any():
+        # Inside the set (or too slow to escape): the distance to the nearest escaped sample.
+        inner = scipy.ndimage.distance_transform_edt(~escaped) * pixel
+        glow = np.where(escaped, glow, profile(np.maximum(inner - pixel, 0.0)))
+    mix = float(np.clip(interior, 0.0, 1.0))
+    if mix > 0.0:
+        bands = 0.5 + 0.5 * np.cos(smooth * (np.pi / 3.0))
+        glow = np.where(escaped, glow * ((1.0 - mix) + mix * bands), glow)
+    return ScalarField(np.clip(glow, 0.0, 1.0).astype(np.float32))
 
 
 BLEND_MODES = ("add", "multiply", "screen", "difference", "overlay", "min", "max")
