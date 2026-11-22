@@ -168,6 +168,7 @@ def _available_presets() -> list:
 @click.option("--legacy-idw", is_flag=True, default=None, hidden=True, help="Use legacy IDW gradient engine instead of fluid mesh.")
 @click.option("--warp", "warps", multiple=True, type=click.Choice(["none", *catalog.WARPS]), hidden=True, help="Add a warp after the engine's own (repeat for more; 'none' first drops the engine's warps).")
 @click.option("--field", "field_stage", type=click.Choice(list(catalog.FIELDS)), default=None, hidden=True, help="Replace the engine's field.")
+@click.option("--blend", default=None, hidden=True, metavar="FIELD[:MODE]", help="Combine a second field with the engine's, e.g. conic:difference (modes: add, multiply, screen, difference, overlay, min, max).")
 @click.option("--mapping", type=click.Choice(list(catalog.MAPPINGS)), default=None, hidden=True, help="Replace the engine's color mapping.")
 @click.option("--stage-param", "stage_params", multiple=True, metavar="STAGE.KEY=VALUE", hidden=True, help="Set a stage argument, e.g. voronoi.mode=edges or twist.amount=3 (repeatable).")
 @click.option("--harmonize", type=click.Choice(["perceptual", "theory", "nothing", "none"]), default=None, hidden=True, help="Color harmonizer algorithm.")

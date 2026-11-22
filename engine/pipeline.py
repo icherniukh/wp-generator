@@ -112,6 +112,7 @@ class RenderConfiguration:
     warps: Optional[List[str]] = None
     field_stage: Optional[str] = None
     mapping: Optional[str] = None
+    blend: Optional[str] = None
     stage_params: Optional[Dict[str, Dict[str, Any]]] = None
     # Contours from the image's luminance ("image") or the engine's scalar
     # field ("field"); under the glass and aberration ("frosted") or over ("sharp").
@@ -160,6 +161,7 @@ class RenderResult:
     warps: Optional[List[str]] = None
     field_stage: Optional[str] = None
     mapping: Optional[str] = None
+    blend: Optional[str] = None
     stage_params: Optional[Dict[str, Dict[str, Any]]] = None
     base_image: Optional[Image.Image] = None
     palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
@@ -404,9 +406,14 @@ class WallpaperPipeline:
         warps = resolve("warps", None)
         field_stage = resolve("field_stage", None)
         mapping = resolve("mapping", None)
+        blend = resolve("blend", None)
         stage_params = resolve("stage_params", None)
         composition = Composition(
-            warps=tuple(warps or ()), field=field_stage, mapping=mapping, stage_params=dict(stage_params or {})
+            warps=tuple(warps or ()),
+            field=field_stage,
+            mapping=mapping,
+            stage_params=dict(stage_params or {}),
+            blend=blend,
         )
 
         base_colors = self._resolve_palette(config, preset_data, complexity, active_seed)
@@ -526,6 +533,7 @@ class WallpaperPipeline:
             warps=list(warps) if warps else None,
             field_stage=field_stage,
             mapping=mapping,
+            blend=blend,
             stage_params=dict(stage_params) if stage_params else None,
             base_image=base_image,
             palette_contrast=evaluate_palette_contrast(final_colors),
