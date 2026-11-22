@@ -402,8 +402,11 @@ def _octave_noise(
 
     h, w = coords.shape
     sample_h, sample_w = max(8, h // 2), max(8, w // 2)
-    sx = scipy.ndimage.zoom(coords.x.astype(np.float64), (sample_h / h, sample_w / w), order=1)
-    sy = scipy.ndimage.zoom(coords.y.astype(np.float64), (sample_h / h, sample_w / w), order=1)
+    # mode="nearest" matters: the default "constant" returns 0 for a last sample that
+    # float rounding puts a hair past the edge, which put the noise at position 0 there
+    # and smeared a band along the bottom (or right) edge in about one grid size in eight.
+    sx = scipy.ndimage.zoom(coords.x.astype(np.float64), (sample_h / h, sample_w / w), order=1, mode="nearest")
+    sy = scipy.ndimage.zoom(coords.y.astype(np.float64), (sample_h / h, sample_w / w), order=1, mode="nearest")
     ox, oy = rng.uniform(0, 1000), rng.uniform(0, 1000)
     total = np.zeros_like(sx)
     amp, freq, norm = 1.0, float(scale), 0.0
@@ -413,7 +416,7 @@ def _octave_noise(
         norm += amp
         amp *= gain
         freq *= lacunarity
-    grid = scipy.ndimage.zoom(total / norm, (h / total.shape[0], w / total.shape[1]), order=3)[:h, :w]
+    grid = scipy.ndimage.zoom(total / norm, (h / total.shape[0], w / total.shape[1]), order=3, mode="nearest")[:h, :w]
     return ScalarField(normalize_scalar_field(grid.astype(np.float32)))
 
 
