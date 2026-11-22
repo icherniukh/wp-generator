@@ -49,6 +49,8 @@ COMPOSED = [
     dict(engine="shapes", warps=["liquify"]),
     dict(engine="simplex", field_stage="shapes",
          stage_params={"shapes": {"kinds": ["circle", "ring"], "hardness": 0.8}}),
+    dict(engine="simplex", field_stage="fractal-shapes",
+         stage_params={"fractal-shapes": {"depth": 2, "fade": 0.8, "hardness": 0.5, "kinds": ["circle", "ring"]}}),
     dict(engine="blobs", shading=0.6, stage_params={"shading": {"light_angle": 45, "refraction": 0, "specular": 0.8, "tint": 0.5}}),
     dict(engine="shapes", bloom=0.6),
     dict(engine="blobs", width=640, height=400, bloom=0.5, shading=0.4,

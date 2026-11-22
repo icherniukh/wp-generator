@@ -175,6 +175,18 @@ def golden_cases() -> List[GoldenCase]:
             stage_params={"shapes": {"kinds": ["circle", "ring"], "hardness": 0.8}},
         )
     )
+    # Fractal shapes: soft edges (hardness 0.3) and a wide halo (fade 0.9) at a low resolution,
+    # so a few levels of cross-platform noise upstream cannot flip a pixel.
+    cases.append(
+        _engine_case(
+            "catalog/field/fractal-shapes",
+            "simplex",
+            width=120,
+            height=80,
+            field_stage="fractal-shapes",
+            stage_params={"fractal-shapes": {"fade": 0.9, "hardness": 0.3}},
+        )
+    )
     # Film grain options; grain_size is covered in tests/test_grain_controls.py, since it
     # scales with the image and this size is too small for it to change anything.
     for grain_name, grain in (
