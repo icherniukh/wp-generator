@@ -22,7 +22,7 @@ Do not use markdown TODO files or duplicate the same task outside beads.
 ## Layout
 
 - `main.py` — Click CLI. Flag names match `RenderConfiguration` fields 1:1; the builder in `main.py` passes them through, so new config fields need no mapping code.
-- `engine/` — pipeline, palette/harmonizer logic, gradient engines (`engine/gradients/`, 12 registered variants), filters, parameter ranges, embedded-metadata support.
+- `engine/` — pipeline, palette/harmonizer logic, gradient engines (`engine/gradients/`, 15 registered names), filters, parameter ranges, embedded-metadata support.
 - `web/` — FastAPI app and the `/calibrate` lab. Run: `uv run uvicorn web.app:app`.
 - `presets/*.json` — OKLCH/HLS sampling distributions plus engine overrides.
 - `tests/` — pytest suite. Run green before finishing any behavior change.

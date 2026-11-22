@@ -1,0 +1,43 @@
+{
+  "preset_id": "liquid",
+  "version": "1.0.0",
+  "description": "Smeared, melting paint: a few thick blurred strokes pulled through a curl-noise liquify warp, with grain in the colors themselves.",
+  "color_space": "oklch",
+  "palette_families": [
+    ["#1b0a2a", "#7b2cbf", "#ff3d7f", "#ff8a4c", "#ffd37a"],
+    ["#03122b", "#0b4f9c", "#1fa2d8", "#5de0d0", "#c9f7ee"],
+    ["#0a1a1f", "#0f6b5c", "#2fd29a", "#8be8c1", "#6c7bff"],
+    ["#260a33", "#d946ef", "#6d5dfc", "#ff7eb6", "#7ee8fa"],
+    ["#1c0606", "#a4161a", "#f2541b", "#ffa62b", "#ffe0a3"],
+    ["#10222b", "#3a86a8", "#7ad7c0", "#f6c1a0", "#ff8fa3"]
+  ],
+  "overrides": {
+    "engine": "simplex",
+    "field_stage": "strokes",
+    "warps": [
+      "none",
+      "liquify"
+    ],
+    "stage_params": {
+      "strokes": {
+        "strokes": 6,
+        "width": 1.1
+      },
+      "liquify": {
+        "amount": 0.6,
+        "scale": 0.5
+      }
+    },
+    "field_grain": 0.05,
+    "noise": {
+      "type": "gaussian",
+      "mu": 0.015,
+      "sigma": 0.005,
+      "clip": [
+        0.005,
+        0.03
+      ]
+    },
+    "harmonize": "none"
+  }
+}

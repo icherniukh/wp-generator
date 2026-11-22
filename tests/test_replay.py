@@ -6,7 +6,7 @@ import pytest
 from engine.metadata import extract_image_metadata
 from engine.pipeline import RenderConfiguration, WallpaperPipeline
 
-PRESETS = ["afterglow", "aura", "balanced", "cupertino", "cyberpunk", "fractal", "holo", "ink", "mesh", "nocturne", "nothing", "pastel", "sleek"]
+PRESETS = ["afterglow", "aura", "balanced", "cupertino", "cyberpunk", "fractal", "gel", "holo", "ink", "liquid", "mesh", "nocturne", "nothing", "pastel", "poster", "sleek"]
 
 
 @pytest.mark.parametrize("preset", PRESETS)
@@ -50,6 +50,9 @@ COMPOSED = [
     dict(engine="simplex", field_stage="shapes",
          stage_params={"shapes": {"kinds": ["circle", "ring"], "hardness": 0.8}}),
     dict(engine="blobs", shading=0.6, stage_params={"shading": {"light_angle": 45, "refraction": 0, "specular": 0.8, "tint": 0.5}}),
+    dict(engine="shapes", bloom=0.6),
+    dict(engine="blobs", width=640, height=400, bloom=0.5, shading=0.4,
+         stage_params={"bloom": {"rays": 0.6, "ray_origin": [0.3, -0.1], "radii": [8, 30], "ray_length": 500}}),
     dict(engine="simplex", contours=0.5, noise=0.3, width=640, height=400,
          stage_params={"contours": {"line_width": 3.0}, "film-grain": {"grain_size": 4.0}, "twist": {"amount": 1.0}}, warps=["twist"]),
 ]

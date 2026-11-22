@@ -1,0 +1,28 @@
+{
+  "preset_id": "poster",
+  "version": "1.0.0",
+  "description": "Bauhaus-style poster: hard-edged circles, bars and arcs in a bold print palette over a dark ink base, with a light grain.",
+  "color_space": "oklch",
+  "palette_families": [
+    ["#14213d", "#e63946", "#f1e9d2", "#f4b41a", "#2a9d8f"],
+    ["#1f1d1b", "#f2541b", "#efe6d0", "#2557a7", "#f4a9b8"],
+    ["#12302a", "#e9b44c", "#ee6c4d", "#f2e8cf", "#6aa5c9"],
+    ["#231942", "#d7385e", "#f7b267", "#8fd5a6", "#f5ecd7"],
+    ["#1a1210", "#e03c31", "#d89b2b", "#ece3cf", "#2b4fa0"],
+    ["#0f2b46", "#ff6b4a", "#fcd581", "#e8efe4", "#4fa3a5"]
+  ],
+  "overrides": {
+    "engine": "shapes",
+    "field_grain": 0.06,
+    "noise": {
+      "type": "gaussian",
+      "mu": 0.04,
+      "sigma": 0.01,
+      "clip": [
+        0.02,
+        0.07
+      ]
+    },
+    "harmonize": "none"
+  }
+}

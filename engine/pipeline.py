@@ -92,6 +92,7 @@ class RenderConfiguration:
     shading: Optional[float] = None
     # Prints the finished image as a screen: dots, cmyk, lines, dither or pixel (None is off).
     halftone: Optional[str] = None
+    bloom: Optional[float] = None
     contours: Optional[float] = None
     contour_levels: Optional[int] = None
     contour_width: Optional[float] = None
@@ -170,6 +171,7 @@ class RenderResult:
     vignette: float = 0.0
     shading: float = 0.0
     halftone: Optional[str] = None
+    bloom: float = 0.0
     channel_offset: Optional[float] = None
     fluid_mode: Optional[str] = None
     harmonize: Optional[str] = None
@@ -326,6 +328,7 @@ class WallpaperPipeline:
         vignette: float,
         shading: float = 0.0,
         halftone: Optional[str] = None,
+        bloom: float = 0.0,
         stage_params: Optional[Dict[str, Dict[str, Any]]] = None,
         trace: Optional[Trace] = None,
     ) -> Image.Image:
@@ -347,6 +350,7 @@ class WallpaperPipeline:
                 vignette=vignette,
                 shading=shading,
                 halftone=halftone,
+                bloom=bloom,
                 stage_params=stage_params,
                 width=image.width,
                 height=image.height,
@@ -401,6 +405,7 @@ class WallpaperPipeline:
         halftone = resolve("halftone", None)
         if halftone is not None and halftone not in HALFTONE_MODES:
             raise PipelineConfigurationError(f"halftone must be one of {', '.join(HALFTONE_MODES)}, not {halftone!r}.")
+        bloom = resolve("bloom", 0.0)
         engine_type = resolve("engine", "simplex")
 
         warp_key_map = {
@@ -549,6 +554,7 @@ class WallpaperPipeline:
             vignette=vignette,
             shading=shading,
             halftone=halftone,
+            bloom=bloom,
             stage_params=stage_params,
             trace=trace,
         )
@@ -581,6 +587,7 @@ class WallpaperPipeline:
             vignette=vignette,
             shading=shading,
             halftone=halftone,
+            bloom=bloom,
             frequency=frequency,
             phase_offset=phase_offset,
             trap_weight=trap_weight,
