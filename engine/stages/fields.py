@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional, Sequence, Tuple
 
 import numpy as np
@@ -1046,7 +1048,15 @@ GLOW_JULIA_CONSTANTS = (
 GLOW_KINDS = ("julia", "mandelbrot")
 _GLOW_BAILOUT = 1.0e3
 _GLOW_COMPACT_EVERY = 4
-_GLOW_SHARPNESS = 0.8  # < 1 gives the glow a sharp bright core and a long soft tail
+_GLOW_SHARPNESS = 0.8  # < 1 gives the halo a sharp bright start and a long soft tail
+_GLOW_AMBIENT_REACH = 15.0  # ambient width, in fades
+_GLOW_SETTLED = 1.0e-10  # an orbit that returns this close to an earlier point is periodic
+_GLOW_CHUNK = 1 << 18  # orbit points iterated together per thread (a few tens of MB)
+_GLOW_THREADS = min(8, os.cpu_count() or 1)
+_GLOW_CROWD = 0.35  # how far a dense area's lines are dimmed, at most
+_GLOW_CROWD_SIGMA = 2.0  # pixels: the blur that measures how much line is around
+_GLOW_CROWD_LO, _GLOW_CROWD_HI = 0.35, 0.85  # blurred line amount where dimming starts and is full
+_GLOW_BAND = 1.5  # pixels around the boundary that get sub-pixel samples, per pixel of core width (at least 1), plus half a pixel
 
 
 def _distance_estimate(
@@ -1058,18 +1068,31 @@ def _distance_estimate(
     complex plane), the smooth iteration count, and a mask of points that escaped
     within the budget. Escaped points leave the working arrays every few steps; the
     estimate and the smooth count do not change with extra squarings, so the delay
-    only costs time. float64 throughout."""
+    only costs time. Points that are provably in the set leave too (the Mandelbrot
+    main cardioid and period-2 bulb up front, and any orbit that has become
+    periodic), which is what makes a deep budget affordable: only the slow escapes
+    near the boundary run to the end. float64 throughout."""
     shape = z0.shape
     z = z0.ravel().astype(np.complex128)
     cc = np.broadcast_to(c, shape).ravel().astype(np.complex128)
-    dz = np.full(z.shape, 1.0 if not mandelbrot else 0.0, dtype=np.complex128)
     index = np.arange(z.size)
-    distance = np.zeros(z.size)
-    smooth = np.zeros(z.size)
-    escaped = np.zeros(z.size, dtype=bool)
+    if mandelbrot:
+        x, y = cc.real, cc.imag
+        q = (x - 0.25) ** 2 + y * y
+        inside = (q * (q + (x - 0.25)) < 0.25 * y * y) | ((x + 1.0) ** 2 + y * y < 0.0625)
+        keep = ~inside
+        z, cc, index = z[keep], cc[keep], index[keep]
+    dz = np.full(z.shape, 1.0 if not mandelbrot else 0.0, dtype=np.complex128)
+    saved = z.copy()
+    distance = np.zeros(z0.size)
+    smooth = np.zeros(z0.size)
+    escaped = np.zeros(z0.size, dtype=bool)
     bailout2 = _GLOW_BAILOUT**2
+    settled2 = _GLOW_SETTLED**2
     with np.errstate(all="ignore"):
         for step in range(1, iterations + 1):
+            if z.size == 0:
+                break
             dz = 2.0 * z * dz + 1.0 if mandelbrot else 2.0 * z * dz
             z = z * z + cc
             if step % _GLOW_COMPACT_EVERY and step != iterations:
@@ -1083,11 +1106,48 @@ def _distance_estimate(
                 distance[hit] = 0.5 * mag * np.log(mag) / np.maximum(np.abs(dzo), 1e-300)
                 smooth[hit] = step + 1.0 - np.log2(np.log(mag))
                 escaped[hit] = True
-                keep = ~out
-                z, dz, cc, index = z[keep], dz[keep], cc[keep], index[keep]
-                if z.size == 0:
-                    break
+            gap = z - saved
+            gone = out | (gap.real * gap.real + gap.imag * gap.imag < settled2)
+            if gone.any():
+                keep = ~gone
+                z, dz, cc, index, saved = z[keep], dz[keep], cc[keep], index[keep], saved[keep]
+            if step & (step - 1) == 0:  # Brent: compare against the orbit at steps 4, 8, 16, ...
+                saved = z.copy()
     return distance.reshape(shape), smooth.reshape(shape), escaped.reshape(shape)
+
+
+def _glow_iterations(iterations: Any, mandelbrot: bool, zoom: float) -> int:
+    if isinstance(iterations, str) and iterations.strip().lower() == "auto":
+        if not mandelbrot:
+            return 300
+        return int(min(2000, round(500 + 200 * np.log2(max(zoom, 1.0)))))
+    try:
+        return max(1, int(iterations))
+    except (TypeError, ValueError):
+        raise ValueError(f"fractal-glow iterations must be 'auto' or an integer, not {iterations!r}") from None
+
+
+def _orbit_chunked(
+    p: np.ndarray, c: Any, *, mandelbrot: bool, iterations: int
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """_distance_estimate over a flat array in cache-sized chunks, on a few threads.
+    Chunks are independent, so the result does not depend on the thread count."""
+
+    def run(start: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        chunk = p[start : start + _GLOW_CHUNK]
+        return _distance_estimate(
+            np.zeros_like(chunk) if mandelbrot else chunk, chunk if mandelbrot else c,
+            mandelbrot=mandelbrot, iterations=iterations,
+        )
+
+    starts = range(0, p.size, _GLOW_CHUNK)
+    workers = min(_GLOW_THREADS, len(starts))
+    if workers > 1:
+        with ThreadPoolExecutor(workers) as pool:
+            parts = list(pool.map(run, starts))
+    else:
+        parts = [run(start) for start in starts]
+    return tuple(np.concatenate(column) for column in zip(*parts))  # type: ignore[return-value]
 
 
 def fractal_glow(
@@ -1098,29 +1158,55 @@ def fractal_glow(
     center: Optional[Sequence[float]] = None,
     c: Optional[Sequence[float]] = None,
     fade: float = 0.005,
-    iterations: int = 200,
+    iterations: Any = "auto",
     interior: float = 0.0,
+    samples: int = 2,
+    core: float = 1.0,
+    glow: float = 0.45,
+    ambient: float = 0.0,
     rng: Any,
 ) -> ScalarField:
-    """A neon fractal: 1.0 on the boundary of a Julia or Mandelbrot set, falling
-    to 0 over a soft band around it.
+    """A neon fractal: a thin bright line on the boundary of a Julia or Mandelbrot
+    set, a dimmer halo around it that fades over a soft band, and optionally a very
+    wide faint lift of the ground.
 
-    The value is exp(-(d / width)^0.8), d the distance estimate to the boundary and
-    width fade times the short side of the image, so the filaments are crisp at any
-    resolution and the fade scales with the image. Pair it with a palette that
-    starts dark and the field maps to a dark ground with bright filaments (bloom
-    then lights the band). It is computed on its own view of the plane, not on the
-    fractal camera, one sample per output pixel (see catalog.compose).
+    With d the distance estimate to the boundary, in output pixels, the value is
+    the screen blend (1 - (1 - a)(1 - b)(1 - c)) of three terms: a core
+    exp(-(d / k)^2), a line core pixels wide at half height with peak 1; a halo
+    glow * exp(-(d / width)^0.8), width fade times the short side of the image;
+    and ambient * exp(-d / (15 width)). The halos of neighbouring filaments overlap
+    at a level of glow, below the lines. Where the boundary is denser than a pixel
+    (at zoom 1 a Mandelbrot set has such patches, with every pixel within a fraction
+    of a pixel of the boundary, whatever the depth) the lines would clip to a white
+    clump, so the line is dimmed by up to a third where a blur a few pixels wide finds
+    a lot of line around it: such a patch reads as a lit mass with holes, brighter at
+    its edge, not as separate strands (they are finer than the image). Pair it with a palette that
+    starts dark: the field maps to a dark ground with bright filaments (bloom then
+    lights the band), and ambient > 0 lifts the ground near the set off pure black.
+    It is computed on its own view of the plane, not on the fractal camera, at
+    full resolution (see catalog.compose).
 
     kind: "julia" (constant c; a curated one is drawn unless c is given) or
     "mandelbrot". zoom magnifies the view (1 shows a Julia set filling the frame
     with some of it cut by the edge); center is the view's middle in the complex
     plane (drawn near the origin for Julia, or near the cardioid for Mandelbrot,
     when unset). The view also turns by a random angle. Inside the set the glow
-    continues symmetrically, with the distance measured in pixels. interior in 0..1
-    multiplies the glow outside the set by the smooth iteration count's own bands,
-    for stripes in the fade band; 0 leaves the plain glow. Always draws the same
-    number of random values, so setting any parameter does not shift the others.
+    continues symmetrically, with the distance measured in pixels.
+    iterations: the escape budget; "auto" (default) is 300 for Julia and
+    500 + 200 log2(max(zoom, 1)), at most 2000, for Mandelbrot, whose boundary
+    keeps growing filaments at every depth. An integer sets it exactly.
+    samples: n takes n x n sub-pixel samples where the line is (within a few
+    pixels of the boundary; elsewhere the field is smooth and one sample serves)
+    and averages the finished value, not the distance, so the line is
+    anti-aliased and filaments thinner than a pixel stay as faint lines; 1 is one
+    sample per pixel.
+    core: line width in output pixels (0 drops the line, a larger number gives a
+    soft wide one). glow: halo amplitude, 0..1. ambient: amplitude of the wide
+    faint falloff, 0..1; 0 leaves the ground at the darkest color.
+    interior in 0..1 multiplies the halo and ambient outside the set by the smooth
+    iteration count's own bands, for stripes in the fade band; 0 leaves them
+    plain. Always draws the same number of random values (6), so setting any
+    parameter does not shift the others.
     """
     if kind not in GLOW_KINDS:
         raise ValueError(f"fractal-glow kind must be one of {', '.join(GLOW_KINDS)}, not {kind!r}")
@@ -1138,37 +1224,83 @@ def fractal_glow(
         mid = complex(0.5 * (draws[2] - 0.5), 0.5 * (draws[3] - 0.5))
     # Complex units per half short side: a Julia set (radius about 1.5) overhangs a 16:9 frame a little.
     span = (0.95 if mandelbrot else 0.75) * (1.0 + 0.2 * (draws[4] - 0.5)) / zoom
+    budget = _glow_iterations(iterations, mandelbrot, zoom)
+    samples = int(np.clip(int(samples), 1, 8))
 
     u, v, _, _ = _frame_extent(coords)
+    u, v = u.astype(np.float64), v.astype(np.float64)
     h, w = coords.shape
     spin = np.exp(1j * angle)
-    p = mid + spin * span * (u.astype(np.float64) + 1j * v.astype(np.float64))
-    distance, smooth, escaped = _distance_estimate(
-        np.zeros_like(p) if mandelbrot else p, p if mandelbrot else c_value, mandelbrot=mandelbrot,
-        iterations=max(1, int(iterations)),
-    )
+    orbit = dict(mandelbrot=mandelbrot, iterations=budget)
+    target = c_value if not mandelbrot else None
+    p = (mid + spin * span * (u + 1j * v)).ravel()
+    distance, smooth, escaped = _orbit_chunked(p, target, **orbit)
 
-    width = max(float(fade), 1e-4) * 2.0 * span  # the fade, in complex units
-    pixel = 2.0 * span / max(min(w, h), 1)
-    # The profile has no cusp at the boundary (a third of a pixel of softening, rescaled
-    # so the peak stays 1): a sample that flips between escaped and not, or a distance
-    # that shifts by rounding, then moves the value by a small amount, not a jump.
-    soft = 0.35 * pixel
+    # Positions along the grid axes, to place sub-pixel samples: complex units per pixel.
+    dudx, dvdx = (u[0, 1] - u[0, 0], v[0, 1] - v[0, 0]) if w > 1 else (2.0 / max(h, 1), 0.0)
+    dudy, dvdy = (u[1, 0] - u[0, 0], v[1, 0] - v[0, 0]) if h > 1 else (0.0, 2.0 / max(w, 1))
+    pixel = span * float(np.hypot(dudx, dvdx))
 
-    def profile(d: np.ndarray) -> np.ndarray:
-        reach = np.sqrt(d * d + soft * soft) / width
-        return np.exp(-(reach**_GLOW_SHARPNESS - (soft / width) ** _GLOW_SHARPNESS))
-
-    glow = np.where(escaped, profile(distance), 0.0)
-    if not escaped.all() and escaped.any():
-        # Inside the set (or too slow to escape): the distance to the nearest escaped sample.
-        inner = scipy.ndimage.distance_transform_edt(~escaped) * pixel
-        glow = np.where(escaped, glow, profile(np.maximum(inner - pixel, 0.0)))
+    width = max(float(fade), 1e-4) * min(w, h)  # the fade, in pixels
+    soft = 0.35  # the halo has no cusp at the boundary: a third of a pixel of softening, rescaled so the peak stays 1
+    k = max(float(core), 0.0) / 1.6651  # exp(-(d/k)^2) is one half at d = core / 2
+    top, amplitude = float(np.clip(glow, 0.0, 1.0)), float(np.clip(ambient, 0.0, 1.0))
     mix = float(np.clip(interior, 0.0, 1.0))
-    if mix > 0.0:
-        bands = 0.5 + 0.5 * np.cos(smooth * (np.pi / 3.0))
-        glow = np.where(escaped, glow * ((1.0 - mix) + mix * bands), glow)
-    return ScalarField(np.clip(glow, 0.0, 1.0).astype(np.float32))
+
+    def shade(d: np.ndarray, count: np.ndarray, outside: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """The halo and ambient (screen-blended) and the line, at distances d in pixels."""
+        reach = np.sqrt(d * d + soft * soft) / width
+        halo = top * np.exp(-(reach**_GLOW_SHARPNESS - (soft / width) ** _GLOW_SHARPNESS))
+        lift = amplitude * np.exp(-d / (_GLOW_AMBIENT_REACH * width))
+        if mix > 0.0:
+            bands = np.where(outside, (1.0 - mix) + mix * (0.5 + 0.5 * np.cos(count * (np.pi / 3.0))), 1.0)
+            halo, lift = halo * bands, lift * bands
+        line = np.exp(-((d / k) ** 2)) if k > 1e-6 else np.zeros_like(d)
+        return 1.0 - (1.0 - halo) * (1.0 - lift), line
+
+    # Inside the set (or too slow to escape): the distance to the nearest escaped
+    # sample, to the boundary between them. Whole pixels, so it is only good for the
+    # smooth falloff; the line itself comes from the estimate on the outer side.
+    if escaped.all():
+        inner = np.zeros(escaped.shape)
+    elif escaped.any():
+        edt = scipy.ndimage.distance_transform_edt(~escaped.reshape(h, w)).ravel()
+        inner = np.maximum(edt - 0.5, 0.0)
+    else:
+        inner = np.full(escaped.shape, np.inf)
+    d_pixels = np.where(escaped, distance / pixel, inner)
+    base, line = shade(d_pixels, smooth, escaped)
+
+    if samples > 1 and escaped.any():
+        near = d_pixels < _GLOW_BAND * max(float(core), 1.0) + 0.5
+        index = np.flatnonzero(near)
+        if index.size:
+            row, col = index // w, index % w
+            base_sum, line_sum = np.zeros(index.size), np.zeros(index.size)
+            offsets = (np.arange(samples) + 0.5) / samples - 0.5
+            for oy in offsets:
+                for ox in offsets:
+                    q = mid + spin * span * (
+                        (u[row, col] + ox * dudx + oy * dudy) + 1j * (v[row, col] + ox * dvdx + oy * dvdy)
+                    )
+                    d, count, out = _orbit_chunked(q, target, **orbit)
+                    b_part, l_part = shade(np.where(out, d / pixel, inner[index]), count, out)
+                    base_sum += b_part
+                    line_sum += l_part
+            base[index] = base_sum / (samples * samples)
+            # Averaging over the sub-pixel positions lowers the peak of a line through the pixel's
+            # middle to the mean of the profile over them; rescale so such a line still peaks at 1.
+            peak = float(np.mean(np.exp(-((offsets / k) ** 2)))) if k > 1e-6 else 1.0
+            line[index] = np.minimum(line_sum / (samples * samples) / peak, 1.0)
+
+    # Where filaments are denser than a pixel the lines overlap and would clip to a white
+    # clump. Dim the line by the local amount of line (a blur a few pixels wide), so a dense
+    # area keeps its structure: the edge of the mass and the gaps stay bright against it.
+    if k > 1e-6 and _GLOW_CROWD > 0.0:
+        crowd = scipy.ndimage.gaussian_filter(line.reshape(h, w), _GLOW_CROWD_SIGMA, mode="nearest").ravel()
+        line = line * (1.0 - _GLOW_CROWD * np.clip((crowd - _GLOW_CROWD_LO) / (_GLOW_CROWD_HI - _GLOW_CROWD_LO), 0.0, 1.0))
+    value = 1.0 - (1.0 - base) * (1.0 - line)
+    return ScalarField(np.clip(value, 0.0, 1.0).reshape(h, w).astype(np.float32))
 
 
 BLEND_MODES = ("add", "multiply", "screen", "difference", "overlay", "min", "max")
