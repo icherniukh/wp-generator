@@ -24,6 +24,7 @@ from PIL import Image
 
 from engine.colors import rgb_to_oklab
 from engine.filters import WallpaperFilters
+from engine.stages.halftone import MIN_SCREEN_CELL, halftone
 from engine.stages.runner import Stage, StageParams
 from engine.stages.types import Field, ScalarField
 
@@ -409,6 +410,16 @@ def _grain_size(reference: float, scale: float) -> float:
     return 1.0 if reference == 1.0 else max(1.0, reference * scale)
 
 
+def _halftone_cell(reference: float, scale: float) -> float:
+    # A screen needs a few pixels per cell, so a small preview keeps a floor.
+    return max(MIN_SCREEN_CELL, reference * scale)
+
+
+def _halftone(p: StageParams) -> Dict:
+    # The cell is given for the reference image and scales with it.
+    return {"mode": p["halftone"], "cell": _halftone_cell(9.0, size_scale(p)), "angle": 45.0, "mix": 1.0, "levels": 4}
+
+
 def _glass(p: StageParams) -> Dict:
     return {"blur_radius": _blur_radius(60, size_scale(p)), "noise_amount": 0.15}
 
@@ -426,6 +437,7 @@ FIELD_CONTOURS = Stage("field contours", "finish", field_contour_lines, ("final"
 GLASS = Stage("glass", "finish", frosted_glass, ("final",), "final", _glass)
 ABERRATION = Stage("chromatic aberration", "finish", chromatic_aberration, ("final",), "final",
                    lambda p: {"strength": p["chromatic_aberration"]})
+HALFTONE = Stage("halftone", "finish", halftone, ("final",), "final", _halftone)
 GRAIN = Stage("film grain", "finish", film_grain, ("final",), "final", _grain)
 VIGNETTE = Stage("vignette", "finish", vignette, ("final",), "final", lambda p: {"strength": p["vignette"]})
 
@@ -479,6 +491,7 @@ FINISH_KEYS: Dict[str, Tuple[Stage, ...]] = {
     "glass": (GLASS,),
     "chromatic-aberration": (ABERRATION,),
     "shading": (SHADE,),
+    "halftone": (HALFTONE,),
     "bloom": (BLOOM,),
     "film-grain": (GRAIN,),
     "vignette": (VIGNETTE,),
@@ -490,6 +503,7 @@ _PIXEL_ARGUMENTS: Dict[str, Dict[str, Callable[[Any, float], Any]]] = {
     "contours": {"line_width": lambda v, scale: v * scale, "smoothing_radius": lambda v, scale: v * scale},
     "glass": {"blur_radius": _blur_radius},
     "shading": {"refraction": lambda v, scale: v * scale, "smoothing": lambda v, scale: v * scale},
+    "halftone": {"cell": _halftone_cell},
     "bloom": {
         "radii": lambda v, scale: tuple(float(r) * scale for r in v),
         "ray_length": lambda v, scale: v * scale,
@@ -550,23 +564,25 @@ def finish_stages(p: StageParams) -> Tuple[Stage, ...]:
     """The enabled effects, in their fixed order.
 
     Contours go first (frosted: the glass softens them) or after the glass and
-    aberration (sharp). contour_source "field" draws them from the field.
+    aberration (sharp). contour_source "field" draws them from the field. The
+    halftone (when p["halftone"] names a mode) comes after the sharp contours and
+    before the film grain, so the grain is not printed into dots.
 
     p["stage_params"] (optional) maps a stage key to argument overrides, like the
-    engine stages': contours, glass, chromatic-aberration, shading, bloom, film-grain,
-    vignette (the stage's name with spaces as dashes; "contours" reaches both
+    engine stages': contours, glass, chromatic-aberration, shading, bloom, halftone,
+    film-grain, vignette (the stage's name with spaces as dashes; "contours" reaches both
     contour stages). Overrides replace the arguments the stage binds from the
     render options, so {"shading": {"light_angle": 45}} turns the light. An
     override never enables a stage: a stage runs only when its own option does
     (shading > 0, noise > 0, ...). An argument the stage does not take raises
     PlanCompositionError. Keys of engine stages are ignored here. Pixel-size
     arguments (line_width, smoothing_radius, blur_radius, refraction, smoothing
-    of shading, radii and ray_length of bloom, grain_size) are given for
+    of shading, radii and ray_length of bloom, cell of halftone, grain_size) are given for
     REFERENCE_SHORT_SIDE and scale with the image like the stage's own defaults,
     so a preview matches the full render.
 
     Order: frosted contours, glass, shading, bloom, chromatic aberration, sharp
-    contours, film grain, vignette.
+    contours, halftone, film grain, vignette.
     """
     with p.reading_for("finish plan"):
         overrides = split_stage_params(p.get("stage_params"))[1]
@@ -588,6 +604,8 @@ def finish_stages(p: StageParams) -> Tuple[Stage, ...]:
             stages.append(ABERRATION)
         if contours is not None and sharp:
             stages.append(contours)
+        if p.get("halftone"):
+            stages.append(HALFTONE)
         if p["noise"] > 0.0:
             stages.append(GRAIN)
         if p["vignette"] > 0.0:
