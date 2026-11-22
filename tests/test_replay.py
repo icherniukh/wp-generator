@@ -33,6 +33,8 @@ COMPOSED = [
     dict(engine="blobs", warps=["noise"], stage_params={"blob-layers": {"blur": 0.8}}),
     dict(engine="simplex", field_stage="conic", blend="radial:difference", mapping="bands",
          stage_params={"blend": {"amount": 0.8}}),
+    dict(engine="simplex", field_stage="ridged", shading=0.6, glass=True),
+    dict(engine="blobs", shading=0.6),
     dict(engine="simplex", width=640, height=400, grain_size=3.0, grain_color="color", grain_blend="soft-light"),
     dict(engine="blobs", width=640, height=400, grain_size=6.0, grain_blend="overlay"),
     dict(engine="simplex", grain_color="color", grain_blend="multiply"),
