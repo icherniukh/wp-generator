@@ -212,6 +212,182 @@ def shade(
     return Image.fromarray(np.clip(out + 0.5, 0, 255).astype(np.uint8))
 
 
+# sRGB code -> linear light, and back through a 14-bit table (fine enough for the darkest codes).
+_TO_LINEAR = np.array(
+    [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in np.arange(256) / 255.0],
+    dtype=np.float32,
+)
+_ENCODE_STEPS = 16384
+_FROM_LINEAR = np.round(
+    255.0
+    * np.array(
+        [12.92 * v if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055 for v in np.arange(_ENCODE_STEPS + 1) / _ENCODE_STEPS]
+    )
+).astype(np.uint8)
+
+# Gains that make strength 1 and rays 1 a strong but not flat-white glow.
+BLOOM_GAIN = 1.2
+RAYS_GAIN = 3.0
+
+
+def _bloom_bright_pass(linear: np.ndarray, threshold: float, knee: float) -> np.ndarray:
+    """The part of the image above `threshold` in linear luminance, with a quadratic soft knee.
+
+    Below threshold - knee nothing passes; between threshold - knee and threshold + knee the
+    contribution rises smoothly; above, the excess over the threshold passes at full weight.
+    The pixel keeps its color (its RGB is scaled), so the glow is tinted like the source.
+    """
+    luma = linear @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    excess = luma - threshold
+    if knee > 0.0:
+        soft = np.clip(excess + knee, 0.0, 2.0 * knee)
+        soft = soft * soft / (4.0 * knee)
+        passed = np.maximum(soft, excess)
+    else:
+        passed = np.maximum(excess, 0.0)
+    return linear * (passed / np.maximum(luma, 1e-6))[..., None]
+
+
+def _box_reduce(a: np.ndarray, factor: int) -> np.ndarray:
+    """Averages factor x factor blocks of an (h, w, c) array whose sides divide by factor."""
+    h, w, c = a.shape
+    return a.reshape(h // factor, factor, w // factor, factor, c).mean(axis=(1, 3), dtype=np.float32)
+
+
+def _enlarge(a: np.ndarray, size: Tuple[int, int]) -> np.ndarray:
+    """Bilinear enlargement of an (h, w, c) float array to size (width, height)."""
+    if (a.shape[1], a.shape[0]) == size:
+        return a
+    return np.stack(
+        [
+            np.asarray(Image.fromarray(a[..., c], mode="F").resize(size, Image.Resampling.BILINEAR))
+            for c in range(a.shape[2])
+        ],
+        axis=-1,
+    )
+
+
+def _bloom_glow(bright: np.ndarray, sigmas: List[float]) -> np.ndarray:
+    """Gaussian-blurs the bright pass at each sigma (pixels) and sums with falling weights.
+
+    The sum has weights 1, 1/2, 1/4, ... normalized to 1, narrowest radius first. A radius is blurred
+    at the size where its sigma is a few pixels, and the layers are combined from the widest down,
+    so most of the work happens on small arrays.
+    """
+    h, w, _ = bright.shape
+    order = sorted(range(len(sigmas)), key=lambda i: sigmas[i])
+    weights = np.array([0.5**rank for rank in range(len(order))], dtype=np.float32)
+    weights /= weights.sum()
+    factors = [max(1, 2 ** int(np.floor(np.log2(max(sigmas[i] / 3.0, 1.0))))) for i in order]
+    block = max(factors)
+    padded = np.pad(bright, ((0, -h % block), (0, -w % block), (0, 0)))
+    levels = {1: padded}
+    glow: Optional[np.ndarray] = None
+    for rank in sorted(range(len(order)), key=lambda r: -factors[r]):
+        factor = factors[rank]
+        if factor not in levels:
+            levels[factor] = _box_reduce(padded, factor)
+        blurred = scipy.ndimage.gaussian_filter(levels[factor], (sigmas[order[rank]] / factor,) * 2 + (0,), mode="constant")
+        blurred[blurred < 1e-8] = 0.0  # no denormals
+        layer = blurred * weights[rank]
+        if glow is not None:
+            layer = layer + _enlarge(glow, (layer.shape[1], layer.shape[0]))
+        glow = layer
+    glow = _enlarge(glow, (padded.shape[1], padded.shape[0]))
+    return glow[:h, :w]
+
+
+def _light_rays(bright: np.ndarray, origin: Tuple[float, float], length: float, samples: int) -> np.ndarray:
+    """Streaks of the bright pass pointing away from `origin` (pixels, in the array's frame).
+
+    Each pixel averages the bright pass at `length` pixels along the line toward the origin,
+    with weights falling toward the far end (about e^-2 at `length`). 2**n samples are taken in
+    n passes: each pass averages the result with a copy of itself moved a further 2**j steps along
+    its own ray, which is exact because a ray's direction stays the same along it.
+    """
+    h, w, c = bright.shape
+    passes = max(1, int(np.ceil(np.log2(max(samples, 2)))))
+    count = 2**passes
+    step = length / count
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    dx, dy = x - origin[0], y - origin[1]
+    distance = np.maximum(np.hypot(dx, dy), 1e-6)
+    ux, uy = dx / distance, dy / distance
+    decay = float(np.exp(-2.0 / count))
+    out = bright
+    for j in range(passes):
+        move = step * 2**j
+        coordinates = np.array([y - uy * move, x - ux * move])
+        weight = decay ** (2**j)
+        moved = np.stack(
+            [scipy.ndimage.map_coordinates(out[..., k], coordinates, order=1, mode="constant") for k in range(c)],
+            axis=-1,
+        )
+        out = (out + weight * moved) / (1.0 + weight)
+    return out
+
+
+def bloom(
+    final: Image.Image,
+    *,
+    strength: float,
+    threshold: float = 0.5,
+    knee: float = 0.3,
+    radii: Tuple[float, ...] = (6.0, 24.0, 90.0),
+    rays: float = 0.0,
+    ray_origin: Tuple[float, float] = (0.5, -0.25),
+    ray_length: float = 700.0,
+    ray_samples: int = 32,
+) -> Image.Image:
+    """A soft glow around the bright parts of the image, and optionally light rays.
+
+    In linear light, the bright pass keeps what is above `threshold` (relative luminance, 0 to 1)
+    with a smooth quadratic knee of half-width `knee`, so nothing below threshold - knee glows.
+    It is blurred with a Gaussian at each of `radii` (sigma in pixels, narrow to wide; the wide
+    ones are blurred at reduced size), summed with weights 1, 1/2, 1/4, ... and screen-added to the
+    image, so the result approaches white without clipping. With `rays` > 0 a streak layer is added
+    the same way: the bright pass smeared `ray_length` pixels away from `ray_origin` (image-relative
+    (x, y); the default is above the top center, so the shafts fall down through the image), sampled
+    `ray_samples` times along the way. `strength` (0 to 1) scales both; `rays` is the amount of
+    streaks relative to the bloom. Deterministic; no RNG. strength 0 returns the image unchanged.
+    """
+    if strength < 0.0 or rays < 0.0:
+        raise ValueError(f"strength and rays must not be negative, not {strength!r} and {rays!r}")
+    if threshold < 0.0 or knee < 0.0:
+        raise ValueError(f"threshold and knee must not be negative, not {threshold!r} and {knee!r}")
+    radii = tuple(float(r) for r in radii)
+    if not radii or min(radii) <= 0.0:
+        raise ValueError(f"radii must be a non-empty list of positive pixel sizes, not {radii!r}")
+    if ray_length < 0.0 or int(ray_samples) < 1:
+        raise ValueError("ray_length must not be negative and ray_samples must be at least 1")
+    source = np.asarray(final.convert("RGB"))
+    if strength <= 0.0:
+        return Image.fromarray(source)
+    h, w = source.shape[:2]
+    linear = _TO_LINEAR[source]
+    bright = _bloom_bright_pass(linear, threshold, knee)
+    if not bright.any():
+        return Image.fromarray(source)
+
+    glow = _bloom_glow(bright, list(radii)) * BLOOM_GAIN
+    if rays > 0.0 and ray_length > 0.0:
+        # Streaks are soft, so make them at about a quarter of the size.
+        factor = max(1, min(4, int(min(w, h) // 64)))
+        small = _box_reduce(np.pad(bright, ((0, -h % factor), (0, -w % factor), (0, 0))), factor) if factor > 1 else bright
+        origin = (ray_origin[0] * w / factor - 0.5, ray_origin[1] * h / factor - 0.5)
+        streaks = _light_rays(small, origin, ray_length / factor, int(ray_samples))
+        streaks = _enlarge(streaks, (small.shape[1] * factor, small.shape[0] * factor))[:h, :w]
+        glow = glow + rays * RAYS_GAIN * streaks
+    glow *= strength
+
+    # Screen: 1 - (1 - image)(1 - glow), which stays below white where the image is.
+    glow = np.minimum(glow, 1.0)
+    out = 1.0 - (1.0 - linear) * (1.0 - glow)
+    encoded = _FROM_LINEAR[(out * _ENCODE_STEPS + 0.5).astype(np.int32)]
+    touched = (glow > 1e-5).any(axis=-1, keepdims=True)
+    return Image.fromarray(np.where(touched, encoded, source))
+
+
 def _contours(p: StageParams) -> Dict:
     scale = size_scale(p)
     return {
@@ -276,6 +452,25 @@ def _shade(p: StageParams) -> Dict:
 SHADE = Stage("shading", "finish", shade, ("final", "field"), "final", _shade)
 
 
+def _bloom(p: StageParams) -> Dict:
+    # Pixel sizes are for REFERENCE_SHORT_SIDE and scale with the image. The ray origin is
+    # relative to the image, so it needs no scaling.
+    scale = size_scale(p)
+    return {
+        "strength": p["bloom"],
+        "threshold": 0.5,
+        "knee": 0.3,
+        "radii": tuple(r * scale for r in (6.0, 24.0, 90.0)),
+        "rays": 0.0,
+        "ray_origin": (0.5, -0.25),
+        "ray_length": 700.0 * scale,
+        "ray_samples": 32,
+    }
+
+
+BLOOM = Stage("bloom", "finish", bloom, ("final",), "final", _bloom)
+
+
 # stage_params keys of the finish stages: the stage's name with spaces as dashes,
 # the way engine.stages.catalog.compose names its keys. "contours" reaches both
 # contour stages (image and field), whichever the render uses.
@@ -284,6 +479,7 @@ FINISH_KEYS: Dict[str, Tuple[Stage, ...]] = {
     "glass": (GLASS,),
     "chromatic-aberration": (ABERRATION,),
     "shading": (SHADE,),
+    "bloom": (BLOOM,),
     "film-grain": (GRAIN,),
     "vignette": (VIGNETTE,),
 }
@@ -294,6 +490,10 @@ _PIXEL_ARGUMENTS: Dict[str, Dict[str, Callable[[Any, float], Any]]] = {
     "contours": {"line_width": lambda v, scale: v * scale, "smoothing_radius": lambda v, scale: v * scale},
     "glass": {"blur_radius": _blur_radius},
     "shading": {"refraction": lambda v, scale: v * scale, "smoothing": lambda v, scale: v * scale},
+    "bloom": {
+        "radii": lambda v, scale: tuple(float(r) * scale for r in v),
+        "ray_length": lambda v, scale: v * scale,
+    },
     "film-grain": {"grain_size": _grain_size},
 }
 
@@ -353,7 +553,7 @@ def finish_stages(p: StageParams) -> Tuple[Stage, ...]:
     aberration (sharp). contour_source "field" draws them from the field.
 
     p["stage_params"] (optional) maps a stage key to argument overrides, like the
-    engine stages': contours, glass, chromatic-aberration, shading, film-grain,
+    engine stages': contours, glass, chromatic-aberration, shading, bloom, film-grain,
     vignette (the stage's name with spaces as dashes; "contours" reaches both
     contour stages). Overrides replace the arguments the stage binds from the
     render options, so {"shading": {"light_angle": 45}} turns the light. An
@@ -361,8 +561,12 @@ def finish_stages(p: StageParams) -> Tuple[Stage, ...]:
     (shading > 0, noise > 0, ...). An argument the stage does not take raises
     PlanCompositionError. Keys of engine stages are ignored here. Pixel-size
     arguments (line_width, smoothing_radius, blur_radius, refraction, smoothing
-    of shading, grain_size) are given for REFERENCE_SHORT_SIDE and scale with
-    the image like the stage's own defaults, so a preview matches the full render.
+    of shading, radii and ray_length of bloom, grain_size) are given for
+    REFERENCE_SHORT_SIDE and scale with the image like the stage's own defaults,
+    so a preview matches the full render.
+
+    Order: frosted contours, glass, shading, bloom, chromatic aberration, sharp
+    contours, film grain, vignette.
     """
     with p.reading_for("finish plan"):
         overrides = split_stage_params(p.get("stage_params"))[1]
@@ -378,6 +582,8 @@ def finish_stages(p: StageParams) -> Tuple[Stage, ...]:
             stages.append(GLASS)
         if p.get("shading", 0.0) > 0.0:
             stages.append(SHADE)
+        if p.get("bloom", 0.0) > 0.0:
+            stages.append(BLOOM)
         if p["chromatic_aberration"] > 0.0:
             stages.append(ABERRATION)
         if contours is not None and sharp:

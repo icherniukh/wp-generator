@@ -69,7 +69,7 @@ def hill():
 
 def test_every_finish_stage_has_a_key_named_like_compose_names_stages():
     assert sorted(FINISH_KEYS) == [
-        "chromatic-aberration", "contours", "film-grain", "glass", "shading", "vignette",
+        "bloom", "chromatic-aberration", "contours", "film-grain", "glass", "shading", "vignette",
     ]
     for key, stages in FINISH_KEYS.items():
         for stage in stages:
