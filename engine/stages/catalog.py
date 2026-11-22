@@ -140,6 +140,10 @@ FIELDS: Dict[str, Choice] = {
                       inputs=("coords", "palette"), bind=lambda p: _blob_count(p)),
     "shapes": _f("shapes", fields.shapes, "hard-edged circles, bars and arcs over the darkest color (shapes)",
                  inputs=("coords", "palette"), bind=lambda p: _shape_layers(p), full_resolution=True),
+    "fractal-glow": _f("fractal-glow", fields.fractal_glow,
+                       "neon Julia or Mandelbrot filaments with a soft fade band, on a dark ground",
+                       bind=_fixed(kind="julia", zoom=1.0, fade=0.005, iterations=200, interior=0.0),
+                       full_resolution=True),
     "strokes": _f("strokes", fields.strokes, "thick, heavily blurred strokes over the darkest color (liquid base)",
                   inputs=("coords", "palette"), bind=lambda p: _stroke_count(p)),
     "ridged": _f("ridged", fields.ridged_noise, "ridged multifractal noise, sharp crests",
@@ -168,7 +172,7 @@ _FIELD_KIND = {
     fields.ridged_noise: "scalar", fields.billow_noise: "scalar", fields.fbm_noise: "scalar",
     fields.radial_emitters: "weights", fields.orbiting_emitters: "weights", fields.anchor_points: "weights",
     fields.patch_mesh: "weights", fields.blob_layers: "weights", fields.strokes: "weights",
-    fields.shapes: "weights",
+    fields.shapes: "weights", fields.fractal_glow: "scalar",
 }
 _FULL_RESOLUTION = {choice.stage.fn for choice in FIELDS.values() if choice.full_resolution}
 _FIELD_REQUIRES = {fields.folded_noise: ("displacement",), fields.fractal_field: ("camera",)}
