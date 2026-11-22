@@ -691,6 +691,144 @@ def strokes(
     return WeightField(composite_over(alphas, colors, base, n), background=base)
 
 
+SHAPE_KINDS = ("circle", "half-circle", "quarter-circle", "rectangle", "bar", "rotated-rectangle", "ring")
+# Edge softness at hardness 0, in half short sides; it falls with the square of 1 - hardness.
+_SHAPE_SOFTNESS = 0.8
+# The edge ramp of a hard shape spans this many pixels (a smoothstep over it is about 0.8 px
+# between 10% and 90%): one pixel of anti-aliasing and a little margin.
+_SHAPE_EDGE_PIXELS = 1.3
+
+
+def shape_coverage(distance: np.ndarray, hardness: float = 0.97) -> np.ndarray:
+    """Coverage in [0, 1] of the inside of a signed distance (negative inside).
+
+    The distance is turned into pixels by its own gradient across the grid, as a
+    shader does with fwidth, so a hard edge is about one pixel wide on any grid
+    and stays so after a warp stretches or squeezes the image. Softness grows
+    with the square of 1 - hardness (see _SHAPE_SOFTNESS), so the default 0.97
+    is still sharp and a low hardness gives blob-like edges. Smoothstep keeps
+    coverage inside [0, 1] with no overshoot."""
+    grad_y, grad_x = np.gradient(distance)
+    pixel = np.maximum(np.hypot(grad_x, grad_y), 1e-6)
+    soft = _SHAPE_SOFTNESS * (1.0 - min(max(float(hardness), 0.0), 1.0)) ** 2
+    width = np.hypot(_SHAPE_EDGE_PIXELS, soft / pixel)
+    t = np.clip(0.5 - distance / (pixel * width), 0.0, 1.0)
+    return (t * t * (3.0 - 2.0 * t)).astype(np.float32)
+
+
+def shape_distance(kind: str, p: np.ndarray, q: np.ndarray, size: float, ratio: float) -> np.ndarray:
+    """Signed distance (negative inside) to a shape centered on the origin of the
+    local coordinates p, q, in the same units as p and q.
+
+    size is the radius, or the half width of a box; ratio is the half height of a
+    box in sizes, or the thickness of a ring in sizes. Half and quarter circles
+    are centered on their bounding box, flat side down and corner at the
+    bottom left, before rotation."""
+    if kind == "circle":
+        return np.hypot(p, q) - size
+    if kind == "half-circle":
+        q = q + size / 2.0
+        return np.maximum(np.hypot(p, q) - size, -q)
+    if kind == "quarter-circle":
+        p, q = p + size / 2.0, q + size / 2.0
+        return np.maximum(np.hypot(p, q) - size, np.maximum(-p, -q))
+    if kind in ("rectangle", "bar", "rotated-rectangle"):
+        reach_u = np.abs(p) - size * (1.8 if kind == "bar" else 1.0)
+        reach_v = np.abs(q) - size * ratio
+        return np.hypot(np.maximum(reach_u, 0.0), np.maximum(reach_v, 0.0)) + np.minimum(
+            np.maximum(reach_u, reach_v), 0.0
+        )
+    if kind == "ring":
+        thickness = size * ratio
+        return np.abs(np.hypot(p, q) - (size - thickness / 2.0)) - thickness / 2.0
+    raise ValueError(f"shape kind must be one of {', '.join(SHAPE_KINDS)}, not {kind!r}")
+
+
+def _shape_kinds(kinds: Any) -> Tuple[str, ...]:
+    chosen = (kinds,) if isinstance(kinds, str) else tuple(kinds)
+    unknown = [k for k in chosen if k not in SHAPE_KINDS]
+    if unknown or not chosen:
+        raise ValueError(f"shape kinds must come from {', '.join(SHAPE_KINDS)}; got {list(chosen)!r}")
+    return chosen
+
+
+def shapes(
+    coords: Coords,
+    palette: Palette,
+    *,
+    count: int = 6,
+    hardness: float = 0.97,
+    kinds: Sequence[str] = SHAPE_KINDS,
+    rng: Any,
+) -> WeightField:
+    """Hard-edged geometric shapes stacked over the darkest color, a poster or
+    Bauhaus composition: each shape is one palette color and covers what is
+    under it, as with blob_layers.
+
+    The image is cut into a loose grid of cells about 1.25 half short sides
+    across (at least 2 by 2). Shapes take distinct cells in turn, wander up to
+    a third of a cell from the center, and are big: radius 0.4 to 0.8 of a
+    cell, the bottom one 1.3 times that, so edges overlap. About 4 in 10 are
+    pushed against the nearest frame edge so the frame cuts them. kinds are
+    the allowed SHAPE_KINDS (half and quarter circles, boxes and bars sit at
+    right angles; rotated rectangles lean 15 to 75 degrees).
+
+    Coverage comes from analytic signed distances (shape_distance) through
+    shape_coverage: at hardness 1 an edge is one pixel of anti-aliasing, and
+    it softens toward blob-like edges as hardness drops. The edge is only as
+    sharp as the grid, so use a full-resolution grid (see catalog.compose).
+    """
+    allowed = _shape_kinds(kinds)
+    n = palette.size
+    total = max(1, int(count))
+    lightness = np.asarray(palette.oklab)[:, 0]
+    base = int(np.argmin(lightness))
+    others = [i for i in range(n) if i != base] or [base]
+
+    u, v, umax, vmax = _frame_extent(coords)
+    cell = 1.25
+    cols, rows = max(2, round(2.0 * umax / cell)), max(2, round(2.0 * vmax / cell))
+    cell_u, cell_v = 2.0 * umax / cols, 2.0 * vmax / rows
+
+    # A fixed number of draws per shape, independent of the palette size and kinds.
+    keys = [rng.uniform(0.0, 1.0) for _ in range(total)]
+    layout = [tuple(rng.uniform(0.0, 1.0) for _ in range(10)) for _ in range(total)]
+    slots = [others[i % len(others)] for i in range(total)]
+    colors = [slot for _, slot in sorted(zip(keys, slots))]
+
+    free = list(range(cols * rows))
+    alphas = []
+    for k, (pick, jit_u, jit_v, bleed, push, size, ratio, quarter, lean, kind_draw) in enumerate(layout):
+        if not free:
+            free = list(range(cols * rows))
+        index = free.pop(min(int(pick * len(free)), len(free) - 1))
+        cu = -umax + (index % cols + 0.5 + (jit_u - 0.5) * 0.66) * cell_u
+        cv = -vmax + (index // cols + 0.5 + (jit_v - 0.5) * 0.66) * cell_v
+        radius = cell * (0.4 + 0.4 * size) * (1.3 if k == 0 else 1.0)
+        if bleed < 0.4:
+            # Against the nearer frame edge on the axis the shape sits closest to, overhanging it.
+            overhang = radius * (0.1 + 0.6 * push)
+            if abs(cu) / umax >= abs(cv) / vmax:
+                cu = np.sign(cu or 1.0) * (umax - radius + overhang)
+            else:
+                cv = np.sign(cv or 1.0) * (vmax - radius + overhang)
+        kind = allowed[min(int(kind_draw * len(allowed)), len(allowed) - 1)]
+        angle = int(quarter * 4.0) * (np.pi / 2.0)
+        if kind == "rotated-rectangle":
+            angle += np.pi / 12.0 + lean * (np.pi / 3.0)
+        if kind == "bar":
+            ratio = 0.07 + 0.13 * ratio
+        elif kind == "ring":
+            ratio = 0.18 + 0.22 * ratio
+        else:
+            ratio = 0.5 + 0.5 * ratio
+        cos_a, sin_a = np.cos(angle), np.sin(angle)
+        du, dv = u - cu, v - cv
+        distance = shape_distance(kind, du * cos_a + dv * sin_a, -du * sin_a + dv * cos_a, radius, ratio)
+        alphas.append(shape_coverage(distance, hardness))
+    return WeightField(composite_over(alphas, colors, base, n), background=base)
+
+
 BLEND_MODES = ("add", "multiply", "screen", "difference", "overlay", "min", "max")
 
 

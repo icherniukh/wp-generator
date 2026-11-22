@@ -28,7 +28,7 @@ from engine.metadata import (
 from engine.parameter_ranges import PARAMETER_RANGES
 from engine.presets import PresetEngine
 from engine.stages import Composition, ScalarField, Trace
-from engine.stages.finish import finish_stages
+from engine.stages.finish import check_finish_stage_params, finish_stages, split_stage_params
 from engine.stages.runner import StageParams, run_stages
 from engine.stages.palette import make_palette
 
@@ -321,6 +321,7 @@ class WallpaperPipeline:
         grain_blend: str = "add",
         vignette: float,
         shading: float = 0.0,
+        stage_params: Optional[Dict[str, Dict[str, Any]]] = None,
         trace: Optional[Trace] = None,
     ) -> Image.Image:
         """Applies the enabled finish effects in their fixed order (engine.stages.finish)."""
@@ -340,6 +341,7 @@ class WallpaperPipeline:
                 grain_blend=grain_blend,
                 vignette=vignette,
                 shading=shading,
+                stage_params=stage_params,
                 width=image.width,
                 height=image.height,
             )
@@ -446,11 +448,13 @@ class WallpaperPipeline:
         if not isinstance(field_grain, (int, float)) or isinstance(field_grain, bool) or not 0.0 <= field_grain <= 1.0:
             raise PipelineConfigurationError(f"field_grain must be a number from 0 to 1, not {field_grain!r}.")
         stage_params = resolve("stage_params", None)
+        # Finish stages' keys are applied after the engine; refuse a bad one before rendering.
+        check_finish_stage_params(stage_params)
         composition = Composition(
             warps=tuple(warps or ()),
             field=field_stage,
             mapping=mapping,
-            stage_params=dict(stage_params or {}),
+            stage_params=split_stage_params(stage_params)[0],
             blend=blend,
             field_grain=float(field_grain),
         )
@@ -535,6 +539,7 @@ class WallpaperPipeline:
             grain_blend=grain_blend,
             vignette=vignette,
             shading=shading,
+            stage_params=stage_params,
             trace=trace,
         )
 

@@ -7,6 +7,8 @@ field or the mapping, add warps, and override any stage's arguments:
     --warp none --warp bulge     drop the engine's warps first
     --field voronoi              replace the field
     --mapping bands              replace the mapping
+    --field shapes               (and any field flagged full_resolution) also sets the
+                                 grid to one sample per output pixel
     --blend conic:difference     compute a second field and combine it with the
                                  first (modes: add, multiply, screen, difference,
                                  overlay, min, max; default screen)
@@ -14,7 +16,9 @@ field or the mapping, add warps, and override any stage's arguments:
                                  grain takes the palette's colors (see
                                  fields.field_grain)
     --stage-param twist.amount=3 set an argument of a stage (catalogue name or
-                                 plan stage name with spaces as dashes)
+                                 plan stage name with spaces as dashes); finish
+                                 stages too, e.g. shading.light_angle=45
+                                 (see engine.stages.finish.finish_stages)
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from engine.stages import fields, mapping, warp
+from engine.stages.finish import split_stage_params
 from engine.stages.runner import Stage, StageParams
 
 
@@ -33,6 +38,10 @@ class Choice:
 
     stage: Stage
     summary: str
+    # The field draws hard edges, so it needs one grid sample per output pixel; compose()
+    # then replaces a coarse sample_grid with a full-size one (a coarser grid enlarged at
+    # export would blur the edge and ring around it).
+    full_resolution: bool = False
 
 
 class PlanCompositionError(ValueError):
@@ -59,6 +68,12 @@ def _blob_count(p: StageParams) -> Dict[str, Any]:
     return blob_count(p)
 
 
+def _shape_layers(p: StageParams) -> Dict[str, Any]:
+    from engine.stages.plans import shape_layers
+
+    return shape_layers(p)
+
+
 def _stroke_count(p: StageParams) -> Dict[str, Any]:
     from engine.stages.plans import stroke_count
 
@@ -75,8 +90,9 @@ def _f(
     summary: str,
     inputs: Tuple[str, ...] = ("coords",),
     bind: Callable[[StageParams], Dict[str, Any]] = _fixed(),
+    full_resolution: bool = False,
 ) -> Choice:
-    return Choice(Stage(name, "field", fn, inputs, "field", bind), summary)
+    return Choice(Stage(name, "field", fn, inputs, "field", bind), summary, full_resolution)
 
 
 def _m(name: str, fn: Callable, summary: str, **defaults: Any) -> Choice:
@@ -122,6 +138,8 @@ FIELDS: Dict[str, Choice] = {
                      inputs=("coords", "palette"), bind=lambda p: _patch_mesh_size(p)),
     "blob-layers": _f("blob-layers", fields.blob_layers, "soft blobs stacked over the darkest color (blobs)",
                       inputs=("coords", "palette"), bind=lambda p: _blob_count(p)),
+    "shapes": _f("shapes", fields.shapes, "hard-edged circles, bars and arcs over the darkest color (shapes)",
+                 inputs=("coords", "palette"), bind=lambda p: _shape_layers(p), full_resolution=True),
     "strokes": _f("strokes", fields.strokes, "thick, heavily blurred strokes over the darkest color (liquid base)",
                   inputs=("coords", "palette"), bind=lambda p: _stroke_count(p)),
     "ridged": _f("ridged", fields.ridged_noise, "ridged multifractal noise, sharp crests",
@@ -150,7 +168,9 @@ _FIELD_KIND = {
     fields.ridged_noise: "scalar", fields.billow_noise: "scalar", fields.fbm_noise: "scalar",
     fields.radial_emitters: "weights", fields.orbiting_emitters: "weights", fields.anchor_points: "weights",
     fields.patch_mesh: "weights", fields.blob_layers: "weights", fields.strokes: "weights",
+    fields.shapes: "weights",
 }
+_FULL_RESOLUTION = {choice.stage.fn for choice in FIELDS.values() if choice.full_resolution}
 _FIELD_REQUIRES = {fields.folded_noise: ("displacement",), fields.fractal_field: ("camera",)}
 _MAPPING_ACCEPTS = {
     mapping.map_colors: ("scalar", "weights"), mapping.bands: ("scalar",),
@@ -206,6 +226,20 @@ def parse_blend(blend: str) -> Tuple[str, str]:
     if mode not in fields.BLEND_MODES:
         raise PlanCompositionError(f"unknown blend mode {mode!r}; choose from {', '.join(fields.BLEND_MODES)}")
     return name, mode
+
+
+def _at_full_resolution(stages: Sequence[Stage], field_name: str) -> List[Stage]:
+    """The stages with a full-size sample grid (one sample per output pixel)."""
+    from engine.stages.frame import control_lattice, fractal_camera, sample_grid
+
+    result: List[Stage] = []
+    for stage in stages:
+        if stage.fn in (control_lattice, fractal_camera):
+            raise PlanCompositionError(
+                f"field {field_name!r} needs a full-resolution grid, which {stage.name!r} cannot give"
+            )
+        result.append(_with_overrides(stage, {"scale": 1.0}) if stage.fn is sample_grid else stage)
+    return result
 
 
 def _check_requires(field_stage: Stage, available: set) -> None:
@@ -321,6 +355,9 @@ def compose(
             # The engine's own mapping cannot color this field; fall back to the plain ramp/blend.
             result[mapping_indexes[0]] = MAPPINGS["ramp"].stage
 
+    if field_stage.fn in _FULL_RESOLUTION:
+        result = _at_full_resolution(result, field_stage.name)
+
     available = {feature for s in result[:field_index] for feature in _provides(s)}
     _check_requires(field_stage, available)
 
@@ -336,6 +373,8 @@ def compose(
     if any(s.fn is mapping.blend_srgb for s in result) and any(s.phase == "resample" for s in result):
         raise PlanCompositionError("srgb-blend cannot be enlarged afterwards; pick another mapping")
 
+    # Finish stages' keys are applied by engine.stages.finish, not here.
+    stage_params = split_stage_params(stage_params)[0]
     if stage_params:
         known = {slug(s.name) for s in result}
         unknown = sorted(set(stage_params) - known)

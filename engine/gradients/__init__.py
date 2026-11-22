@@ -18,7 +18,7 @@ from engine.gradients.interpolation import (
     oklab_image_to_pil,
     validate_palette_colors,
 )
-from engine.gradients.mesh import BlobLayersGradient, FluidMeshGradient, MeshGradient, PatchMeshGradient, SimplexMeshGradient
+from engine.gradients.mesh import BlobLayersGradient, FluidMeshGradient, MeshGradient, PatchMeshGradient, ShapesGradient, SimplexMeshGradient
 from engine.gradients.registry import (
     GRADIENT_REGISTRY,
     get_gradient_engine_class,
@@ -44,6 +44,7 @@ __all__ = [
     "FractalFieldGradient",
     "MeshGradient",
     "PatchMeshGradient",
+    "ShapesGradient",
     "RadialBasisGradient",
     "RBFFieldGradient",
     "SimplexMeshGradient",
