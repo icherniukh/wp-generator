@@ -1,0 +1,90 @@
+{
+  "preset_id": "holo",
+  "version": "1.0.0",
+  "description": "Pastel holographic foil: a conic sweep screened with a radial one, bent by noise, in mirrored bands.",
+  "color_space": "oklch",
+  "color_count": {
+    "type": "uniform_int",
+    "min": 4,
+    "max": 5
+  },
+  "palette_structure": [
+    {
+      "role": "grounding_anchor",
+      "hue": {
+        "type": "uniform",
+        "min": 0,
+        "max": 1.0
+      },
+      "lightness": {
+        "type": "gaussian",
+        "mu": 0.93,
+        "sigma": 0.02,
+        "clip": [
+          0.88,
+          0.97
+        ]
+      },
+      "chroma": {
+        "type": "gaussian",
+        "mu": 0.22,
+        "sigma": 0.06,
+        "clip": [
+          0.1,
+          0.35
+        ]
+      }
+    },
+    {
+      "role": "accent_core",
+      "hue": {
+        "type": "uniform",
+        "min": 0,
+        "max": 1.0
+      },
+      "lightness": {
+        "type": "gaussian",
+        "mu": 0.85,
+        "sigma": 0.04,
+        "clip": [
+          0.76,
+          0.92
+        ]
+      },
+      "chroma": {
+        "type": "gaussian",
+        "mu": 0.42,
+        "sigma": 0.08,
+        "clip": [
+          0.28,
+          0.55
+        ]
+      }
+    }
+  ],
+  "overrides": {
+    "engine": "simplex",
+    "warps": [
+      "noise"
+    ],
+    "field_stage": "conic",
+    "blend": "radial:screen",
+    "mapping": "bands",
+    "stage_params": {
+      "bands": {
+        "cycles": 2,
+        "repeat": "mirror"
+      }
+    },
+    "noise": {
+      "type": "gaussian",
+      "mu": 0.015,
+      "sigma": 0.005,
+      "clip": [
+        0.0,
+        0.03
+      ]
+    },
+    "harmonize": "none"
+  }
+}

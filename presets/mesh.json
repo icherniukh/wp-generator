@@ -1,0 +1,77 @@
+{
+  "preset_id": "mesh",
+  "version": "1.0.0",
+  "description": "A grid of vivid colors blended bicubically, like a mesh gradient fill.",
+  "color_space": "oklch",
+  "color_count": {
+    "type": "uniform_int",
+    "min": 3,
+    "max": 5
+  },
+  "palette_structure": [
+    {
+      "role": "grounding_anchor",
+      "hue": {
+        "type": "uniform",
+        "min": 0,
+        "max": 1.0
+      },
+      "lightness": {
+        "type": "gaussian",
+        "mu": 0.32,
+        "sigma": 0.06,
+        "clip": [
+          0.2,
+          0.45
+        ]
+      },
+      "chroma": {
+        "type": "gaussian",
+        "mu": 0.4,
+        "sigma": 0.1,
+        "clip": [
+          0.2,
+          0.6
+        ]
+      }
+    },
+    {
+      "role": "accent_core",
+      "hue": {
+        "type": "uniform",
+        "min": 0,
+        "max": 1.0
+      },
+      "lightness": {
+        "type": "gaussian",
+        "mu": 0.7,
+        "sigma": 0.08,
+        "clip": [
+          0.55,
+          0.86
+        ]
+      },
+      "chroma": {
+        "type": "gaussian",
+        "mu": 0.6,
+        "sigma": 0.12,
+        "clip": [
+          0.4,
+          0.85
+        ]
+      }
+    }
+  ],
+  "overrides": {
+    "engine": "patch-mesh",
+    "noise": {
+      "type": "gaussian",
+      "mu": 0.02,
+      "sigma": 0.008,
+      "clip": [
+        0.0,
+        0.04
+      ]
+    }
+  }
+}
