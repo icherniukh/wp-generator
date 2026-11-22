@@ -11,7 +11,9 @@ field or the mapping, add warps, and override any stage's arguments:
                                  first (modes: add, multiply, screen, difference,
                                  overlay, min, max; default screen)
     --stage-param twist.amount=3 set an argument of a stage (catalogue name or
-                                 plan stage name with spaces as dashes)
+                                 plan stage name with spaces as dashes); finish
+                                 stages too, e.g. shading.light_angle=45
+                                 (see engine.stages.finish.finish_stages)
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from engine.stages import fields, mapping, warp
+from engine.stages.finish import split_stage_params
 from engine.stages.runner import Stage, StageParams
 
 
@@ -296,6 +299,8 @@ def compose(
     if any(s.fn is mapping.blend_srgb for s in result) and any(s.phase == "resample" for s in result):
         raise PlanCompositionError("srgb-blend cannot be enlarged afterwards; pick another mapping")
 
+    # Finish stages' keys are applied by engine.stages.finish, not here.
+    stage_params = split_stage_params(stage_params)[0]
     if stage_params:
         known = {slug(s.name) for s in result}
         unknown = sorted(set(stage_params) - known)
