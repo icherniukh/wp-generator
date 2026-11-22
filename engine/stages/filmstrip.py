@@ -75,8 +75,8 @@ def _coords_view(coords: Coords, aspect: float) -> Image.Image:
     thumb_h = max(1, int(round(THUMB_W / aspect)))
     gh, gw = coords.shape
     zoom = (thumb_h / gh, THUMB_W / gw)
-    x = scipy.ndimage.zoom(coords.x.astype(np.float64), zoom, order=1)
-    y = scipy.ndimage.zoom(coords.y.astype(np.float64), zoom, order=1)
+    x = scipy.ndimage.zoom(coords.x.astype(np.float64), zoom, order=1, mode="nearest")
+    y = scipy.ndimage.zoom(coords.y.astype(np.float64), zoom, order=1, mode="nearest")
     bx, by = coords.base_x, coords.base_y
     x0, x1 = float(bx.min()), float(bx.max())
     y0, y1 = float(by.min()), float(by.max())
