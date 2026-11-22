@@ -40,6 +40,9 @@ COMPOSED = [
     dict(engine="simplex", width=640, height=400, grain_size=3.0, grain_color="color", grain_blend="soft-light"),
     dict(engine="blobs", width=640, height=400, grain_size=6.0, grain_blend="overlay"),
     dict(engine="simplex", grain_color="color", grain_blend="multiply"),
+    dict(engine="shapes", warps=["liquify"]),
+    dict(engine="simplex", field_stage="shapes",
+         stage_params={"shapes": {"kinds": ["circle", "ring"], "hardness": 0.8}}),
 ]
 
 

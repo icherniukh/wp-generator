@@ -60,6 +60,19 @@ class BlobLayersGradient(StagedEngine):
         return self._render(colors, complexity=complexity, seed=seed)
 
 
+class ShapesGradient(StagedEngine):
+    plan = "shapes"
+
+    def generate(
+        self,
+        colors: Sequence[Sequence[float]],
+        complexity: int = 5,
+        seed: Optional[int] = None,
+    ) -> Image.Image:
+        """Hard-edged circles, bars and arcs stacked over the darkest color, at full resolution."""
+        return self._render(colors, complexity=complexity, seed=seed)
+
+
 class MeshGradient(StagedEngine):
     plan = "idw"
 

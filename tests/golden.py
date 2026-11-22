@@ -136,6 +136,17 @@ def golden_cases() -> List[GoldenCase]:
     cases.append(_engine_case("catalog/warp/liquify/blobs", "blobs", warps=["liquify"]))
     cases.append(_engine_case("catalog/field/strokes", "simplex", field_stage="strokes"))
     cases.append(_engine_case("catalog/field/strokes/liquify", "simplex", field_stage="strokes", warps=["liquify"]))
+    # Shapes put hard edges on a full-resolution grid, however the plan samples.
+    cases.append(_engine_case("catalog/field/shapes", "simplex", field_stage="shapes"))
+    cases.append(_engine_case("catalog/warp/liquify/shapes", "shapes", warps=["liquify"]))
+    cases.append(
+        _engine_case(
+            "catalog/field/shapes/kinds",
+            "simplex",
+            field_stage="shapes",
+            stage_params={"shapes": {"kinds": ["circle", "ring"], "hardness": 0.8}},
+        )
+    )
     # Film grain options; grain_size is covered in tests/test_grain_controls.py, since it
     # scales with the image and this size is too small for it to change anything.
     for grain_name, grain in (
