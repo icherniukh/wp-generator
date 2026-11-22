@@ -102,6 +102,9 @@ def golden_cases() -> List[GoldenCase]:
             fractal_angle=0.3,
         )
     )
+    # Height-field shading from a scalar field and from a weight field's lightness.
+    cases.append(_engine_case("shading/simplex", "simplex", width=120, height=80, shading=0.6))
+    cases.append(_engine_case("shading/blobs", "blobs", width=120, height=80, shading=0.6))
     # A single color is a solid fill for some engines; the pipeline never passes one.
     for engine in ("rbf", "topographic", "fractal"):
         cases.append(
@@ -133,6 +136,16 @@ def golden_cases() -> List[GoldenCase]:
     cases.append(_engine_case("catalog/warp/liquify/blobs", "blobs", warps=["liquify"]))
     cases.append(_engine_case("catalog/field/strokes", "simplex", field_stage="strokes"))
     cases.append(_engine_case("catalog/field/strokes/liquify", "simplex", field_stage="strokes", warps=["liquify"]))
+    # Film grain options; grain_size is covered in tests/test_grain_controls.py, since it
+    # scales with the image and this size is too small for it to change anything.
+    for grain_name, grain in (
+        ("color", dict(grain_color="color")),
+        ("overlay", dict(grain_blend="overlay")),
+        ("soft-light", dict(grain_blend="soft-light")),
+        ("multiply", dict(grain_blend="multiply")),
+        ("color-soft-light", dict(grain_color="color", grain_blend="soft-light")),
+    ):
+        cases.append(_engine_case(f"grain/{grain_name}", "simplex", noise=0.1, **grain))
     # Presets keep their own sampled parameters and finish, so filters are covered too.
     for preset_path in sorted((Path(__file__).parent.parent / "presets").glob("*.json")):
         if preset_path.name == "parameter_ranges.json":

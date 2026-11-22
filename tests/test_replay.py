@@ -35,13 +35,18 @@ COMPOSED = [
     dict(engine="simplex", field_stage="strokes", stage_params={"strokes": {"strokes": 5, "blur": 0.7}}),
     dict(engine="simplex", field_stage="conic", blend="radial:difference", mapping="bands",
          stage_params={"blend": {"amount": 0.8}}),
+    dict(engine="simplex", field_stage="ridged", shading=0.6, glass=True),
+    dict(engine="blobs", shading=0.6),
+    dict(engine="simplex", width=640, height=400, grain_size=3.0, grain_color="color", grain_blend="soft-light"),
+    dict(engine="blobs", width=640, height=400, grain_size=6.0, grain_blend="overlay"),
+    dict(engine="simplex", grain_color="color", grain_blend="multiply"),
 ]
 
 
 @pytest.mark.parametrize("composition", COMPOSED, ids=lambda c: f"{c['engine']}+{c.get('field_stage') or c.get('warps')}")
 def test_composed_render_replays_from_metadata(composition):
     pipeline = WallpaperPipeline()
-    config = RenderConfiguration(width=160, height=100, seed=8, noise=0.2, **composition)
+    config = RenderConfiguration(**{"width": 160, "height": 100, "seed": 8, "noise": 0.2, **composition})
     png, original = pipeline.render_png_bytes(config)
     metadata = extract_image_metadata(png)
     replayed = pipeline.render(metadata.to_render_configuration())
