@@ -74,6 +74,12 @@ def _shape_layers(p: StageParams) -> Dict[str, Any]:
     return shape_layers(p)
 
 
+def _fractal_shape_layers(p: StageParams) -> Dict[str, Any]:
+    """2 root shapes up to complexity 5, 3 from 6, each repeated over 3 levels."""
+    return {"count": min(3, 2 + max(1, int(p["complexity"])) // 6), "depth": 3, "ratio": 0.45,
+            "fade": 0.35, "hardness": 0.97}
+
+
 def _stroke_count(p: StageParams) -> Dict[str, Any]:
     from engine.stages.plans import stroke_count
 
@@ -140,6 +146,9 @@ FIELDS: Dict[str, Choice] = {
                       inputs=("coords", "palette"), bind=lambda p: _blob_count(p)),
     "shapes": _f("shapes", fields.shapes, "hard-edged circles, bars and arcs over the darkest color (shapes)",
                  inputs=("coords", "palette"), bind=lambda p: _shape_layers(p), full_resolution=True),
+    "fractal-shapes": _f("fractal-shapes", fields.fractal_shapes,
+                         "shapes that repeat at smaller scales along their edges, with soft halos (self-similar poster)",
+                         inputs=("coords", "palette"), bind=lambda p: _fractal_shape_layers(p), full_resolution=True),
     "fractal-glow": _f("fractal-glow", fields.fractal_glow,
                        "neon Julia or Mandelbrot filaments with a soft fade band, on a dark ground",
                        bind=_fixed(kind="julia", zoom=1.0, fade=0.005, iterations=200, interior=0.0),
@@ -172,7 +181,7 @@ _FIELD_KIND = {
     fields.ridged_noise: "scalar", fields.billow_noise: "scalar", fields.fbm_noise: "scalar",
     fields.radial_emitters: "weights", fields.orbiting_emitters: "weights", fields.anchor_points: "weights",
     fields.patch_mesh: "weights", fields.blob_layers: "weights", fields.strokes: "weights",
-    fields.shapes: "weights", fields.fractal_glow: "scalar",
+    fields.shapes: "weights", fields.fractal_shapes: "weights", fields.fractal_glow: "scalar",
 }
 _FULL_RESOLUTION = {choice.stage.fn for choice in FIELDS.values() if choice.full_resolution}
 _FIELD_REQUIRES = {fields.folded_noise: ("displacement",), fields.fractal_field: ("camera",)}

@@ -843,6 +843,201 @@ def shapes(
     return WeightField(composite_over(alphas, colors, base, n), background=base)
 
 
+# What each shape kind begets besides itself: circles circles and rings, boxes boxes and bars.
+_FRACTAL_KIN = {
+    "circle": ("circle", "ring"),
+    "ring": ("ring", "circle"),
+    "half-circle": ("half-circle", "circle"),
+    "quarter-circle": ("quarter-circle", "circle"),
+    "rectangle": ("rectangle", "bar"),
+    "bar": ("bar", "rectangle"),
+    "rotated-rectangle": ("rotated-rectangle", "rectangle"),
+}
+FRACTAL_SHAPE_CAP = 120
+# Halo width at fade 1, in shape sizes, and its opacity right at the edge; the halo falls off
+# exponentially and is cut where it drops below e^-_HALO_REACH of that.
+_HALO_WIDTH = 0.5
+_HALO_ALPHA = 0.35
+_HALO_REACH = 4.0
+_CULL_STRIDE = 8
+
+
+def _shape_bounds(kind: str, size: float, ratio: float) -> Tuple[float, float]:
+    """Half extents (along the shape's own axes) of the box a shape fits in."""
+    if kind in ("rectangle", "rotated-rectangle"):
+        return size, size * ratio
+    if kind == "bar":
+        return 1.8 * size, size * ratio
+    return (1.5 * size, 1.5 * size) if kind in ("half-circle", "quarter-circle") else (size, size)
+
+
+def _cull_box(u: np.ndarray, v: np.ndarray, center: Tuple[float, float], reach: float, step: float, stride: int):
+    """Slices of the pixels that may lie within reach of center, found on a coarse
+    subsampling of the frame positions (u, v) and widened by the coarse step, so it
+    holds on a grid a warp has bent. None when the shape is off the image."""
+    near = np.hypot(u[::stride, ::stride] - center[0], v[::stride, ::stride] - center[1]) < reach + step
+    rows, cols = np.flatnonzero(near.any(axis=1)), np.flatnonzero(near.any(axis=0))
+    if not rows.size:
+        return None
+    h, w = u.shape
+    r0, r1 = max(int(rows[0]) * stride - stride, 0), min((int(rows[-1]) + 2) * stride, h)
+    c0, c1 = max(int(cols[0]) * stride - stride, 0), min((int(cols[-1]) + 2) * stride, w)
+    if r1 - r0 < 3 or c1 - c0 < 3:
+        r0, r1, c0, c1 = max(r0 - 2, 0), min(r1 + 2, h), max(c0 - 2, 0), min(c1 + 2, w)
+    return slice(r0, r1), slice(c0, c1)
+
+
+def fractal_shapes(
+    coords: Coords,
+    palette: Palette,
+    *,
+    count: int = 3,
+    depth: int = 3,
+    ratio: float = 0.45,
+    fade: float = 0.35,
+    hardness: float = 0.97,
+    kinds: Sequence[str] = SHAPE_KINDS,
+    rng: Any,
+) -> WeightField:
+    """Self-similar shape compositions: the shapes poster, where every shape
+    repeats at smaller scales and soft halos carry one scale into the next.
+
+    count big shapes are laid out as in shapes. Each spawns 2 to 4 children (2 to 3
+    below the first generation) at ratio times its size, centered on its boundary or a
+    little inside it, for depth levels of shapes in all (1 is the roots alone); the total is capped at
+    FRACTAL_SHAPE_CAP. A child is the parent's kind or a related one (circles
+    beget circles and rings, rectangles rectangles and bars) and keeps its
+    orientation. A root takes one of the palette's colors but the darkest, which
+    stays the background, and every generation takes the next color in the cycle
+    of them. Shapes are stacked over the base, parents first.
+
+    The body of a shape has the crisp edge of shape_coverage at the given hardness.
+    fade (0 to 1) adds a halo outside it: opacity falling off exponentially from
+    0.6 at the edge over fade * 0.5 sizes, wider at deeper levels, so overlapping
+    shapes grade into each other. 0 gives hard shapes only.
+
+    Each shape is evaluated only inside its bounding box. The random draws are a
+    fixed number per shape, whatever the palette and kinds.
+    """
+    allowed = _shape_kinds(kinds)
+    n = palette.size
+    base = int(np.argmin(np.asarray(palette.oklab)[:, 0]))
+    others = [i for i in range(n) if i != base] or [base]
+    roots_wanted = max(1, int(count))
+    levels = max(1, int(depth)) - 1
+    child_ratio = min(max(float(ratio), 0.1), 0.9)
+    fade = min(max(float(fade), 0.0), 1.0)
+
+    u, v, umax, vmax = _frame_extent(coords)
+    h, w = u.shape
+    cell = 1.25
+    cols, rows = max(2, round(2.0 * umax / cell)), max(2, round(2.0 * vmax / cell))
+    cell_u, cell_v = 2.0 * umax / cols, 2.0 * vmax / rows
+    free: list = []
+
+    def related(kind: str, draw: float) -> str:
+        pool = [k for k in _FRACTAL_KIN[kind] if k in allowed]
+        return pool[0] if draw < 0.65 or len(pool) < 2 else pool[1]
+
+    # Every shape: kind, center, size, ratio, angle, depth, color slot, and the two draws
+    # that place its own children (its count and the angle of the first).
+    shapes_list: list = []
+    queue: list = []  # (parent or None, index of the child among its siblings, sibling count)
+    for k in range(roots_wanted):
+        queue.append((None, k, roots_wanted))
+    head = 0
+    while head < len(queue) and len(shapes_list) < FRACTAL_SHAPE_CAP:
+        parent, slot, siblings = queue[head]
+        head += 1
+        draws = [rng.uniform(0.0, 1.0) for _ in range(14)]
+        kind_d, pick, jit_u, jit_v, bleed, push, size_d, ratio_d, quarter, lean, n_d, spin, inset, size_j = draws
+        if parent is None:
+            if not free:
+                free = list(range(cols * rows))
+            index = free.pop(min(int(pick * len(free)), len(free) - 1))
+            cu = -umax + (index % cols + 0.5 + (jit_u - 0.5) * 0.66) * cell_u
+            cv = -vmax + (index // cols + 0.5 + (jit_v - 0.5) * 0.66) * cell_v
+            size = cell * (0.4 + 0.4 * size_d) * (1.3 if slot == 0 else 1.0)
+            if bleed < 0.4:
+                overhang = size * (0.1 + 0.6 * push)
+                if abs(cu) / umax >= abs(cv) / vmax:
+                    cu = np.sign(cu or 1.0) * (umax - size + overhang)
+                else:
+                    cv = np.sign(cv or 1.0) * (vmax - size + overhang)
+            kind = allowed[min(int(kind_d * len(allowed)), len(allowed) - 1)]
+            angle = int(quarter * 4.0) * (np.pi / 2.0)
+            if kind == "rotated-rectangle":
+                angle += np.pi / 12.0 + lean * (np.pi / 3.0)
+            level, cycle = 0, slot % len(others)
+        else:
+            level = parent["level"] + 1
+            size = parent["size"] * child_ratio * (0.85 + 0.3 * size_j)
+            kind = related(parent["kind"], kind_d)
+            angle = parent["angle"]
+            if kind in ("half-circle", "quarter-circle"):
+                angle += int(quarter * 4.0) * (np.pi / 2.0)
+            # Evenly around the parent from its spin, each child a little off its slot.
+            theta = parent["spin"] + 2.0 * np.pi * (slot + 0.5 + (jit_u - 0.5) * 0.6) / siblings
+            local = theta - parent["angle"]
+            dx, dy = np.cos(local), np.sin(local)
+            half_u, half_v = _shape_bounds(parent["kind"], parent["size"], parent["ratio"])
+            if parent["kind"] in ("rectangle", "bar", "rotated-rectangle"):
+                reach = 1.0 / max(abs(dx) / half_u, abs(dy) / half_v, 1e-9)
+            else:
+                reach = 0.9 * parent["size"]
+            reach -= size * inset * 0.9
+            bu, bv = dx * reach, dy * reach
+            cos_p, sin_p = np.cos(parent["angle"]), np.sin(parent["angle"])
+            cu = parent["cu"] + bu * cos_p - bv * sin_p
+            cv = parent["cv"] + bu * sin_p + bv * cos_p
+            cycle = (parent["cycle"] + 1) % len(others)
+        if kind == "bar":
+            shape_ratio = 0.07 + 0.13 * ratio_d
+        elif kind == "ring":
+            shape_ratio = 0.18 + 0.22 * ratio_d
+        else:
+            shape_ratio = 0.5 + 0.5 * ratio_d
+        shape = dict(kind=kind, cu=cu, cv=cv, size=size, ratio=shape_ratio, angle=angle, level=level,
+                     cycle=cycle, spin=spin * 2.0 * np.pi)
+        shapes_list.append(shape)
+        if level < levels:
+            kids = 2 + int(n_d * (3 if level == 0 else 2))
+            queue.extend((shape, j, kids) for j in range(kids))
+
+    # Pixel step between coarse samples, so a crop never cuts a shape short.
+    coarse_u, coarse_v = u[::_CULL_STRIDE, ::_CULL_STRIDE], v[::_CULL_STRIDE, ::_CULL_STRIDE]
+    step = 0.0
+    if coarse_u.shape[0] > 1:
+        step = max(step, float(np.hypot(np.diff(coarse_u, axis=0), np.diff(coarse_v, axis=0)).max()))
+    if coarse_u.shape[1] > 1:
+        step = max(step, float(np.hypot(np.diff(coarse_u, axis=1), np.diff(coarse_v, axis=1)).max()))
+
+    weights = np.zeros((n, h, w), dtype=np.float32)
+    weights[base] = 1.0
+    for shape in shapes_list:
+        size, level = shape["size"], shape["level"]
+        halo_width = fade * _HALO_WIDTH * size * (1.0 + 0.3 * level)
+        half_u, half_v = _shape_bounds(shape["kind"], size, shape["ratio"])
+        reach = float(np.hypot(half_u, half_v)) + _HALO_REACH * halo_width
+        box = _cull_box(u, v, (shape["cu"], shape["cv"]), reach, step, _CULL_STRIDE)
+        if box is None:
+            continue
+        du, dv = u[box] - shape["cu"], v[box] - shape["cv"]
+        cos_a, sin_a = np.cos(shape["angle"]), np.sin(shape["angle"])
+        distance = shape_distance(shape["kind"], du * cos_a + dv * sin_a, -du * sin_a + dv * cos_a, size,
+                                  shape["ratio"])
+        alpha = shape_coverage(distance, hardness)
+        if halo_width > 1e-6:
+            floor = np.exp(-_HALO_REACH)
+            falloff = np.exp(-np.maximum(distance, 0.0) / halo_width)
+            halo = _HALO_ALPHA * np.clip((falloff - floor) / (1.0 - floor), 0.0, 1.0)
+            alpha = alpha + (1.0 - alpha) * halo.astype(np.float32)
+        region = weights[(slice(None),) + box]
+        region *= 1.0 - alpha
+        region[others[shape["cycle"]]] += alpha
+    return WeightField(weights, background=base)
+
+
 # Julia constants whose sets are connected or dendritic and fill a frame with fine filaments.
 GLOW_JULIA_CONSTANTS = (
     (-0.8, 0.156), (-0.7269, 0.1889), (0.285, 0.01), (-0.4, 0.6), (-0.835, -0.2321),

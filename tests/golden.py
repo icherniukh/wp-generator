@@ -175,6 +175,18 @@ def golden_cases() -> List[GoldenCase]:
             stage_params={"shapes": {"kinds": ["circle", "ring"], "hardness": 0.8}},
         )
     )
+    # Fractal shapes: soft edges (hardness 0.3) and a wide halo (fade 0.9) at a low resolution,
+    # so a few levels of cross-platform noise upstream cannot flip a pixel.
+    cases.append(
+        _engine_case(
+            "catalog/field/fractal-shapes",
+            "simplex",
+            width=120,
+            height=80,
+            field_stage="fractal-shapes",
+            stage_params={"fractal-shapes": {"fade": 0.9, "hardness": 0.3}},
+        )
+    )
     # Fractal glow: a low-resolution grid and a wide fade, so the field is smooth. A crisp
     # escape-time boundary is chaotic and flips whole pixels across platforms; a fade of
     # a fifth of the short side keeps each value within a few levels of a neighbour's, and
