@@ -316,6 +316,8 @@ class WallpaperPipeline:
                 chromatic_aberration=chromatic_aberration,
                 noise=noise,
                 vignette=vignette,
+                width=image.width,
+                height=image.height,
             )
         )
         stages = finish_stages(params)

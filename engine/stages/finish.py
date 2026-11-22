@@ -1,5 +1,9 @@
 """Finish stages: image effects applied to the exported 8-bit image, in a fixed order.
 
+Sizes in pixels (glass blur, contour width and smoothing) are given for an
+image whose short side is REFERENCE_SHORT_SIDE and scale with the image, so a
+small preview looks like the full render reduced.
+
 Contours can follow the image's luminance (default) or the engine's scalar
 field, and sit under the glass and aberration (frosted, default) or over them
 (sharp).
@@ -17,10 +21,32 @@ from engine.stages.runner import Stage, StageParams
 from engine.stages.types import ScalarField
 
 
-def contour_lines(image: Image.Image, *, intensity: float, levels: int, line_width: float, mode: str) -> Image.Image:
+# The default device (MacBook Pro 14", 3024 x 1964), where the pixel sizes below were tuned.
+REFERENCE_SHORT_SIDE = 1964
+
+
+def size_scale(p: StageParams) -> float:
+    """The image's short side relative to REFERENCE_SHORT_SIDE."""
+    return min(int(p["width"]), int(p["height"])) / REFERENCE_SHORT_SIDE
+
+
+def contour_lines(
+    image: Image.Image,
+    *,
+    intensity: float,
+    levels: int,
+    line_width: float,
+    mode: str,
+    smoothing_radius: float = 2.5,
+) -> Image.Image:
     """Isolines of the image's smoothed luminance, drawn over it."""
     return WallpaperFilters.apply_contour_lines(
-        image, levels=levels, line_width=line_width, intensity=intensity, mode=mode
+        image,
+        levels=levels,
+        line_width=line_width,
+        intensity=intensity,
+        mode=mode,
+        smoothing_radius=smoothing_radius,
     )
 
 
@@ -33,7 +59,14 @@ def field_elevation(field: ScalarField, size: Tuple[int, int]) -> np.ndarray:
 
 
 def field_contour_lines(
-    image: Image.Image, field: ScalarField, *, intensity: float, levels: int, line_width: float, mode: str
+    image: Image.Image,
+    field: ScalarField,
+    *,
+    intensity: float,
+    levels: int,
+    line_width: float,
+    mode: str,
+    smoothing_radius: float = 2.5,
 ) -> Image.Image:
     """Isolines of the engine's scalar field, so they follow the shape the
     engine computed rather than the colors the palette gave it."""
@@ -43,6 +76,7 @@ def field_contour_lines(
         line_width=line_width,
         intensity=intensity,
         mode=mode,
+        smoothing_radius=smoothing_radius,
         elevation=field_elevation(field, image.size),
     )
 
@@ -68,18 +102,24 @@ def vignette(image: Image.Image, *, strength: float) -> Image.Image:
 
 
 def _contours(p: StageParams) -> Dict:
+    scale = size_scale(p)
     return {
         "intensity": p["contours"],
         "levels": p["contour_levels"],
-        "line_width": p["contour_width"],
+        "line_width": p["contour_width"] * scale,
         "mode": p["contour_mode"],
+        "smoothing_radius": 2.5 * scale,
     }
+
+
+def _glass(p: StageParams) -> Dict:
+    # frosted_glass blurs at half size with radius blur_radius // 2, so keep at least 2.
+    return {"blur_radius": max(2, int(round(60 * size_scale(p)))), "noise_amount": 0.15}
 
 
 CONTOURS = Stage("contours", "finish", contour_lines, ("final",), "final", _contours)
 FIELD_CONTOURS = Stage("field contours", "finish", field_contour_lines, ("final", "field"), "final", _contours)
-GLASS = Stage("glass", "finish", frosted_glass, ("final",), "final",
-              lambda p: {"blur_radius": 60, "noise_amount": 0.15})
+GLASS = Stage("glass", "finish", frosted_glass, ("final",), "final", _glass)
 ABERRATION = Stage("chromatic aberration", "finish", chromatic_aberration, ("final",), "final",
                    lambda p: {"strength": p["chromatic_aberration"]})
 GRAIN = Stage("film grain", "finish", film_grain, ("final",), "final", lambda p: {"amount": p["noise"]})
