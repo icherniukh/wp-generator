@@ -43,6 +43,9 @@ COMPOSED = [
     dict(engine="shapes", warps=["liquify"]),
     dict(engine="simplex", field_stage="shapes",
          stage_params={"shapes": {"kinds": ["circle", "ring"], "hardness": 0.8}}),
+    dict(engine="blobs", shading=0.6, stage_params={"shading": {"light_angle": 45, "refraction": 0, "specular": 0.8, "tint": 0.5}}),
+    dict(engine="simplex", contours=0.5, noise=0.3, width=640, height=400,
+         stage_params={"contours": {"line_width": 3.0}, "film-grain": {"grain_size": 4.0}, "twist": {"amount": 1.0}}, warps=["twist"]),
 ]
 
 
