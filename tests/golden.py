@@ -136,6 +136,11 @@ def golden_cases() -> List[GoldenCase]:
     cases.append(_engine_case("catalog/warp/liquify/blobs", "blobs", warps=["liquify"]))
     cases.append(_engine_case("catalog/field/strokes", "simplex", field_stage="strokes"))
     cases.append(_engine_case("catalog/field/strokes/liquify", "simplex", field_stage="strokes", warps=["liquify"]))
+    # Noise on the field before mapping: a scalar field, weight fields, a coarse lattice
+    # and a blended field.
+    for engine in ("simplex", "blobs", "fluid-wave", "fractal"):
+        cases.append(_engine_case(f"field-grain/{engine}", engine, field_grain=0.15))
+    cases.append(_engine_case("field-grain/blend", "simplex", field_stage="conic", blend="radial:difference", field_grain=0.1))
     # Film grain options; grain_size is covered in tests/test_grain_controls.py, since it
     # scales with the image and this size is too small for it to change anything.
     for grain_name, grain in (

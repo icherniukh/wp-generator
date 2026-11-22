@@ -115,6 +115,8 @@ class RenderConfiguration:
     field_stage: Optional[str] = None
     mapping: Optional[str] = None
     blend: Optional[str] = None
+    # Noise added to the field before color mapping (0 is off), so the grain takes the ramp's colors.
+    field_grain: Optional[float] = None
     stage_params: Optional[Dict[str, Dict[str, Any]]] = None
     # Contours from the image's luminance ("image") or the engine's scalar
     # field ("field"); under the glass and aberration ("frosted") or over ("sharp").
@@ -173,6 +175,7 @@ class RenderResult:
     field_stage: Optional[str] = None
     mapping: Optional[str] = None
     blend: Optional[str] = None
+    field_grain: float = 0.0
     stage_params: Optional[Dict[str, Dict[str, Any]]] = None
     base_image: Optional[Image.Image] = None
     palette_contrast: PaletteContrast = field(default_factory=lambda: PaletteContrast(()))
@@ -439,6 +442,9 @@ class WallpaperPipeline:
         field_stage = resolve("field_stage", None)
         mapping = resolve("mapping", None)
         blend = resolve("blend", None)
+        field_grain = resolve("field_grain", 0.0)
+        if not isinstance(field_grain, (int, float)) or isinstance(field_grain, bool) or not 0.0 <= field_grain <= 1.0:
+            raise PipelineConfigurationError(f"field_grain must be a number from 0 to 1, not {field_grain!r}.")
         stage_params = resolve("stage_params", None)
         composition = Composition(
             warps=tuple(warps or ()),
@@ -446,6 +452,7 @@ class WallpaperPipeline:
             mapping=mapping,
             stage_params=dict(stage_params or {}),
             blend=blend,
+            field_grain=float(field_grain),
         )
 
         base_colors = self._resolve_palette(config, preset_data, complexity, active_seed)
@@ -574,6 +581,7 @@ class WallpaperPipeline:
             field_stage=field_stage,
             mapping=mapping,
             blend=blend,
+            field_grain=float(field_grain),
             stage_params=dict(stage_params) if stage_params else None,
             base_image=base_image,
             palette_contrast=evaluate_palette_contrast(final_colors),

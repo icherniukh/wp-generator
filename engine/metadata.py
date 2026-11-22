@@ -125,6 +125,7 @@ class ImageMetadata:
             field_stage=params.get("field"),
             mapping=params.get("mapping"),
             blend=params.get("blend"),
+            field_grain=params.get("field_grain"),
             stage_params=params.get("stage_params"),
             seed=self.seed,
         )
@@ -182,6 +183,7 @@ def build_image_metadata(result: Any, version: Optional[str] = None) -> ImageMet
         "field": getattr(result, "field_stage", None),
         "mapping": getattr(result, "mapping", None),
         "blend": getattr(result, "blend", None),
+        "field_grain": getattr(result, "field_grain", None),
         "stage_params": getattr(result, "stage_params", None),
         "preset": getattr(result, "preset", None),
         "preset_version": getattr(result, "preset_version", None),

@@ -8,7 +8,7 @@ import numpy as np
 import scipy.ndimage
 
 from engine.gradients.spatial import generate_noise_plane, normalize_scalar_field, trig_fbm_field
-from engine.stages.types import Coords, Palette, ScalarField, WeightField
+from engine.stages.types import Coords, Field, Palette, ScalarField, WeightField
 
 
 def folded_noise(
@@ -721,3 +721,92 @@ def blend_fields(
         raise ValueError(f"blend mode must be one of {', '.join(BLEND_MODES)}, not {mode!r}")
     out = a + float(amount) * (out - a)
     return ScalarField(normalize_scalar_field(out) if normalize else np.clip(out, 0.0, 1.0).astype(np.float32))
+
+
+def _resize_plane(plane: np.ndarray, size: Tuple[int, int], method: str = "bicubic") -> np.ndarray:
+    """Resizes one float plane to size (width, height): PIL bicubic, which aligns
+    pixel centers as the export's Lanczos does, or "spline", the cubic spline
+    that bicubic_upscale uses, which aligns the corner samples (the two disagree
+    by tens of pixels on a lattice as coarse as fluid-wave's)."""
+    from PIL import Image
+
+    if method == "spline":
+        width, height = size
+        rows, cols = plane.shape
+        return scipy.ndimage.zoom(plane, (height / rows, width / cols), order=3, mode="nearest").astype(np.float32)
+    image = Image.fromarray(np.ascontiguousarray(plane, dtype=np.float32), mode="F")
+    return np.asarray(image.resize(size, Image.Resampling.BICUBIC), dtype=np.float32)
+
+
+def field_grain(field: Field, coords: Coords, *, amount: float = 0.1, resize: str = "bicubic", rng: Any) -> Field:
+    """Adds noise to the field itself, before it is mapped to colors, so the
+    grain takes the palette's own colors: neighboring hues speckle into each
+    other instead of grey noise lying over them (finish-stage film grain).
+
+    Resolution. Engines evaluate the field on a grid a quarter of the output
+    size (sample_grid), map it there and enlarge the colors in the export
+    stage, which would blur noise added at that size into blotches four pixels
+    wide. So a field coarser than coords.output_size is first enlarged to it
+    (the mapping then runs at output resolution and the export has nothing left
+    to resize), and the noise is drawn per output pixel. resize picks the
+    enlargement so the gradient matches the one the plan makes without grain:
+    "bicubic" where the export enlarges the colors, "spline" for plans that
+    enlarge them with bicubic_upscale (fluid-wave). A field
+    that is already at output size, as in spline-wave, flow-field and idw, is
+    used as is. The returned field is at output size; the plan's own field,
+    which contours and shading read, is left untouched.
+
+    Scalar fields. Zero-mean Gaussian noise of standard deviation amount times
+    the field's robust range (its 1st to 99th percentile span, at least 0.25 so
+    a nearly flat field still grains, at most 1 since mappings read 0..1).
+    Every mapping reads the field as a position on the palette in 0..1 and
+    clips it to that (none renormalizes it), so amount is a fraction of the
+    ramp, for escape-fractal as for simplex. Bands and cosine cycles also
+    multiply the field by their cycle count or frequency; the plan divides
+    amount by that before calling (catalog._with_field_grain). The result is folded back into
+    0..1 by reflection rather than clipped, so pixels sitting on the first or
+    last color still speckle toward their neighbor instead of half of them
+    staying flat.
+
+    Weight fields (blobs, patch-mesh, strokes, rbf, idw, flow-field). Noise
+    moves weight between layers: each layer's weight gets its own Gaussian
+    noise of standard deviation amount, with the mean over layers removed so
+    the total is unchanged, then weights are clipped at 0 and renormalized to
+    sum to 1. A pixel of one color thus picks up specks of the others, in
+    proportion to amount, with no order between colors (a weight field has
+    none). Chosen from renders over a single shared noise plane pushing every
+    pixel along one fixed random direction in layer space: that clips at zero
+    for most pixels, so it came out as sparse same-hue specks (confetti) on a
+    clean background, where independent per-layer noise reads as even grain.
+    Specks of the other colors lighten an area of one dark color slightly.
+
+    The noise comes from one draw of rng, which seeds a numpy generator, so it
+    is reproducible per seed and unaffected by the field's size.
+    """
+    width, height = coords.output_size
+    generator = np.random.default_rng(rng.getrandbits(63))
+    amount = float(amount)
+
+    if isinstance(field, ScalarField):
+        t = np.asarray(field.t, dtype=np.float32)
+        if t.shape != (height, width):
+            t = np.clip(_resize_plane(t, (width, height), resize), 0.0, 1.0)
+        low, high = np.percentile(t, (1.0, 99.0))
+        span = float(np.clip(high - low, 0.25, 1.0))
+        noisy = t + generator.standard_normal(t.shape, dtype=np.float32) * np.float32(amount * span)
+        # Reflect at 0 and 1: a triangle wave of period 2.
+        folded = np.abs((noisy + 1.0) % 2.0 - 1.0)
+        return ScalarField(folded.astype(np.float32))
+
+    if isinstance(field, WeightField):
+        weights = np.asarray(field.weights, dtype=np.float32)
+        count, rows, cols = weights.shape
+        if (rows, cols) != (height, width):
+            weights = np.stack([_resize_plane(plane, (width, height), resize) for plane in weights])
+        noise = generator.standard_normal(weights.shape, dtype=np.float32)
+        noise -= noise.mean(axis=0, keepdims=True)
+        weights = np.clip(weights + noise * np.float32(amount), 0.0, None)
+        weights /= np.maximum(weights.sum(axis=0), 1e-6)
+        return WeightField(weights, background=field.background)
+
+    raise TypeError(f"cannot add grain to {type(field).__name__}")

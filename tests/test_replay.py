@@ -40,6 +40,9 @@ COMPOSED = [
     dict(engine="simplex", width=640, height=400, grain_size=3.0, grain_color="color", grain_blend="soft-light"),
     dict(engine="blobs", width=640, height=400, grain_size=6.0, grain_blend="overlay"),
     dict(engine="simplex", grain_color="color", grain_blend="multiply"),
+    dict(engine="simplex", field_stage="conic", blend="radial:difference", field_grain=0.15),
+    dict(engine="blobs", field_grain=0.2, shading=0.5),
+    dict(engine="fluid-wave", field_grain=0.1, contours=0.5, contour_source="field"),
 ]
 
 
