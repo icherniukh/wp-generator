@@ -185,6 +185,7 @@ def _available_presets() -> list:
 @click.option("--grain-blend", type=click.Choice(["add", "overlay", "soft-light", "multiply"]), default=None, hidden=True, help="How the grain is applied: add (default), overlay, soft-light or multiply.")
 @click.option("--vignette", type=float, default=None, hidden=True, help="Subtle radial edge darkening (0.0-1.0).")
 @click.option("--shading", type=float, default=None, hidden=True, help="Height-field lighting, a 3D glass or relief look (0.0-1.0).")
+@click.option("--bloom", type=float, default=None, hidden=True, help="Glow around bright areas (0.0-1.0); light rays via --stage-param bloom.rays=0.6.")
 @click.option("--glass", is_flag=True, default=None, hidden=True, help="Apply frosted glass texture overlay.")
 @click.option("--aberration", "--chromatic-aberration", "chromatic_aberration", type=float, default=None, hidden=True, help="Chromatic aberration strength (0.0-0.1).")
 @click.option("--preview-fx", is_flag=True, default=None, hidden=True, help="Preview FX rendering layers.")
@@ -249,6 +250,7 @@ def _validate_cli_arguments(params: dict) -> None:
         ("--noise", params.get("noise"), 0.0, 1.0),
         ("--vignette", params.get("vignette"), 0.0, 1.0),
         ("--shading", params.get("shading"), 0.0, 1.0),
+        ("--bloom", params.get("bloom"), 0.0, 1.0),
         ("--field-grain", params.get("field_grain"), 0.0, 1.0),
         ("--aberration", params.get("chromatic_aberration"), 0.0, 0.1),
         ("--ambient-weight", params.get("ambient_weight"), 0.0, 1.0),

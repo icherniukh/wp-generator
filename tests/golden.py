@@ -105,6 +105,18 @@ def golden_cases() -> List[GoldenCase]:
     # Height-field shading from a scalar field and from a weight field's lightness.
     cases.append(_engine_case("shading/simplex", "simplex", width=120, height=80, shading=0.6))
     cases.append(_engine_case("shading/blobs", "blobs", width=120, height=80, shading=0.6))
+    # Bloom alone, and with light rays through stage_params.
+    cases.append(_engine_case("bloom/shapes", "shapes", width=120, height=80, bloom=0.6))
+    cases.append(
+        _engine_case(
+            "bloom/shapes/rays",
+            "shapes",
+            width=120,
+            height=80,
+            bloom=0.6,
+            stage_params={"bloom": {"rays": 0.6}},
+        )
+    )
     # A single color is a solid fill for some engines; the pipeline never passes one.
     for engine in ("rbf", "topographic", "fractal"):
         cases.append(
