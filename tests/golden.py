@@ -106,8 +106,10 @@ def golden_cases() -> List[GoldenCase]:
     cases.append(_engine_case("shading/simplex", "simplex", width=120, height=80, shading=0.6))
     cases.append(_engine_case("shading/blobs", "blobs", width=120, height=80, shading=0.6))
     # Halftone screens. The size is large enough that the cell (given for the reference
-    # image) is above its two pixel floor.
-    for mode in ("dots", "cmyk", "dither"):
+    # image) is above its two pixel floor. Dots and cmyk move whole dot edges when the
+    # engine's pixels differ by a level or two across platforms, which this tolerance
+    # cannot absorb; tests/test_halftone.py and the replay tests cover them instead.
+    for mode in ("dither",):
         cases.append(
             _engine_case(
                 f"halftone/{mode}", "simplex", width=240, height=160, halftone=mode,
