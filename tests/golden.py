@@ -131,6 +131,16 @@ def golden_cases() -> List[GoldenCase]:
                 ),
             )
         )
+    # Film grain options; grain_size is covered in tests/test_grain_controls.py, since it
+    # scales with the image and this size is too small for it to change anything.
+    for grain_name, grain in (
+        ("color", dict(grain_color="color")),
+        ("overlay", dict(grain_blend="overlay")),
+        ("soft-light", dict(grain_blend="soft-light")),
+        ("multiply", dict(grain_blend="multiply")),
+        ("color-soft-light", dict(grain_color="color", grain_blend="soft-light")),
+    ):
+        cases.append(_engine_case(f"grain/{grain_name}", "simplex", noise=0.1, **grain))
     # Presets keep their own sampled parameters and finish, so filters are covered too.
     for preset_path in sorted((Path(__file__).parent.parent / "presets").glob("*.json")):
         if preset_path.name == "parameter_ranges.json":

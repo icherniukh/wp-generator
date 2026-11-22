@@ -179,6 +179,9 @@ def _available_presets() -> list:
 @click.option("--contour-source", type=click.Choice(["image", "field"]), default=None, hidden=True, help="Draw contours from the image's luminance (default) or the engine's field.")
 @click.option("--contour-placement", type=click.Choice(["frosted", "sharp"]), default=None, hidden=True, help="Contours under the glass and aberration (frosted, default) or over them (sharp).")
 @click.option("--noise", type=float, default=None, hidden=True, help="Grain/noise amount (0.0-1.0).")
+@click.option("--grain-size", type=float, default=None, hidden=True, help="Film grain size: 1 is the default grain, up to 8 is coarser (scales with the image).")
+@click.option("--grain-color", type=click.Choice(["mono", "color"]), default=None, hidden=True, help="Film grain the same on all channels (mono, default) or independent per channel (color).")
+@click.option("--grain-blend", type=click.Choice(["add", "overlay", "soft-light", "multiply"]), default=None, hidden=True, help="How the grain is applied: add (default), overlay, soft-light or multiply.")
 @click.option("--vignette", type=float, default=None, hidden=True, help="Subtle radial edge darkening (0.0-1.0).")
 @click.option("--shading", type=float, default=None, hidden=True, help="Height-field lighting, a 3D glass or relief look (0.0-1.0).")
 @click.option("--glass", is_flag=True, default=None, hidden=True, help="Apply frosted glass texture overlay.")
@@ -249,6 +252,7 @@ def _validate_cli_arguments(params: dict) -> None:
         ("--ambient-weight", params.get("ambient_weight"), 0.0, 1.0),
         ("--phase-offset", params.get("phase_offset"), 0.0, 1.0),
         ("--trap-weight", params.get("trap_weight"), 0.0, 1.0),
+        ("--grain-size", params.get("grain_size"), 1.0, 8.0),
     ]
     for flag, val, lo, hi in range_checks:
         if val is not None and not lo <= val <= hi:

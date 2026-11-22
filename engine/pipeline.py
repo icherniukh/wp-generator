@@ -17,6 +17,7 @@ from engine.colors import (
     hex_to_rgb,
     rgb_to_hex,
 )
+from engine.filters import GRAIN_BLENDS, GRAIN_COLORS, GRAIN_SIZE_RANGE
 from engine.gradients import render_gradient
 from engine.metadata import (
     ImageMetadata,
@@ -119,6 +120,11 @@ class RenderConfiguration:
     # field ("field"); under the glass and aberration ("frosted") or over ("sharp").
     contour_source: Optional[str] = None
     contour_placement: Optional[str] = None
+    # Film grain: size (1.0 is the default grain), "mono" or "color", and how it is
+    # blended ("add", "overlay", "soft-light", "multiply").
+    grain_size: Optional[float] = None
+    grain_color: Optional[str] = None
+    grain_blend: Optional[str] = None
     seed: Optional[int] = None
     capture_base_image: bool = False
 
@@ -152,6 +158,9 @@ class RenderResult:
     contour_mode: Optional[str] = None
     contour_source: Optional[str] = None
     contour_placement: Optional[str] = None
+    grain_size: Optional[float] = None
+    grain_color: Optional[str] = None
+    grain_blend: Optional[str] = None
     glass: bool = False
     vignette: float = 0.0
     shading: float = 0.0
@@ -304,6 +313,9 @@ class WallpaperPipeline:
         field: Optional[Any] = None,
         chromatic_aberration: float,
         noise: float,
+        grain_size: float = 1.0,
+        grain_color: str = "mono",
+        grain_blend: str = "add",
         vignette: float,
         shading: float = 0.0,
         trace: Optional[Trace] = None,
@@ -320,6 +332,9 @@ class WallpaperPipeline:
                 glass=glass,
                 chromatic_aberration=chromatic_aberration,
                 noise=noise,
+                grain_size=grain_size,
+                grain_color=grain_color,
+                grain_blend=grain_blend,
                 vignette=vignette,
                 shading=shading,
                 width=image.width,
@@ -401,6 +416,15 @@ class WallpaperPipeline:
             raise PipelineConfigurationError(f"contour_source must be image or field, not {contour_source!r}.")
         if contour_placement not in ("frosted", "sharp"):
             raise PipelineConfigurationError(f"contour_placement must be frosted or sharp, not {contour_placement!r}.")
+        grain_size = resolve("grain_size", 1.0)
+        grain_color = resolve("grain_color", "mono")
+        grain_blend = resolve("grain_blend", "add")
+        if not isinstance(grain_size, (int, float)) or isinstance(grain_size, bool) or not GRAIN_SIZE_RANGE[0] <= grain_size <= GRAIN_SIZE_RANGE[1]:
+            raise PipelineConfigurationError(f"grain_size must be a number from {GRAIN_SIZE_RANGE[0]} to {GRAIN_SIZE_RANGE[1]}, not {grain_size!r}.")
+        if grain_color not in GRAIN_COLORS:
+            raise PipelineConfigurationError(f"grain_color must be one of {GRAIN_COLORS}, not {grain_color!r}.")
+        if grain_blend not in GRAIN_BLENDS:
+            raise PipelineConfigurationError(f"grain_blend must be one of {GRAIN_BLENDS}, not {grain_blend!r}.")
 
         fractal_type = resolve("fractal_type", "fluid")
         fractal_zoom = resolve("fractal_zoom", None)
@@ -499,6 +523,9 @@ class WallpaperPipeline:
             glass=glass_param,
             chromatic_aberration=chromatic_aberration,
             noise=noise,
+            grain_size=grain_size,
+            grain_color=grain_color,
+            grain_blend=grain_blend,
             vignette=vignette,
             shading=shading,
             trace=trace,
@@ -525,6 +552,9 @@ class WallpaperPipeline:
             contour_mode=contour_mode,
             contour_source=contour_source if contours else None,
             contour_placement=contour_placement if contours else None,
+            grain_size=grain_size if noise > 0 and grain_size != 1.0 else None,
+            grain_color=grain_color if noise > 0 and grain_color != "mono" else None,
+            grain_blend=grain_blend if noise > 0 and grain_blend != "add" else None,
             glass=glass_param,
             vignette=vignette,
             shading=shading,
