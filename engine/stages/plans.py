@@ -15,6 +15,7 @@ from engine.parameter_ranges import PARAMETER_RANGES
 from engine.stages.export import to_srgb_image
 from engine.stages.fields import (
     anchor_points,
+    blob_layers,
     elevation,
     folded_noise,
     folded_ramp,
@@ -259,6 +260,22 @@ PATCH_MESH = Plan((
 ), solid_if_single_color=True)
 
 
+# blobs ---------------------------------------------------------------------
+
+def blob_count(p: StageParams) -> Dict:
+    """3 blobs at complexity 1, 4 at 3, 6 at 9."""
+    return {"blobs": 3 + max(1, int(p["complexity"])) // 3, "blur": 0.5}
+
+
+BLOBS = Plan((
+    PALETTE,
+    Stage("grid", "frame", sample_grid, (), "coords", _grid((0.0, 1.0))),
+    Stage("blob layers", "field", blob_layers, ("coords", "palette"), "field", blob_count),
+    MAP,
+    EXPORT,
+), solid_if_single_color=True)
+
+
 # fractals ------------------------------------------------------------------
 
 def _fractal_kind(engine: str) -> Callable[[StageParams], str]:
@@ -319,4 +336,5 @@ STAGED_PLANS: Dict[str, Plan] = {
     "escape-fractal": _fractal_plan("escape-fractal"),
     "idw": IDW,
     "patch-mesh": PATCH_MESH,
+    "blobs": BLOBS,
 }

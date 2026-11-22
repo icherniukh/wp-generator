@@ -454,15 +454,21 @@ def fbm_noise(
     )
 
 
-def _image_unit_square(coords: Coords) -> Tuple[np.ndarray, np.ndarray]:
-    """Positions as 0..1 across the image's width and height, following any
-    rotation or zoom of the current coordinates (from their corners)."""
+def _frame_extent(coords: Coords) -> Tuple[np.ndarray, np.ndarray, float, float]:
+    """Frame positions (half short sides, centered) and the half width and half
+    height of the image in them, following any rotation or zoom (from the corners)."""
     from engine.stages.warp import Frame
 
     u, v = Frame(coords).from_xy(coords.x, coords.y)
     corners = (0, -1)
     umax = max(float(np.max(np.abs(u[np.ix_(corners, corners)]))), 1e-9)
     vmax = max(float(np.max(np.abs(v[np.ix_(corners, corners)]))), 1e-9)
+    return u, v, umax, vmax
+
+
+def _image_unit_square(coords: Coords) -> Tuple[np.ndarray, np.ndarray]:
+    """Positions as 0..1 across the image's width and height."""
+    u, v, umax, vmax = _frame_extent(coords)
     return (u / umax + 1.0) / 2.0, (v / vmax + 1.0) / 2.0
 
 
@@ -520,3 +526,89 @@ def patch_mesh(
     weights = np.clip(weights, 0.0, None)
     weights /= np.maximum(weights.sum(axis=0), 1e-6)
     return WeightField(weights)
+
+
+def composite_over(alphas: Sequence[np.ndarray], colors: Sequence[int], base: int, num_colors: int) -> np.ndarray:
+    """Per-color weights of layers stacked with the "over" operator on a base color.
+
+    Layer k (bottom first) has coverage alphas[k] and palette index colors[k].
+    Over-compositing fixed colors is linear in the colors, so the result is a
+    weight per color: layer k keeps a_k times the transparency of everything
+    above it, and the base keeps what no layer covers. The weights sum to 1
+    without normalizing, and an opaque layer hides what is under it.
+    """
+    shape = alphas[0].shape if len(alphas) else ()
+    weights = np.zeros((num_colors, *shape), dtype=np.float32)
+    remaining = np.ones(shape, dtype=np.float32)
+    for alpha, color in zip(reversed(alphas), reversed(colors)):
+        a = np.clip(alpha, 0.0, 1.0).astype(np.float32)
+        weights[color] += a * remaining
+        remaining *= 1.0 - a
+    weights[base] += remaining
+    return weights
+
+
+def _blurred_ellipse(d: np.ndarray, blur: float) -> np.ndarray:
+    """Coverage of a unit ellipse blurred by a Gaussian of sigma blur (in radii),
+    at elliptic distance d: an erfc edge, scaled so the center reaches what a
+    blurred disc reaches there, 1 - exp(-1 / (2 blur^2)). A blur wider than the
+    shape lowers its peak, as a large layer blur does to a small ellipse."""
+    from scipy.special import erfc
+
+    s = max(float(blur), 1e-3)
+    peak = 1.0 - np.exp(-1.0 / (2.0 * s * s))
+    edge = erfc((d - 1.0) / (np.sqrt(2.0) * s)) / erfc(-1.0 / (np.sqrt(2.0) * s))
+    return peak * np.clip(edge, 0.0, 1.0)
+
+
+def blob_layers(
+    coords: Coords,
+    palette: Palette,
+    *,
+    blobs: int = 4,
+    blur: float = 0.5,
+    spread: float = 1.1,
+    rng: Any,
+) -> WeightField:
+    """Soft elliptical blobs stacked over the darkest color, each covering what
+    is under it rather than averaging with it.
+
+    The first blob is large (1.0 to 1.5 half short sides) and sits at the
+    bottom; the others are smaller (0.5 to 0.95) and drawn over it. Centers may
+    lie up to spread times the half width or height from the middle, so a blob
+    can sit partly off the image. Every color except the base appears when
+    there are enough blobs, and the blob of the lightest color is moved toward
+    an edge. blur is the Gaussian sigma in blob radii.
+    """
+    n = palette.size
+    count = max(1, int(blobs))
+    lightness = np.asarray(palette.oklab)[:, 0]
+    base = int(np.argmin(lightness))
+    others = [i for i in range(n) if i != base] or [base]
+    lightest = int(np.argmax(lightness))
+
+    # A fixed number of draws per blob, independent of the palette size.
+    keys = [rng.uniform(0.0, 1.0) for _ in range(count)]
+    layout = [
+        (rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), rng.uniform(0.0, 1.0),
+         rng.uniform(0.55, 1.0), rng.uniform(0.0, np.pi), rng.uniform(0.7, 1.0))
+        for _ in range(count)
+    ]
+    slots = [others[i % len(others)] for i in range(count)]
+    colors = [slot for _, slot in sorted(zip(keys, slots))]
+
+    u, v, umax, vmax = _frame_extent(coords)
+    alphas = []
+    for k, ((cu, cv, size, ratio, angle, opacity), color) in enumerate(zip(layout, colors)):
+        if color == lightest and n > 1:
+            # Off-center, near an edge: at least 0.8 of the way out on one axis.
+            reach = max(abs(cu), abs(cv))
+            cu, cv = (cu / reach * 0.85, cv / reach * 0.85) if reach > 1e-6 else (0.85, 0.0)
+        radius = 1.0 + 0.5 * size if k == 0 else 0.5 + 0.45 * size
+        du = u - cu * spread * umax
+        dv = v - cv * spread * vmax
+        cos_a, sin_a = np.cos(angle), np.sin(angle)
+        along = (du * cos_a + dv * sin_a) / radius
+        across = (-du * sin_a + dv * cos_a) / (radius * ratio)
+        alphas.append(opacity * _blurred_ellipse(np.sqrt(along**2 + across**2), blur))
+    return WeightField(composite_over(alphas, colors, base, n), background=base)

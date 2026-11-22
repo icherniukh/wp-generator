@@ -30,6 +30,7 @@ COMPOSED = [
     dict(engine="rbf", field_stage="ridged", mapping="cycles"),
     dict(engine="patch-mesh", warps=["sphere"], stage_params={"patch-mesh": {"jitter": 0.4}}),
     dict(engine="simplex", field_stage="patch-mesh"),
+    dict(engine="blobs", warps=["noise"], stage_params={"blob-layers": {"blur": 0.8}}),
 ]
 
 

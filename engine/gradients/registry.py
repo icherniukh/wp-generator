@@ -13,7 +13,7 @@ from engine.gradients.fractal import (
     FluidFractalGradient,
     FractalFieldGradient,
 )
-from engine.gradients.mesh import FluidMeshGradient, MeshGradient, PatchMeshGradient, SimplexMeshGradient
+from engine.gradients.mesh import BlobLayersGradient, FluidMeshGradient, MeshGradient, PatchMeshGradient, SimplexMeshGradient
 from engine.gradients.spline import SplineWaveGradient
 
 GRADIENT_REGISTRY: Dict[str, Type[Any]] = {
@@ -30,6 +30,7 @@ GRADIENT_REGISTRY: Dict[str, Type[Any]] = {
     "escape-fractal": EscapeTimeFractalGradient,
     "idw": MeshGradient,
     "patch-mesh": PatchMeshGradient,
+    "blobs": BlobLayersGradient,
 }
 
 _BUILTIN_ENGINES: Dict[str, Type[Any]] = dict(GRADIENT_REGISTRY)

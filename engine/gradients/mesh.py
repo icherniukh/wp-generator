@@ -47,6 +47,19 @@ class PatchMeshGradient(StagedEngine):
         return self._render(colors, complexity=complexity, seed=seed)
 
 
+class BlobLayersGradient(StagedEngine):
+    plan = "blobs"
+
+    def generate(
+        self,
+        colors: Sequence[Sequence[float]],
+        complexity: int = 5,
+        seed: Optional[int] = None,
+    ) -> Image.Image:
+        """Soft blobs stacked over the darkest color with the over operator, in Oklab."""
+        return self._render(colors, complexity=complexity, seed=seed)
+
+
 class MeshGradient(StagedEngine):
     plan = "idw"
 

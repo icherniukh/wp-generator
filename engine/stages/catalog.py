@@ -47,6 +47,12 @@ def _patch_mesh_size(p: StageParams) -> Dict[str, Any]:
     return patch_mesh_size(p)
 
 
+def _blob_count(p: StageParams) -> Dict[str, Any]:
+    from engine.stages.plans import blob_count
+
+    return blob_count(p)
+
+
 def _w(name: str, fn: Callable, summary: str, **defaults: Any) -> Choice:
     return Choice(Stage(name, "warp", fn, ("coords",), "coords", _fixed(**defaults)), summary)
 
@@ -100,6 +106,8 @@ FIELDS: Dict[str, Choice] = {
                   bind=lambda p: {"cells": max(4, 3 * p["complexity"]), "mode": "distance"}),
     "patch-mesh": _f("patch-mesh", fields.patch_mesh, "colored control grid blended bicubically (patch-mesh)",
                      inputs=("coords", "palette"), bind=lambda p: _patch_mesh_size(p)),
+    "blob-layers": _f("blob-layers", fields.blob_layers, "soft blobs stacked over the darkest color (blobs)",
+                      inputs=("coords", "palette"), bind=lambda p: _blob_count(p)),
     "ridged": _f("ridged", fields.ridged_noise, "ridged multifractal noise, sharp crests",
                  bind=_fixed(scale=1.5, octaves=4, sharpness=2.0)),
     "billow": _f("billow", fields.billow_noise, "billow noise, rounded puffs with creases",
@@ -125,7 +133,7 @@ _FIELD_KIND = {
     fields.conic: "scalar", fields.spiral: "scalar", fields.radial: "scalar", fields.voronoi: "scalar",
     fields.ridged_noise: "scalar", fields.billow_noise: "scalar", fields.fbm_noise: "scalar",
     fields.radial_emitters: "weights", fields.orbiting_emitters: "weights", fields.anchor_points: "weights",
-    fields.patch_mesh: "weights",
+    fields.patch_mesh: "weights", fields.blob_layers: "weights",
 }
 _FIELD_REQUIRES = {fields.folded_noise: ("displacement",), fields.fractal_field: ("camera",)}
 _MAPPING_ACCEPTS = {
