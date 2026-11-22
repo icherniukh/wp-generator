@@ -188,3 +188,27 @@ def test_metadata_without_shading_replays_as_off():
     png, _ = WallpaperPipeline().render_png_bytes(RenderConfiguration(width=64, height=40, seed=2, engine="simplex"))
     metadata = extract_image_metadata(png)
     assert not metadata.parameters.get("shading")
+
+
+def test_near_black_weight_field_gets_no_highlight():
+    # On a weight field the height is the image's lightness, so the slopes of a dark blob's
+    # edge used to light up as grey patches. Near-black stays near-black.
+    w, h = SIZE
+    ramp = np.tile(np.linspace(4, 24, w).astype(np.uint8), (h, 1))
+    dark = Image.fromarray(np.stack([ramp, ramp, ramp + 2], axis=-1))
+    field = WeightField(np.full((2, h, w), 0.5, dtype=np.float32))
+    glossy = {**PARAMS, "strength": 1.0, "depth": 6.0, "specular": 1.0, "rim": 1.0, "shininess": 6.0}
+    plain = {**glossy, "specular": 0.0, "rim": 0.0}
+    for angle in (0.0, 90.0, 135.0, 225.0):
+        lit = np.asarray(shade(dark, field, **{**glossy, "light_angle": angle}), dtype=np.int16)
+        base = np.asarray(shade(dark, field, **{**plain, "light_angle": angle}), dtype=np.int16)
+        assert (lit - base).max() <= 6, angle
+
+    # The same slope on a light image keeps its gloss.
+    light = Image.fromarray(np.stack([np.tile(np.linspace(150, 250, w).astype(np.uint8), (h, 1))] * 3, axis=-1))
+    gain = max(
+        (np.asarray(shade(light, field, **{**glossy, "light_angle": a}), dtype=np.int16)
+         - np.asarray(shade(light, field, **{**plain, "light_angle": a}), dtype=np.int16)).max()
+        for a in (0.0, 90.0, 180.0, 270.0)
+    )
+    assert gain > 30

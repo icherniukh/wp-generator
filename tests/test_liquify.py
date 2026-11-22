@@ -110,3 +110,23 @@ def test_strokes_deterministic_and_every_color_appears():
     field = _strokes(strokes=6)
     for color in (0, 2, 3):
         assert field.weights[color].max() > 0.3, color
+
+
+def _orientation_dominance(field, bins=18):
+    """Share of the gradient magnitude within one histogram bin of the dominant orientation."""
+    lightness = np.asarray(make_palette(colors=PALETTE).oklab)[:, 0]
+    height = np.tensordot(lightness, field.weights, axes=1)
+    grad_y, grad_x = np.gradient(height)
+    theta = np.mod(np.arctan2(grad_y, grad_x), np.pi)
+    hist, _ = np.histogram(theta, bins=bins, range=(0.0, np.pi), weights=np.hypot(grad_x, grad_y))
+    hist = hist / hist.sum()
+    peak = int(hist.argmax())
+    return float(sum(hist[(peak + d) % bins] for d in (-1, 0, 1)))
+
+
+def test_strokes_fan_out_instead_of_running_in_parallel_stripes():
+    # Seed 21 used to come out as near-parallel stripes: every stroke shared one flow direction.
+    shares = [_orientation_dominance(_strokes(seed=seed)) for seed in range(24)]
+    assert _orientation_dominance(_strokes(seed=21)) < 0.45
+    assert max(shares) < 0.6
+    assert float(np.mean(shares)) < 0.45

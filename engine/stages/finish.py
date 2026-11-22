@@ -124,6 +124,10 @@ def vignette(image: Image.Image, *, strength: float) -> Image.Image:
 
 # The steepest surface tilt shade() allows, as rise over run (2.5 is about 68 degrees).
 MAX_SLOPE = 2.5
+# The shine fades out over dark colors: from nothing at Oklab lightness 0.18 (near black) to
+# full at 0.42. A white highlight added to near-black reads as a grey patch, and on a weight
+# field the height is the lightness itself, so the slopes of a dark blob's edge would light up.
+SHINE_DARK, SHINE_BRIGHT = 0.18, 0.42
 
 
 def shade(
@@ -147,7 +151,8 @@ def shade(
     when the field is a weight field (or absent); it is smoothed with a
     Gaussian of sigma `smoothing` pixels. Normals come from the height gradient
     times `depth`, measured per short side of the image, so the relief does not
-    depend on the resolution. Lambert diffuse is normalized so a flat surface is
+    depend on the resolution. The highlight and rim fade out over near-black
+    colors (see SHINE_DARK), so dark areas get no grey glints. Lambert diffuse is normalized so a flat surface is
     unchanged, the Blinn-Phong highlight is zero on a flat surface, and a
     Schlick-Fresnel rim brightens steep slopes. light_angle (degrees,
     counterclockwise from the right) and light_elevation (degrees above the
@@ -206,7 +211,10 @@ def shade(
     highlight = np.clip((np.clip(facing, 0.0, 1.0) ** shininess - flat) / max(1.0 - flat, 1e-6), 0.0, 1.0)
     fresnel = (1.0 - nz) ** 5
 
-    shine = (specular * highlight + rim * fresnel)[..., None] * 255.0
+    lightness = rgb_to_oklab(base)[..., 0]
+    gate = np.clip((lightness - SHINE_DARK) / (SHINE_BRIGHT - SHINE_DARK), 0.0, 1.0)
+    gate = gate * gate * (3.0 - 2.0 * gate)
+    shine = (gate * (specular * highlight + rim * fresnel))[..., None] * 255.0
     if tint > 0.0:
         shine = shine * (1.0 - tint) + shine / 255.0 * base * tint
     out = base * (1.0 - strength + strength * diffuse[..., None]) + strength * shine
