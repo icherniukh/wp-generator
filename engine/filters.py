@@ -2,6 +2,19 @@ import numpy as np
 import scipy.ndimage
 from PIL import Image, ImageFilter
 
+GRAIN_COLORS = ("mono", "color")
+GRAIN_BLENDS = ("add", "overlay", "soft-light", "multiply")
+# Below 1 the grain would be finer than a pixel, which is what the default already is.
+GRAIN_SIZE_RANGE = (1.0, 8.0)
+
+# Weights of the fine and the coarse grain layer when each has unit variance. They give a
+# standard deviation of 0.806 * sigma, which is the default grain's (0.7 fine, 0.4 after
+# enlarging the 0.6 half-size layer), so grains of any size share its strength.
+_GRAIN_FINE, _GRAIN_COARSE = 0.7, 0.4
+# Per-blend gain so the grain's strength at the same amount is close to "add" on typical images.
+_GRAIN_BLEND_GAIN = {"overlay": 1.25, "soft-light": 2.0, "multiply": 1.1}
+
+
 class WallpaperFilters:
     @staticmethod
     def apply_dither(image, amount=0.05):
@@ -22,18 +35,30 @@ class WallpaperFilters:
         return Image.fromarray(np.clip(img_arr, 0, 255).astype(np.uint8))
 
     @staticmethod
-    def apply_film_grain(image, amount=0.08):
+    def apply_film_grain(image, amount=0.08, grain_size=1.0, grain_color="mono", grain_blend="add"):
         """
         Applies multi-scale photographic film grain with luminance roll-off.
         Combines fine high-frequency noise with organic clumpiness visible on high-DPI displays.
         :param amount: Grain intensity (0.0 to 1.0).
+        :param grain_size: Grain size in pixels; 1.0 is the default grain, larger is coarser.
+        :param grain_color: "mono" (one noise for all channels) or "color" (independent per channel).
+        :param grain_blend: "add", "overlay", "soft-light" or "multiply".
         """
+        if grain_color not in GRAIN_COLORS:
+            raise ValueError(f"grain_color must be one of {GRAIN_COLORS}, not {grain_color!r}.")
+        if grain_blend not in GRAIN_BLENDS:
+            raise ValueError(f"grain_blend must be one of {GRAIN_BLENDS}, not {grain_blend!r}.")
         if amount <= 0.0:
             return image.copy()
 
         img_arr = np.array(image, dtype=np.float32)
         h, w = img_arr.shape[:2]
         channels = img_arr.shape[2] if img_arr.ndim == 3 else 1
+
+        if (grain_size, grain_color, grain_blend) != (1.0, "mono", "add"):
+            return WallpaperFilters._film_grain_controlled(
+                img_arr, amount, max(1.0, float(grain_size)), grain_color, grain_blend
+            )
 
         sigma = 255.0 * amount
         fine_grain = np.random.normal(0.0, sigma * 0.7, (h, w)).astype(np.float32)
@@ -58,6 +83,58 @@ class WallpaperFilters:
             img_arr += modulated_grain
 
         return Image.fromarray(np.clip(img_arr, 0, 255).astype(np.uint8))
+
+    @staticmethod
+    def _grain_layer(h, w, size):
+        """Unit-variance white noise generated at 1/size resolution and enlarged bicubically."""
+        lh, lw = max(1, int(round(h / size))), max(1, int(round(w / size)))
+        small = np.random.standard_normal((lh, lw)).astype(np.float32)
+        if (lh, lw) == (h, w):
+            return small
+        layer = np.asarray(
+            Image.fromarray(small, mode="F").resize((w, h), Image.Resampling.BICUBIC), dtype=np.float32
+        )
+        return (layer - layer.mean()) / max(float(layer.std()), 1e-6)
+
+    @staticmethod
+    def _grain_noise(h, w, size, sigma):
+        """Zero-mean grain with the default grain's strength: a fine layer at `size` pixels and
+        a coarser clump layer at twice that."""
+        noise = _GRAIN_FINE * WallpaperFilters._grain_layer(h, w, size)
+        noise += _GRAIN_COARSE * WallpaperFilters._grain_layer(h, w, 2.0 * size)
+        return noise * np.float32(sigma)
+
+    @staticmethod
+    def _film_grain_controlled(img_arr, amount, size, color, blend):
+        """Film grain with a chosen size, color mode and blend; the default settings take the
+        original path in apply_film_grain instead."""
+        h, w = img_arr.shape[:2]
+        sigma = 255.0 * amount
+        has_rgb = img_arr.ndim == 3 and img_arr.shape[2] >= 3
+        rgb = img_arr[..., :3] if has_rgb else img_arr[..., None]
+        planes = 3 if color == "color" and has_rgb else 1
+        # Grain in 0-255 units; "color" draws one noise per channel.
+        noise = np.stack([WallpaperFilters._grain_noise(h, w, size, sigma) for _ in range(planes)], axis=-1)
+
+        base = rgb / 255.0
+        d = noise / 255.0 * _GRAIN_BLEND_GAIN.get(blend, 1.0)  # the noise layer is 0.5 + d, mid-grey centered
+        if blend == "add":
+            lum = np.mean(rgb, axis=2) / 255.0
+            out = base + d * np.clip(4.0 * lum * (1.0 - lum), 0.35, 1.0)[..., None]
+        else:
+            layer = np.clip(0.5 + d, 0.0, 1.0)
+            if blend == "overlay":
+                out = np.where(base < 0.5, 2.0 * base * layer, 1.0 - 2.0 * (1.0 - base) * (1.0 - layer))
+            elif blend == "soft-light":
+                out = (1.0 - 2.0 * layer) * base * base + 2.0 * layer * base
+            else:  # multiply, with the layer doubled so mid-grey leaves the image unchanged
+                out = base * 2.0 * layer
+        if has_rgb:
+            result = img_arr.copy()
+            result[..., :3] = out * 255.0
+        else:
+            result = out[..., 0] * 255.0
+        return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8))
 
     apply_noise = apply_film_grain
 
