@@ -355,7 +355,10 @@ class WallpaperPipeline:
                 return explicit_val
             if key in overrides:
                 val = overrides[key]
-                return self.preset_engine.sample_distribution(val) if isinstance(val, dict) else val
+                # stage_params is a plain mapping of stage arguments, not a distribution.
+                if isinstance(val, dict) and key != "stage_params":
+                    return self.preset_engine.sample_distribution(val)
+                return val
             return default() if callable(default) else default
 
         complexity = resolve("complexity", lambda: PARAMETER_RANGES.sample("complexity"))

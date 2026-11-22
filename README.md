@@ -99,6 +99,13 @@ One render per preset, grouped by style. Table columns keep the previews small; 
 | ![Cupertino preset](samples/cupertino.png) | ![Pastel preset](samples/pastel.png) |
 | Soft, muted light and dark | Light anchors, desaturated accents |
 
+### Blobs, Mesh and Foil
+
+| Aura | Mesh | Holo |
+| :---: | :---: | :---: |
+| ![Aura preset](samples/aura.png) | ![Mesh preset](samples/mesh.png) | ![Holo preset](samples/holo.png) |
+| Blurred color blobs over a dark base, grain | Vivid color grid blended bicubically | Pastel holographic foil in mirrored bands |
+
 ### Experimental
 
 | Fractal |
