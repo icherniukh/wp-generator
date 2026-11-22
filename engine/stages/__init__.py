@@ -34,9 +34,11 @@ class Composition:
     field: Optional[str] = None
     mapping: Optional[str] = None
     stage_params: Dict[str, Dict[str, Any]] = dataclasses.field(default_factory=dict)
+    # "FIELD[:MODE]": a second field combined with the first (catalog.parse_blend).
+    blend: Optional[str] = None
 
     def __bool__(self) -> bool:
-        return bool(self.warps or self.field or self.mapping or self.stage_params)
+        return bool(self.warps or self.field or self.mapping or self.stage_params or self.blend)
 
 
 def render_staged(
@@ -61,6 +63,7 @@ def render_staged(
             field=composition.field,
             mapping_name=composition.mapping,
             stage_params=composition.stage_params,
+            blend=composition.blend,
         )
     stage_params = StageParams(params)
     if trace is not None:

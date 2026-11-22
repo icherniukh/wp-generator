@@ -136,3 +136,42 @@ def test_noise_folds_differ():
     images = {name: _render("simplex", Composition(field=name)) for name in ("ridged", "billow", "fbm")}
     assert not np.array_equal(images["ridged"], images["billow"])
     assert not np.array_equal(images["billow"], images["fbm"])
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_blend_renders_or_refuses(engine):
+    composition = Composition(blend="conic:difference")
+    first = _render(engine, composition)
+    if first is None:
+        return
+    assert np.array_equal(first, _render(engine, composition))
+    assert not np.array_equal(first, _render(engine, Composition()))
+
+
+def test_blend_modes():
+    from engine.stages.fields import BLEND_MODES, blend_fields
+    from engine.stages.types import ScalarField
+
+    a = ScalarField(np.array([[0.2, 0.8]], np.float32))
+    b = ScalarField(np.array([[0.5, 0.5]], np.float32))
+    expect = {
+        "add": [0.7, 1.0], "multiply": [0.1, 0.4], "screen": [0.6, 0.9], "difference": [0.3, 0.3],
+        "overlay": [0.2, 0.8], "min": [0.2, 0.5], "max": [0.5, 0.8],
+    }
+    assert set(expect) == set(BLEND_MODES)
+    for mode, values in expect.items():
+        out = blend_fields(a, b, mode=mode, normalize=False).t
+        assert np.allclose(out[0], values), mode
+    assert np.allclose(blend_fields(a, b, mode="screen", amount=0.0, normalize=False).t, a.t)
+
+
+def test_blend_refuses_weights_and_unknown_names():
+    with pytest.raises(PlanCompositionError, match="two scalar fields"):
+        compose(STAGED_PLANS["rbf"].stages, blend="conic")
+    with pytest.raises(PlanCompositionError, match="two scalar fields"):
+        compose(STAGED_PLANS["simplex"].stages, blend="blob-layers")
+    with pytest.raises(PlanCompositionError, match="blend mode"):
+        compose(STAGED_PLANS["simplex"].stages, blend="conic:dodge")
+    stages = compose(STAGED_PLANS["simplex"].stages, blend="radial:max", stage_params={"blend": {"amount": 0.5}})
+    names = [s.name for s in stages]
+    assert names[names.index("noisy ramp") + 1:][:2] == ["blend radial", "blend"]

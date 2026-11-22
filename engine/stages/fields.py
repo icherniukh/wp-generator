@@ -612,3 +612,35 @@ def blob_layers(
         across = (-du * sin_a + dv * cos_a) / (radius * ratio)
         alphas.append(opacity * _blurred_ellipse(np.sqrt(along**2 + across**2), blur))
     return WeightField(composite_over(alphas, colors, base, n), background=base)
+
+
+BLEND_MODES = ("add", "multiply", "screen", "difference", "overlay", "min", "max")
+
+
+def blend_fields(
+    field: ScalarField, other: ScalarField, *, mode: str = "screen", amount: float = 1.0, normalize: bool = True
+) -> ScalarField:
+    """Combines two scalar fields as image layers: field is the bottom layer and
+    other the top. amount mixes from field alone (0) to the full blend (1);
+    normalize stretches the result back to 0..1, which keeps a difference of two
+    similar fields from mapping to a narrow slice of the palette."""
+    a = np.asarray(field.t, dtype=np.float32)
+    b = np.asarray(other.t, dtype=np.float32)
+    if mode == "add":
+        out = np.clip(a + b, 0.0, 1.0)
+    elif mode == "multiply":
+        out = a * b
+    elif mode == "screen":
+        out = 1.0 - (1.0 - a) * (1.0 - b)
+    elif mode == "difference":
+        out = np.abs(a - b)
+    elif mode == "overlay":
+        out = np.where(a < 0.5, 2.0 * a * b, 1.0 - 2.0 * (1.0 - a) * (1.0 - b))
+    elif mode == "min":
+        out = np.minimum(a, b)
+    elif mode == "max":
+        out = np.maximum(a, b)
+    else:
+        raise ValueError(f"blend mode must be one of {', '.join(BLEND_MODES)}, not {mode!r}")
+    out = a + float(amount) * (out - a)
+    return ScalarField(normalize_scalar_field(out) if normalize else np.clip(out, 0.0, 1.0).astype(np.float32))

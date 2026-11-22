@@ -120,6 +120,7 @@ class ImageMetadata:
             warps=params.get("warps"),
             field_stage=params.get("field"),
             mapping=params.get("mapping"),
+            blend=params.get("blend"),
             stage_params=params.get("stage_params"),
             seed=self.seed,
         )
@@ -172,6 +173,7 @@ def build_image_metadata(result: Any, version: Optional[str] = None) -> ImageMet
         "warps": getattr(result, "warps", None),
         "field": getattr(result, "field_stage", None),
         "mapping": getattr(result, "mapping", None),
+        "blend": getattr(result, "blend", None),
         "stage_params": getattr(result, "stage_params", None),
         "preset": getattr(result, "preset", None),
         "preset_version": getattr(result, "preset_version", None),

@@ -7,6 +7,9 @@ field or the mapping, add warps, and override any stage's arguments:
     --warp none --warp bulge     drop the engine's warps first
     --field voronoi              replace the field
     --mapping bands              replace the mapping
+    --blend conic:difference     compute a second field and combine it with the
+                                 first (modes: add, multiply, screen, difference,
+                                 overlay, min, max; default screen)
     --stage-param twist.amount=3 set an argument of a stage (catalogue name or
                                  plan stage name with spaces as dashes)
 """
@@ -181,6 +184,44 @@ def _with_overrides(stage: Stage, overrides: Mapping[str, Any]) -> Stage:
     return replace(stage, bind=bind)
 
 
+def parse_blend(blend: str) -> Tuple[str, str]:
+    """Splits "FIELD[:MODE]" (mode defaults to screen) and checks both names."""
+    name, _, mode = blend.partition(":")
+    name, mode = name.strip(), (mode.strip() or "screen")
+    if name not in FIELDS:
+        raise PlanCompositionError(f"unknown blend field {name!r}; choose from {', '.join(FIELDS)}")
+    if mode not in fields.BLEND_MODES:
+        raise PlanCompositionError(f"unknown blend mode {mode!r}; choose from {', '.join(fields.BLEND_MODES)}")
+    return name, mode
+
+
+def _check_requires(field_stage: Stage, available: set) -> None:
+    missing = [r for r in _FIELD_REQUIRES.get(field_stage.fn, ()) if r not in available]
+    if missing:
+        hint = {"camera": "use a fractal engine", "displacement": "add --warp noise"}
+        raise PlanCompositionError(
+            f"field {field_stage.name!r} needs {', '.join(missing)} ({'; '.join(hint[m] for m in missing)})"
+        )
+
+
+def _blend_stages(blend: str, field_stage: Stage, kind: str) -> Tuple[Stage, Stage]:
+    """The second field, writing field_b, and the stage that combines it into field.
+
+    The second field's stage is named "blend-<field>" and the combining stage
+    "blend", so --stage-param can reach both (blend.mode, blend.amount,
+    blend.normalize, blend-conic.turns)."""
+    name, mode = parse_blend(blend)
+    other = FIELDS[name].stage
+    if kind != "scalar" or _FIELD_KIND.get(other.fn, "scalar") != "scalar":
+        raise PlanCompositionError(
+            f"--blend combines two scalar fields; {field_stage.name!r} gives {kind}, "
+            f"{name!r} gives {_FIELD_KIND.get(other.fn, 'scalar')}"
+        )
+    second = replace(other, name=f"blend {name}", output="field_b")
+    combine = Stage("blend", "field", fields.blend_fields, ("field", "field_b"), "field", _fixed(mode=mode))
+    return second, combine
+
+
 def compose(
     stages: Sequence[Stage],
     *,
@@ -188,6 +229,7 @@ def compose(
     field: Optional[str] = None,
     mapping_name: Optional[str] = None,
     stage_params: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    blend: Optional[str] = None,
 ) -> Tuple[Stage, ...]:
     """The plan's stages with the requested replacements, checked for fit."""
     result: List[Stage] = list(stages)
@@ -234,12 +276,12 @@ def compose(
             result[mapping_indexes[0]] = MAPPINGS["ramp"].stage
 
     available = {feature for s in result[:field_index] for feature in _provides(s)}
-    missing = [r for r in _FIELD_REQUIRES.get(field_stage.fn, ()) if r not in available]
-    if missing:
-        hint = {"camera": "use a fractal engine", "displacement": "add --warp noise"}
-        raise PlanCompositionError(
-            f"field {field_stage.name!r} needs {', '.join(missing)} ({'; '.join(hint[m] for m in missing)})"
-        )
+    _check_requires(field_stage, available)
+
+    if blend:
+        blend_stages = _blend_stages(blend, field_stage, kind)
+        _check_requires(blend_stages[0], available)
+        result[field_index + 1:field_index + 1] = blend_stages
 
     if any(s.fn is mapping.blend_srgb for s in result) and any(s.phase == "resample" for s in result):
         raise PlanCompositionError("srgb-blend cannot be enlarged afterwards; pick another mapping")
