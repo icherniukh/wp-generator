@@ -645,6 +645,10 @@ def _capsule_distance(
     return best
 
 
+# The range of stroke directions, in radians (about 125 degrees).
+STROKE_SPREAD = 2.2
+
+
 def strokes(
     coords: Coords,
     palette: Palette,
@@ -659,10 +663,13 @@ def strokes(
 
     Each stroke is a smooth curve running across the image, drawn as a capsule
     chain of radius width / 2 (in half short sides) that thins toward its ends,
-    with a Gaussian edge of sigma blur (in radii). Strokes share a flow
-    direction, within about 40 degrees, each with its own color from the palette
-    (every color but the darkest appears when there are enough strokes), and
-    each covers what is under it, as with blob_layers.
+    with a Gaussian edge of sigma blur (in radii). The strokes' directions are
+    spread evenly over about 125 degrees around a random flow direction (each
+    jittered inside its own slice, the slices assigned to strokes at random), and
+    each bends and wobbles a good deal, so no two lie parallel and the picture
+    never reads as stripes. Each stroke has its own color from the palette (every
+    color but the darkest appears when there are enough strokes), and each covers
+    what is under it, as with blob_layers.
     """
     n = palette.size
     count = max(1, int(strokes))
@@ -674,17 +681,21 @@ def strokes(
     flow = rng.uniform(0.0, np.pi)
     keys = [rng.uniform(0.0, 1.0) for _ in range(count)]
     layout = [
-        (rng.uniform(-0.9, 0.9), rng.uniform(-0.9, 0.9), rng.uniform(-0.6, 0.6), rng.uniform(3.0, 4.2),
-         rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), rng.uniform(0.75, 1.25), rng.uniform(0.75, 1.0))
+        (rng.uniform(-0.9, 0.9), rng.uniform(-0.9, 0.9), rng.uniform(0.15, 0.85), rng.uniform(2.0, 3.8),
+         rng.uniform(-0.45, 0.45), rng.uniform(-0.45, 0.45), rng.uniform(0.75, 1.25), rng.uniform(0.75, 1.0),
+         rng.uniform(0.0, 1.0))
         for _ in range(count)
     ]
     slots = [others[i % len(others)] for i in range(count)]
     colors = [slot for _, slot in sorted(zip(keys, slots))]
+    # Each stroke gets its own slice of the direction range, so the strokes fan out.
+    slice_of = {k: rank for rank, k in enumerate(sorted(range(count), key=lambda k: layout[k][8]))}
 
     u, v, umax, vmax = _frame_extent(coords)
     taper = 0.55 + 0.45 * np.sin(np.linspace(0.0, 1.0, 24) * np.pi)
     alphas = []
-    for (cu, cv, turn, length, bend, wobble, thickness, opacity) in layout:
+    for k, (cu, cv, jitter, length, bend, wobble, thickness, opacity, _) in enumerate(layout):
+        turn = ((slice_of[k] + jitter) / count - 0.5) * STROKE_SPREAD
         path = _stroke_path((cu * umax, cv * vmax), flow + turn, length, bend, wobble)
         radii = max(float(width), 1e-3) / 2.0 * thickness * taper
         alphas.append(opacity * _blurred_ellipse(_capsule_distance(u, v, path, radii), blur))

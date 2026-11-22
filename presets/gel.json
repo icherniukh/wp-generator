@@ -4,25 +4,65 @@
   "description": "Glossy 3D glass: soft color blobs lit as a relief, with a highlight that takes the colors underneath.",
   "color_space": "oklch",
   "palette_families": [
-    ["#2b1055", "#7f5af0", "#ff6ac1", "#ffb86b", "#6be5ff"],
-    ["#0b2447", "#19a7ce", "#7be0d0", "#ffd1a9", "#ff7eb3"],
-    ["#3a0f3f", "#e84a9a", "#ff9a62", "#ffe29a", "#8f7cff"],
-    ["#07313a", "#22c7a9", "#b6f05b", "#ffd45e", "#4aa8ff"],
-    ["#2a1a5e", "#5b8def", "#b79cff", "#ff8ac9", "#ffe1f0"],
-    ["#401018", "#ff5d5d", "#ffb347", "#fff0a8", "#c56cf0"]
+    [
+      "#5b2bd9",
+      "#8f5bff",
+      "#ff5fb3",
+      "#ffa27a",
+      "#5fd8ff"
+    ],
+    [
+      "#0a5fb5",
+      "#2fa8ff",
+      "#59e3d0",
+      "#ffd6a5",
+      "#ff8bb0"
+    ],
+    [
+      "#b0245f",
+      "#ff5c8a",
+      "#ff9a5c",
+      "#ffd37a",
+      "#9a7bff"
+    ],
+    [
+      "#0b7a6e",
+      "#26c9a8",
+      "#a6ee6a",
+      "#ffe066",
+      "#4aa8ff"
+    ],
+    [
+      "#4338ca",
+      "#7c6bff",
+      "#c58bff",
+      "#ff8fd0",
+      "#ffd9ec"
+    ],
+    [
+      "#a3281f",
+      "#ff6347",
+      "#ffb04a",
+      "#ffe9a0",
+      "#d06cff"
+    ]
   ],
   "overrides": {
     "engine": "blobs",
-    "shading": 1.0,
+    "shading": 0.9,
     "stage_params": {
       "shading": {
-        "tint": 0.8,
-        "depth": 1.6,
-        "light_elevation": 55,
-        "specular": 0.7,
-        "shininess": 20,
-        "rim": 0.6,
-        "smoothing": 50
+        "tint": 0.5,
+        "depth": 2.2,
+        "light_elevation": 52,
+        "specular": 1.0,
+        "shininess": 40,
+        "rim": 0.7,
+        "smoothing": 40
+      },
+      "blob-layers": {
+        "blobs": 4,
+        "blur": 0.4
       }
     },
     "noise": {
