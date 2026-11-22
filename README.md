@@ -126,7 +126,7 @@ Every wallpaper is three operations:
 
 1. **Palette** — 2–5 harmonious OKLCH colors: a dark grounding anchor plus luminous accents, sampled from the preset's distributions (or your `--colors`, or the screen sampler).
 2. **Field** — a procedural engine maps 2D coordinates through a mathematical field (domain warping, radial emitters, topography, fractals) and paints it through the palette.
-3. **Finish** — optional surface effects: film grain, vignette, optional contour isobars, frosted glass, height-field shading, chromatic aberration.
+3. **Finish** — optional surface effects: film grain, vignette, optional contour isobars, frosted glass, height-field shading, bloom and light rays, chromatic aberration, halftone screens.
 
 Explore the [visual field guide](index.html) for controlled before/after comparisons and a real palette → field → finish walkthrough. The [architecture reference](docs/ARCHITECTURE.md) documents implementation and configuration.
 
@@ -136,7 +136,7 @@ flowchart LR
     WEB["Web API (FastAPI)\n+ /calibrate lab"] --> CFG
     CFG --> PAL["Palette\nOKLCH anchor + accents"]
     PAL --> ENG["Field engine\n15 registered names"]
-    ENG --> FX["Finish (filters)\ngrain · vignette · glass · shading · aberration …"]
+    ENG --> FX["Finish (filters)\ngrain · vignette · glass · shading · bloom · halftone · aberration …"]
     FX --> OUT["PNG + embedded render metadata"]
     OUT --> CAL["/calibrate\nsliders + previews"]
     CAL -.->|"tune ranges"| CFG
@@ -153,7 +153,7 @@ wp-generator --sample                              # grab a color from the scree
 wp-generator --metadata wallpaper.png             # inspect an existing render
 ```
 
-Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--preset`, `--colors` (repeat per color), `--sample`, `--metadata`/`--inspect`, `--json`. Everything else is an advanced engine/filter override, hidden from `--help` — run `--help-all` for the full list (`--seed`, `--res`, `--engine`, `--complexity`, `--fluid-mode`, `--harmonize`, `--noise`, `--contours`, `--glass`, `--shading`, `--field-grain`, the stage options below, and the fractal family).
+Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--preset`, `--colors` (repeat per color), `--sample`, `--metadata`/`--inspect`, `--json`. Everything else is an advanced engine/filter override, hidden from `--help` — run `--help-all` for the full list (`--seed`, `--res`, `--engine`, `--complexity`, `--fluid-mode`, `--harmonize`, `--noise`, `--contours`, `--glass`, `--shading`, `--bloom`, `--halftone`, `--field-grain`, the stage options below, and the fractal family).
 
 ### Stage options
 
@@ -166,9 +166,11 @@ Each engine runs a plan of stages: warps, a field, a color mapping. These hidden
 | `--blend FIELD[:MODE]` | Combine a second field with the engine's, e.g. `radial:screen`. |
 | `--mapping NAME` | Replace the color mapping: `ramp`, `bands`, `cycles` or `srgb-blend`. |
 | `--field-grain 0-1` | Noise on the field before color mapping, so the grain takes the palette's own colors instead of film grain's grey. |
-| `--stage-param STAGE.KEY=VALUE` | Set one argument of a stage, e.g. `strokes.width=1.1` or `shading.tint=0.8`. Reaches finish stages too (`shading`, `glass`, `film-grain`, `vignette`, `contours`, `chromatic-aberration`); it never switches a stage on. |
+| `--bloom 0-1` | Glow around the bright areas; 0 is off. Light rays are off until you set `--stage-param bloom.rays=0.6`. Other knobs: `bloom.threshold`, `bloom.knee`, `bloom.ray_length`. |
+| `--halftone MODE` | Print the finished image as a screen: `dots`, `cmyk`, `lines`, `dither` (8×8 Bayer) or `pixel` (mosaic). Knobs: `halftone.cell` (dot spacing or block size), `halftone.angle` (dots, lines), `halftone.levels` (dither, pixel), `halftone.mix` (blend with the original, 0-1). |
+| `--stage-param STAGE.KEY=VALUE` | Set one argument of a stage, e.g. `strokes.width=1.1`, `shading.tint=0.8`, `bloom.rays=0.6` or `halftone.cell=14`. Reaches finish stages too (`shading`, `bloom`, `halftone`, `glass`, `film-grain`, `vignette`, `contours`, `chromatic-aberration`); it never switches a stage on. Pixel sizes (`halftone.cell`, `bloom.ray_length`, `grain_size`, ...) are given for a 1964 px short side and scale with the image. |
 
-Presets set the same keys in their `overrides` (`engine`, `warps`, `field_stage`, `blend`, `mapping`, `field_grain`, `stage_params`, `shading`, `noise`, `grain_*`); see `presets/poster.json`, `liquid.json` and `gel.json`.
+Presets set the same keys in their `overrides` (`engine`, `warps`, `field_stage`, `blend`, `mapping`, `field_grain`, `stage_params`, `shading`, `bloom`, `halftone`, `noise`, `grain_*`); see `presets/poster.json`, `liquid.json` and `gel.json`. No shipped preset sets `bloom` or `halftone`; they are opt-in per run, or add them to a preset's `overrides`.
 
 ### Device Presets (`--device`)
 
@@ -233,10 +235,12 @@ Select with `--engine`. `radial-basis` is an alias of `rbf`. The fractal names s
 | Contour isobars | Vector topographic lines, light/dark/accent (`--contours`, `--contour-levels`, `--contour-width`, `--contour-mode`) |
 | Frosted glass | Diffusion blur + frost noise (`--glass`) |
 | Height-field shading | Lights the image as a relief for a glossy 3D glass or embossed look (`--shading`; `shading.tint` mixes the highlight toward the local color) |
+| Bloom and light rays | Soft glow around bright areas, in linear light, with optional rays streaking away from a point above the image (`--bloom`; `bloom.rays` adds the rays) |
 | Chromatic aberration | Radial lens dispersion (`--aberration`) |
-| Dither | Bounded monochromatic dither (defined, currently unwired) |
+| Halftone | The finished image printed as a screen: `dots`, `cmyk`, `lines`, `dither` or `pixel` (`--halftone`; `halftone.cell` sets the cell) |
+| Dither | Bounded monochromatic noise dither, `apply_dither` (defined, currently unwired; `--halftone dither` is the ordered Bayer dither) |
 
-Use `--preview-fx` to compare the unfiltered base against the entire enabled finish stack (base left, finished render right). It does not isolate individual effects; the visual guide demonstrates those separately. Finish effects fall into three groups: texture (grain/dither), optical treatment (glass/shading/aberration/vignette), and optional graphic contours.
+Use `--preview-fx` to compare the unfiltered base against the entire enabled finish stack (base left, finished render right). It does not isolate individual effects; the visual guide demonstrates those separately. Finish effects fall into four groups: texture (grain/dither), optical treatment (glass/shading/bloom/aberration/vignette), optional graphic contours, and the halftone screen. They run in a fixed order: frosted contours, glass, shading, bloom, chromatic aberration, sharp contours, halftone, film grain, vignette. The halftone sits before the grain so the grain is not printed into dots.
 
 ## Web API
 
