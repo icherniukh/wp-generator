@@ -36,6 +36,22 @@ Do not use markdown TODO files or duplicate the same task outside beads.
 - Validate user-facing behavior by running it; keep 119+ tests passing.
 - Do not commit agent tooling state (`.turbocharging/`, `.codex/`, `.claude/`, `.serena/`), experiment reports, or planning docs — all gitignored or intentionally untracked.
 
+## Comparing variants
+
+Use `tools/compare.py` instead of ad hoc PIL scripts to look at render variants side by side. Rows are variants, columns are seeds (`--transpose` swaps them):
+
+```bash
+uv run python tools/compare.py \
+  --variant 'preset=aura' --variant 'preset=aura,noise=0,field_grain=0.15' \
+  --variant 'engine=blobs,warps=noise+liquify,stage_params.shading.tint=0.6' \
+  --seeds 1,2,3 --res 640x360 --crop 300x200 --diff --workers 4 --out sheet.png
+```
+
+- A variant is `key=value` pairs; keys are `RenderConfiguration` fields (unknown keys list the valid ones). `stage_params.<stage>.<arg>=v` nests, `a+b` makes a list, values are JSON when they parse.
+- Each column renders one seed. A variant without `preset` or `colors` reuses the first variant's final palette for that seed, so only the changed option differs. A variant that sets `preset` keeps its own palette, which can shift when you set an engine value the preset would otherwise sample (use `noise=0` rather than leaving `noise` unset).
+- `--crop WxH` adds a 100% center crop under each image (grain, halftone), `--diff` adds the amplified difference against the first variant (`--diff-gain`), `--json` prints the resolved parameters per cell.
+- Write sheets outside the repo (scratchpad or `output/`), then view them.
+
 ## Shell
 
 Use non-interactive forms for file operations:
