@@ -91,9 +91,22 @@ def chromatic_aberration(image: Image.Image, *, strength: float) -> Image.Image:
     return WallpaperFilters.apply_chromatic_aberration(image, strength=strength)
 
 
-def film_grain(image: Image.Image, *, amount: float) -> Image.Image:
-    """Fine plus coarse Gaussian noise, weaker in deep shadows and highlights."""
-    return WallpaperFilters.apply_film_grain(image, amount=amount)
+def film_grain(
+    image: Image.Image,
+    *,
+    amount: float,
+    grain_size: float = 1.0,
+    grain_color: str = "mono",
+    grain_blend: str = "add",
+) -> Image.Image:
+    """Fine plus coarse Gaussian noise, weaker in deep shadows and highlights.
+
+    grain_size enlarges the grain (1.0 is the default grain), grain_color "color" draws
+    the noise per channel, and grain_blend applies it by add, overlay, soft-light or multiply.
+    """
+    return WallpaperFilters.apply_film_grain(
+        image, amount=amount, grain_size=grain_size, grain_color=grain_color, grain_blend=grain_blend
+    )
 
 
 def vignette(image: Image.Image, *, strength: float) -> Image.Image:
@@ -117,12 +130,22 @@ def _glass(p: StageParams) -> Dict:
     return {"blur_radius": max(2, int(round(60 * size_scale(p)))), "noise_amount": 0.15}
 
 
+def _grain(p: StageParams) -> Dict:
+    args: Dict = {"amount": p["noise"]}
+    size = p.get("grain_size", 1.0)
+    # The size is given for the reference image and scales with it; the default stays 1 pixel.
+    args["grain_size"] = 1.0 if size == 1.0 else max(1.0, size * size_scale(p))
+    args["grain_color"] = p.get("grain_color", "mono")
+    args["grain_blend"] = p.get("grain_blend", "add")
+    return args
+
+
 CONTOURS = Stage("contours", "finish", contour_lines, ("final",), "final", _contours)
 FIELD_CONTOURS = Stage("field contours", "finish", field_contour_lines, ("final", "field"), "final", _contours)
 GLASS = Stage("glass", "finish", frosted_glass, ("final",), "final", _glass)
 ABERRATION = Stage("chromatic aberration", "finish", chromatic_aberration, ("final",), "final",
                    lambda p: {"strength": p["chromatic_aberration"]})
-GRAIN = Stage("film grain", "finish", film_grain, ("final",), "final", lambda p: {"amount": p["noise"]})
+GRAIN = Stage("film grain", "finish", film_grain, ("final",), "final", _grain)
 VIGNETTE = Stage("vignette", "finish", vignette, ("final",), "final", lambda p: {"strength": p["vignette"]})
 
 
