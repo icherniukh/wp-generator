@@ -131,6 +131,11 @@ def golden_cases() -> List[GoldenCase]:
                 ),
             )
         )
+    # Catalogue stages composed onto an engine's plan.
+    cases.append(_engine_case("catalog/warp/liquify", "simplex", warps=["liquify"]))
+    cases.append(_engine_case("catalog/warp/liquify/blobs", "blobs", warps=["liquify"]))
+    cases.append(_engine_case("catalog/field/strokes", "simplex", field_stage="strokes"))
+    cases.append(_engine_case("catalog/field/strokes/liquify", "simplex", field_stage="strokes", warps=["liquify"]))
     # Film grain options; grain_size is covered in tests/test_grain_controls.py, since it
     # scales with the image and this size is too small for it to change anything.
     for grain_name, grain in (

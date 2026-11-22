@@ -31,6 +31,8 @@ COMPOSED = [
     dict(engine="patch-mesh", warps=["sphere"], stage_params={"patch-mesh": {"jitter": 0.4}}),
     dict(engine="simplex", field_stage="patch-mesh"),
     dict(engine="blobs", warps=["noise"], stage_params={"blob-layers": {"blur": 0.8}}),
+    dict(engine="simplex", warps=["liquify"], stage_params={"liquify": {"amount": 0.6, "steps": 8}}),
+    dict(engine="simplex", field_stage="strokes", stage_params={"strokes": {"strokes": 5, "blur": 0.7}}),
     dict(engine="simplex", field_stage="conic", blend="radial:difference", mapping="bands",
          stage_params={"blend": {"amount": 0.8}}),
     dict(engine="simplex", field_stage="ridged", shading=0.6, glass=True),

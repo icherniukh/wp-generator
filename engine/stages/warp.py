@@ -196,3 +196,61 @@ def lens(coords: Coords, *, amount: float = 0.3) -> Coords:
         return u * scale, v * scale
 
     return _apply_in_frame(coords, move)
+
+
+# Largest speed of the curl of two-octave simplex noise, in noise units (the
+# 99.9th percentile of the gradient magnitude is about 7.1, the maximum 8.9),
+# so the normalized velocity stays within about 1.
+_CURL_PEAK = 7.5
+
+
+def liquify(coords: Coords, *, amount: float = 0.4, scale: float = 0.8, steps: int = 6, rng: Any) -> Coords:
+    """Smears positions along a divergence-free flow, like stirring liquid.
+
+    The velocity is the curl of a smooth simplex-noise potential,
+    v = (dpsi/dy, -dpsi/dx), normalized so its speed stays within about 1 at any
+    scale. Positions are advected in steps equal moves of -(amount / steps) * v,
+    with v looked up where they are, so nearby positions move together and the
+    pattern is dragged into swirls rather than torn. amount is the farthest a
+    position can travel, in half short sides; scale is the potential's frequency
+    per half short side.
+
+    A large amount or scale stretches the pattern into thin filaments; far
+    enough (amount * scale above about 0.35 at 6 steps) the explicit steps
+    overshoot and the finest filaments fold over. Raise steps to push that out.
+
+    The potential is one noise plane over a square lattice that covers the
+    positions plus a margin, and v is its finite-difference gradient, read back
+    bilinearly: far cheaper than evaluating noise at every position and step.
+    """
+    ox, oy = rng.uniform(0.0, 500.0), rng.uniform(0.0, 500.0)
+    steps = max(1, int(steps))
+    if amount == 0.0:
+        return coords
+    scale = max(float(scale), 1e-3)
+    h, w = coords.shape
+
+    def move(u: np.ndarray, v: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        margin = abs(amount) * 1.3 + 0.05
+        u0, u1 = float(u.min()) - margin, float(u.max()) + margin
+        v0, v1 = float(v.min()) - margin, float(v.max()) + margin
+        span = max(u1 - u0, v1 - v0)
+        density = float(np.clip(min(h, w) / 2.0, 32.0, 96.0))  # lattice samples per half short side
+        n = int(np.clip(np.ceil(span * density) + 1, 16, 2048))
+        cell = span / (n - 1)
+        origin_u, origin_v = (u0 + u1) / 2.0 - span / 2.0, (v0 + v1) / 2.0 - span / 2.0
+        # The plane spans 2 * plane_scale noise units over the lattice, scale per half short side.
+        psi = generate_noise_plane(n, n, scale=scale * span / 2.0, octaves=2, offset=(ox, oy)).astype(np.float64)
+        per_cell = 2.0 * (scale * span / 2.0) / (n - 1)  # noise units per lattice cell
+        d_row, d_col = np.gradient(psi)
+        norm = 1.0 / (per_cell * _CURL_PEAK)
+        flow_u, flow_v = d_row * norm, -d_col * norm
+
+        dt = float(amount) / steps
+        for _ in range(steps):
+            at = [(v - origin_v).ravel() / cell, (u - origin_u).ravel() / cell]
+            u = u - dt * scipy.ndimage.map_coordinates(flow_u, at, order=1, mode="nearest").reshape(u.shape)
+            v = v - dt * scipy.ndimage.map_coordinates(flow_v, at, order=1, mode="nearest").reshape(v.shape)
+        return u, v
+
+    return _apply_in_frame(coords, move)

@@ -56,6 +56,12 @@ def _blob_count(p: StageParams) -> Dict[str, Any]:
     return blob_count(p)
 
 
+def _stroke_count(p: StageParams) -> Dict[str, Any]:
+    from engine.stages.plans import stroke_count
+
+    return stroke_count(p)
+
+
 def _w(name: str, fn: Callable, summary: str, **defaults: Any) -> Choice:
     return Choice(Stage(name, "warp", fn, ("coords",), "coords", _fixed(**defaults)), summary)
 
@@ -80,6 +86,8 @@ WARPS: Dict[str, Choice] = {
     "sine": _w("sine", warp.sine_warp, "a fixed smooth sinusoidal bend", amplitude=0.18),
     "twist": _w("twist", warp.twist, "swirl around the center", amount=2.0, radius=1.0),
     "bulge": _w("bulge", warp.bulge, "lens magnify (or pinch, amount < 0) at the center", amount=0.5, radius=1.0),
+    "liquify": _w("liquify", warp.liquify, "smear along a divergence-free curl-noise flow",
+                  amount=0.4, scale=0.8, steps=6),
     "wave": _w("wave", warp.wave, "sideways sine ripple", amplitude=0.08, waves=3.0, angle=0.0),
     "sphere": _w("sphere", warp.sphere, "wrap the center disc around a sphere", amount=1.0, radius=1.0),
     "lens": _w("lens", warp.lens, "barrel (amount > 0) or pincushion (< 0) lens distortion", amount=0.3),
@@ -111,6 +119,8 @@ FIELDS: Dict[str, Choice] = {
                      inputs=("coords", "palette"), bind=lambda p: _patch_mesh_size(p)),
     "blob-layers": _f("blob-layers", fields.blob_layers, "soft blobs stacked over the darkest color (blobs)",
                       inputs=("coords", "palette"), bind=lambda p: _blob_count(p)),
+    "strokes": _f("strokes", fields.strokes, "thick, heavily blurred strokes over the darkest color (liquid base)",
+                  inputs=("coords", "palette"), bind=lambda p: _stroke_count(p)),
     "ridged": _f("ridged", fields.ridged_noise, "ridged multifractal noise, sharp crests",
                  bind=_fixed(scale=1.5, octaves=4, sharpness=2.0)),
     "billow": _f("billow", fields.billow_noise, "billow noise, rounded puffs with creases",
@@ -136,7 +146,7 @@ _FIELD_KIND = {
     fields.conic: "scalar", fields.spiral: "scalar", fields.radial: "scalar", fields.voronoi: "scalar",
     fields.ridged_noise: "scalar", fields.billow_noise: "scalar", fields.fbm_noise: "scalar",
     fields.radial_emitters: "weights", fields.orbiting_emitters: "weights", fields.anchor_points: "weights",
-    fields.patch_mesh: "weights", fields.blob_layers: "weights",
+    fields.patch_mesh: "weights", fields.blob_layers: "weights", fields.strokes: "weights",
 }
 _FIELD_REQUIRES = {fields.folded_noise: ("displacement",), fields.fractal_field: ("camera",)}
 _MAPPING_ACCEPTS = {
