@@ -52,6 +52,10 @@ uv run python tools/compare.py \
 - `--crop WxH` adds a 100% center crop under each image (grain, halftone), `--diff` adds the amplified difference against the first variant (`--diff-gain`), `--json` prints the resolved parameters per cell.
 - Write sheets outside the repo (scratchpad or `output/`), then view them.
 
+## Seeing a render's stages
+
+Add `--trace` to a `main.py` render to also write `<output>_trace.png`, a frame per stage with its output, arguments, the parameters it read, and the parameters set but never read. Check it when an option seems to do nothing or you need to see which stage changes what. From Python: `WallpaperPipeline().render(config, trace=Trace())`, then `render_filmstrip(trace)` (`engine/stages/runner.py`, `engine/stages/filmstrip.py`). See the README section "Seeing the pipeline".
+
 ## Shell
 
 Use non-interactive forms for file operations:

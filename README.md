@@ -153,7 +153,7 @@ wp-generator --sample                              # grab a color from the scree
 wp-generator --metadata wallpaper.png             # inspect an existing render
 ```
 
-Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--preset`, `--colors` (repeat per color), `--sample`, `--metadata`/`--inspect`, `--json`. Everything else is an advanced engine/filter override, hidden from `--help` — run `--help-all` for the full list (`--seed`, `--res`, `--engine`, `--complexity`, `--fluid-mode`, `--harmonize`, `--noise`, `--contours`, `--glass`, `--shading`, `--bloom`, `--halftone`, `--field-grain`, the stage options below, and the fractal family).
+Core flags: `--device`, `--count`, `--output`, `--out-dir`, `--workers`, `--preset`, `--colors` (repeat per color), `--sample`, `--metadata`/`--inspect`, `--json`. Everything else is an advanced engine/filter override, hidden from `--help` — run `--help-all` for the full list (`--seed`, `--res`, `--engine`, `--complexity`, `--fluid-mode`, `--harmonize`, `--noise`, `--contours`, `--glass`, `--shading`, `--bloom`, `--halftone`, `--field-grain`, `--trace`, the stage options below, and the fractal family).
 
 ### Stage options
 
@@ -162,7 +162,7 @@ Each engine runs a plan of stages: warps, a field, a color mapping. These hidden
 | Flag | Effect |
 | :--- | :--- |
 | `--warp NAME` | Add a warp after the engine's own (repeat for several; `none` drops the engine's own). Includes `noise`, `twist`, `lens` and `liquify`, a curl-noise smear that stirs the pattern like liquid. |
-| `--field NAME` | Replace the engine's field, e.g. `conic`, `voronoi`, `shapes` (hard-edged poster shapes) or `strokes` (thick blurred strokes). |
+| `--field NAME` | Replace the engine's field, e.g. `conic`, `voronoi`, `shapes` (hard-edged poster shapes), `strokes` (thick blurred strokes), `fractal-glow` (neon Julia or Mandelbrot filaments on a dark ground) or `fractal-shapes` (shapes repeated at smaller scales with soft halos). |
 | `--blend FIELD[:MODE]` | Combine a second field with the engine's, e.g. `radial:screen`. |
 | `--mapping NAME` | Replace the color mapping: `ramp`, `bands`, `cycles` or `srgb-blend`. |
 | `--field-grain 0-1` | Noise on the field before color mapping, so the grain takes the palette's own colors instead of film grain's grey. |
@@ -171,6 +171,39 @@ Each engine runs a plan of stages: warps, a field, a color mapping. These hidden
 | `--stage-param STAGE.KEY=VALUE` | Set one argument of a stage, e.g. `strokes.width=1.1`, `shading.tint=0.8`, `bloom.rays=0.6` or `halftone.cell=14`. Reaches finish stages too (`shading`, `bloom`, `halftone`, `glass`, `film-grain`, `vignette`, `contours`, `chromatic-aberration`); it never switches a stage on. Pixel sizes (`halftone.cell`, `bloom.ray_length`, `grain_size`, ...) are given for a 1964 px short side and scale with the image. |
 
 Presets set the same keys in their `overrides` (`engine`, `warps`, `field_stage`, `blend`, `mapping`, `field_grain`, `stage_params`, `shading`, `bloom`, `halftone`, `noise`, `grain_*`); see `presets/poster.json`, `liquid.json` and `gel.json`. No shipped preset sets `bloom` or `halftone`; they are opt-in per run, or add them to a preset's `overrides`.
+
+### Seeing the pipeline (`--trace`)
+
+Add `--trace` to any render to also write `<output>_trace.png`: one frame per stage, in the order they ran.
+
+```bash
+uv run python main.py --preset gel --seed 2 --res 1280 720 --trace --output gel.png   # also writes gel_trace.png
+```
+
+![Trace of the gel preset](docs/assets/trace-gel.png)
+
+Each frame shows:
+
+- the stage's number, name and kind (`palette`, `frame`, `warp`, `field`, `mapping`, `export`, `finish`);
+- what it produced: palette swatches, a checkerboard showing how a frame or warp stage moved the coordinates, one weight map per color (or a grayscale field), or the image after a mapping, export or finish step;
+- its data flow, e.g. `field, palette -> image`, and the output's type and size;
+- the arguments it was called with, and the render parameters it read (`reads: ...`).
+
+Under the frames, in red, are the parameters that were set but never read by any stage, so you can see when an option has no effect on this engine. Inputs are named, not pictured: a stage's input is the output of the earlier frame with that name.
+
+From Python, pass a `Trace` to `render` and draw it with `render_filmstrip`:
+
+```python
+from engine.pipeline import RenderConfiguration, WallpaperPipeline
+from engine.stages.filmstrip import render_filmstrip
+from engine.stages.runner import Trace
+
+trace = Trace()
+WallpaperPipeline().render(RenderConfiguration(preset="gel", seed=2, width=1280, height=720), trace=trace)
+render_filmstrip(trace, title="gel seed 2").save("gel_trace.png")
+for record in trace.records:  # phase, name, inputs, output_name, arguments, params_read, output
+    print(record.phase, record.name, record.arguments)
+```
 
 ### Device Presets (`--device`)
 

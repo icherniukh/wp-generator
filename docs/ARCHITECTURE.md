@@ -28,6 +28,8 @@ consumed by the pipeline.
 
 `random.seed` / `np.random.seed` on the active seed make every run reproducible.
 
+Passing a `Trace` (`engine/stages/runner.py`) to `render` records every stage: its kind, inputs, output, arguments and the parameters it read. `render_filmstrip` (`engine/stages/filmstrip.py`) draws the trace as one PNG; the CLI writes it with `--trace` (see the README, "Seeing the pipeline").
+
 ## Primitives Inventory
 
 All rendered with one palette and one seed, so the grid shows math, not color luck:
