@@ -54,3 +54,6 @@ output/*/
 .claude/
 .codex/
 .serena/
+
+# Beads tracker: synced through its Dolt remote (gs://bd-server/wp_generator), not git
+.beads/
